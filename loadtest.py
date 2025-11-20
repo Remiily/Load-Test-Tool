@@ -4595,7 +4595,7 @@ def generate_html_report(report: Dict) -> Path:
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LoadTest Enterprise - Performance Analysis Report</title>
+    <title>LoadTest Enterprise - Reporte de Análisis de Rendimiento</title>
     <style>
         body {{
             font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
@@ -4713,7 +4713,7 @@ def generate_html_report(report: Dict) -> Path:
     <div class="container">
         <div class="header">
             <h1>LoadTest Enterprise</h1>
-            <div class="subtitle">Performance Analysis Report</div>
+            <div class="subtitle">Reporte de Análisis de Rendimiento</div>
         </div>
         
         <h2>Información General</h2>
@@ -5725,6 +5725,243 @@ def generate_recommendations() -> List[Dict]:
     return recommendations
 
 # ============================================================================
+# SISTEMA DE AUTO-UPDATE
+# ============================================================================
+
+def check_github_version() -> Optional[str]:
+    """Verifica la versión más reciente en GitHub"""
+    try:
+        import urllib.request
+        import json
+        
+        # Obtener información del repositorio
+        url = f"{GITHUB_API_URL}/releases/latest"
+        
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent', 'LoadTest-Enterprise/1.0')
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode())
+            latest_version = data.get('tag_name', '').lstrip('v')
+            return latest_version if latest_version else None
+    except Exception as e:
+        log_message("DEBUG", f"Error verificando versión en GitHub: {e}")
+        return None
+
+def check_github_version_from_file() -> Optional[str]:
+    """Verifica la versión desde el archivo loadtest.py en GitHub"""
+    try:
+        import urllib.request
+        
+        # Obtener el archivo loadtest.py desde GitHub
+        url = f"{GITHUB_RAW_URL}/loadtest.py"
+        
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent', 'LoadTest-Enterprise/1.0')
+        
+        with urllib.request.urlopen(req, timeout=10) as response:
+            content = response.read().decode('utf-8')
+            
+            # Buscar la línea VERSION
+            for line in content.split('\n'):
+                if line.strip().startswith('VERSION = '):
+                    # Extraer versión: VERSION = "1.0.0"
+                    version_match = re.search(r'VERSION\s*=\s*["\']([^"\']+)["\']', line)
+                    if version_match:
+                        return version_match.group(1)
+        return None
+    except Exception as e:
+        log_message("DEBUG", f"Error verificando versión desde archivo: {e}")
+        return None
+
+def check_for_updates(silent: bool = False) -> Tuple[bool, Optional[str]]:
+    """Verifica si hay actualizaciones disponibles"""
+    if not silent:
+        print_color("\n🔍 Verificando actualizaciones...", Colors.CYAN, True)
+    
+    # Intentar obtener versión desde releases primero
+    latest_version = check_github_version()
+    
+    # Si no hay releases, intentar desde el archivo
+    if not latest_version:
+        latest_version = check_github_version_from_file()
+    
+    if not latest_version:
+        if not silent:
+            print_color("  ⚠️ No se pudo verificar la versión en GitHub", Colors.YELLOW)
+        return False, None
+    
+    current_version = VERSION
+    comparison = compare_versions(current_version, latest_version)
+    
+    if comparison < 0:
+        # Hay una versión más nueva
+        if not silent:
+            print_color(f"  ✓ Nueva versión disponible: v{latest_version}", Colors.GREEN)
+            print_color(f"  Tu versión actual: v{current_version}", Colors.YELLOW)
+        return True, latest_version
+    elif comparison == 0:
+        # Versión actual
+        if not silent:
+            print_color(f"  ✓ Estás usando la versión más reciente (v{current_version})", Colors.GREEN)
+        return False, latest_version
+    else:
+        # Versión local más nueva (desarrollo)
+        if not silent:
+            print_color(f"  ℹ️ Versión local (v{current_version}) es más reciente que la remota (v{latest_version})", Colors.CYAN)
+        return False, latest_version
+
+def download_file_from_github(filepath: str, save_path: Path) -> bool:
+    """Descarga un archivo desde GitHub"""
+    try:
+        import urllib.request
+        import shutil
+        
+        url = f"{GITHUB_RAW_URL}/{filepath}"
+        
+        req = urllib.request.Request(url)
+        req.add_header('User-Agent', 'LoadTest-Enterprise/1.0')
+        
+        with urllib.request.urlopen(req, timeout=30) as response:
+            content = response.read()
+            
+            # Crear backup del archivo existente
+            if save_path.exists():
+                backup_path = save_path.with_suffix(save_path.suffix + '.backup')
+                try:
+                    shutil.copy2(save_path, backup_path)
+                    log_message("INFO", f"Backup creado: {backup_path}")
+                except Exception as e:
+                    log_message("WARN", f"No se pudo crear backup: {e}")
+            
+            # Guardar nuevo archivo
+            with open(save_path, 'wb') as f:
+                f.write(content)
+            
+            return True
+    except Exception as e:
+        log_message("ERROR", f"Error descargando {filepath}: {e}")
+        return False
+
+def update_tool(force: bool = False) -> bool:
+    """Actualiza la herramienta desde GitHub"""
+    print_color("\n🔄 Iniciando actualización...", Colors.CYAN, True)
+    
+    # Verificar si hay actualizaciones
+    has_update, latest_version = check_for_updates(silent=True)
+    
+    if not has_update and not force:
+        print_color("  ✓ Ya estás usando la versión más reciente", Colors.GREEN)
+        return False
+    
+    if not latest_version:
+        print_color("  ❌ No se pudo determinar la versión disponible", Colors.RED)
+        return False
+    
+    print_color(f"  📥 Descargando versión v{latest_version}...", Colors.YELLOW)
+    
+    # Archivos a actualizar
+    files_to_update = [
+        "loadtest.py",
+        "loadtest_web.py",
+        "requirements.txt",
+        "README.md",
+        "INSTALL.md",
+        "install.sh",
+        "install.bat"
+    ]
+    
+    updated_files = []
+    failed_files = []
+    
+    for filename in files_to_update:
+        file_path = SCRIPT_DIR / filename
+        
+        # No actualizar si el archivo no existe localmente (puede ser opcional)
+        if not file_path.exists() and filename not in ["loadtest.py", "loadtest_web.py"]:
+            continue
+        
+        print_color(f"  📥 Descargando {filename}...", Colors.CYAN)
+        
+        if download_file_from_github(filename, file_path):
+            updated_files.append(filename)
+            print_color(f"    ✓ {filename} actualizado", Colors.GREEN)
+        else:
+            failed_files.append(filename)
+            print_color(f"    ✗ Error actualizando {filename}", Colors.RED)
+    
+    # Actualizar templates si existe
+    templates_dir = SCRIPT_DIR / "templates"
+    if templates_dir.exists():
+        index_html = templates_dir / "index.html"
+        if index_html.exists():
+            print_color(f"  📥 Descargando templates/index.html...", Colors.CYAN)
+            if download_file_from_github("templates/index.html", index_html):
+                updated_files.append("templates/index.html")
+                print_color(f"    ✓ templates/index.html actualizado", Colors.GREEN)
+            else:
+                failed_files.append("templates/index.html")
+    
+    print_color("\n" + "=" * 60, Colors.CYAN)
+    print_color("📊 Resumen de actualización:", Colors.BOLD, True)
+    
+    if updated_files:
+        print_color(f"  ✓ Archivos actualizados: {len(updated_files)}", Colors.GREEN)
+        for f in updated_files:
+            print_color(f"    - {f}", Colors.GREEN)
+    
+    if failed_files:
+        print_color(f"  ✗ Archivos con errores: {len(failed_files)}", Colors.RED)
+        for f in failed_files:
+            print_color(f"    - {f}", Colors.RED)
+    
+    print_color("=" * 60, Colors.CYAN)
+    
+    if updated_files:
+        print_color("\n✅ Actualización completada", Colors.GREEN, True)
+        print_color("💡 Reinicia la herramienta para usar la nueva versión", Colors.YELLOW)
+        return True
+    else:
+        print_color("\n⚠️ No se pudo actualizar ningún archivo", Colors.YELLOW)
+        return False
+
+def auto_check_updates() -> None:
+    """Verifica actualizaciones automáticamente al inicio (solo si no está en modo web)"""
+    if WEB_PANEL_MODE:
+        return
+    
+    try:
+        # Verificar solo una vez por día
+        update_check_file = OUTPUT_DIR / ".last_update_check"
+        should_check = True
+        
+        if update_check_file.exists():
+            try:
+                last_check = datetime.fromtimestamp(update_check_file.stat().st_mtime)
+                hours_since_check = (datetime.now() - last_check).total_seconds() / 3600
+                should_check = hours_since_check >= 24  # Verificar cada 24 horas
+            except:
+                pass
+        
+        if should_check:
+            has_update, latest_version = check_for_updates(silent=True)
+            
+            # Actualizar timestamp
+            try:
+                update_check_file.touch()
+            except:
+                pass
+            
+            if has_update:
+                print_color(f"\n💡 Nueva versión disponible: v{latest_version}", Colors.YELLOW, True)
+                print_color(f"   Ejecuta: python loadtest.py --update", Colors.CYAN)
+                print()
+    
+    except Exception as e:
+        # Silenciar errores en verificación automática
+        pass
+
+# ============================================================================
 # FUNCIÓN PRINCIPAL
 # ============================================================================
 
@@ -5789,6 +6026,9 @@ Ejemplos:
     parser.add_argument("--web", action="store_true", help="Iniciar panel web")
     parser.add_argument("--web-port", type=int, default=5000, help="Puerto para panel web (default: 5000)")
     parser.add_argument("--socket-attack", action="store_true", help="Activar ataque socket-based de bajo nivel")
+    parser.add_argument("--check-update", action="store_true", help="Verificar si hay actualizaciones disponibles")
+    parser.add_argument("--update", action="store_true", help="Actualizar la herramienta desde GitHub")
+    parser.add_argument("--no-auto-update-check", action="store_true", help="Desactivar verificación automática de actualizaciones")
     parser.add_argument("--no-tcp-optimization", action="store_true", help="Desactivar optimizaciones TCP")
     parser.add_argument("--max-payload-mb", type=int, default=10, help="Máximo tamaño de payload en MB (default: 10)")
     parser.add_argument("--connection-pool", type=int, default=1000, help="Tamaño del pool de conexiones (default: 1000)")
@@ -5798,6 +6038,18 @@ Ejemplos:
     parser.add_argument("--target-variations", nargs="+", help="Variaciones del target (URLs adicionales)")
     
     args = parser.parse_args()
+    
+    # Verificar actualizaciones (no requiere target)
+    if args.check_update:
+        has_update, latest_version = check_for_updates(silent=False)
+        if has_update:
+            print_color(f"\n💡 Para actualizar, ejecuta: python loadtest.py --update", Colors.CYAN, True)
+        sys.exit(0)
+    
+    # Actualizar herramienta (no requiere target)
+    if args.update:
+        update_tool()
+        sys.exit(0)
     
     # Iniciar panel web (no requiere target)
     if args.web:
@@ -5811,7 +6063,7 @@ Ejemplos:
     
     # Validar que se proporcione target si no se usa --web o --show-params
     if not args.target:
-        parser.error("El argumento -t/--target es requerido (excepto cuando se usa --web o --show-params)")
+        parser.error("El argumento -t/--target es requerido (excepto cuando se usa --web, --show-params, --check-update o --update)")
     
     # Configurar variables globales
     TARGET = args.target
@@ -5829,6 +6081,10 @@ Ejemplos:
     MEMORY_MONITORING = not args.no_memory_monitoring
     DEBUG_MODE = args.debug
     DRY_RUN = args.dry_run
+    
+    # Verificación automática de actualizaciones (solo si no está desactivada)
+    if not args.no_auto_update_check:
+        auto_check_updates()
     
     # Banner
     print_color("""

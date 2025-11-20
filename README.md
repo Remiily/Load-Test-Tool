@@ -7,89 +7,90 @@
 ![License](https://img.shields.io/badge/license-MIT-orange.svg)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20Linux%20%7C%20macOS-lightgrey.svg)
 
-**Enterprise Web Load Testing & Performance Analysis Suite**
+**Suite Empresarial de Pruebas de Carga Web y Análisis de Rendimiento**
 
-Professional tool for authorized security testing and performance analysis.
+Herramienta profesional para pruebas de seguridad autorizadas y análisis de rendimiento.
 
-[Features](#-features) • [Installation](#-installation) • [Usage](#-usage) • [Documentation](#-documentation) • [Contributing](#-contributing)
+[Características](#-características) • [Instalación](#-instalación) • [Uso](#-uso) • [Documentación](#-documentación) • [Contribuir](#-contribuir)
 
 </div>
 
 ---
 
-## 📋 Table of Contents
+## 📋 Tabla de Contenidos
 
-- [Overview](#-overview)
-- [Features](#-features)
-- [Requirements](#-requirements)
-- [Installation](#-installation)
-- [Quick Start](#-quick-start)
-- [Usage](#-usage)
-- [Configuration](#-configuration)
-- [Supported Tools](#-supported-tools)
-- [Reports](#-reports)
-- [Web Panel](#-web-panel)
-- [Examples](#-examples)
-- [Troubleshooting](#-troubleshooting)
-- [Contributing](#-contributing)
-- [License](#-license)
-- [Disclaimer](#-disclaimer)
-
----
-
-## 🎯 Overview
-
-**LoadTest Enterprise** is a comprehensive web load testing and performance analysis suite designed for security professionals and DevOps teams. It provides advanced capabilities for stress testing, performance analysis, and security assessment of web applications and services.
-
-### Key Capabilities
-
-- **Multi-Tool Integration**: Supports 40+ industry-standard load testing tools
-- **Intelligent Monitoring**: Real-time resource monitoring with automatic throttling
-- **Advanced Reporting**: Comprehensive HTML reports with detailed metrics and recommendations
-- **Web Interface**: Modern web panel for easy configuration and monitoring
-- **Auto-Installation**: Automatic installation of required testing tools
-- **Enterprise-Ready**: Professional design suitable for corporate environments
+- [Resumen](#-resumen)
+- [Características](#-características)
+- [Requisitos](#-requisitos)
+- [Instalación](#-instalación)
+- [Inicio Rápido](#-inicio-rápido)
+- [Uso](#-uso)
+- [Configuración](#-configuración)
+- [Herramientas Soportadas](#-herramientas-soportadas)
+- [Reportes](#-reportes)
+- [Panel Web](#-panel-web)
+- [Ejemplos](#-ejemplos)
+- [Sistema de Auto-Actualización](#-sistema-de-auto-actualización)
+- [Solución de Problemas](#-solución-de-problemas)
+- [Contribuir](#-contribuir)
+- [Licencia](#-licencia)
+- [Descargo de Responsabilidad](#-descargo-de-responsabilidad)
 
 ---
 
-## ✨ Features
+## 🎯 Resumen
 
-### Core Features
+**LoadTest Enterprise** es una suite completa de pruebas de carga web y análisis de rendimiento diseñada para profesionales de seguridad y equipos DevOps. Proporciona capacidades avanzadas para pruebas de estrés, análisis de rendimiento y evaluación de seguridad de aplicaciones y servicios web.
 
-- 🔄 **Multiple Attack Modes**: MIXED, CONSTANT, BURST, RAMP_UP
-- 📊 **Real-Time Monitoring**: CPU, memory, and network metrics
-- 🎯 **Smart Resource Management**: Automatic throttling based on system resources
-- 📈 **Comprehensive Reporting**: Detailed HTML reports with charts and recommendations
-- 🌐 **Web Panel**: Modern web interface for configuration and monitoring
-- 🔧 **Tool Auto-Installation**: Automatically installs missing testing tools
-- 🛡️ **Security Features**: WAF bypass, stealth mode, proxy support
-- ⚡ **High Performance**: Optimized for maximum throughput
-- 📱 **Multi-Protocol**: HTTP/1.1, HTTP/2, WebSocket support
-- 🎨 **Professional UI**: Corporate-ready design and branding
+### Capacidades Clave
 
-### Advanced Features
-
-- **Connection Pooling**: Reusable connections for better performance
-- **TCP Optimization**: Advanced TCP stack optimizations
-- **HTTP/2 Multiplexing**: Support for HTTP/2 protocol
-- **Rate Adaptive**: Dynamic rate adjustment based on server response
-- **Memory Management**: Intelligent memory monitoring and throttling
-- **Distributed Testing**: Support for multi-node distributed testing
-- **Fingerprinting**: Automatic target fingerprinting and analysis
-- **Vulnerability Detection**: Security header analysis and vulnerability detection
+- **Integración Multi-Herramienta**: Soporta 40+ herramientas estándar de la industria para pruebas de carga
+- **Monitoreo Inteligente**: Monitoreo de recursos en tiempo real con throttling automático
+- **Reportes Avanzados**: Reportes HTML completos con métricas detalladas y recomendaciones
+- **Interfaz Web**: Panel web moderno para configuración y monitoreo fácil
+- **Auto-Instalación**: Instalación automática de herramientas de prueba requeridas
+- **Listo para Empresa**: Diseño profesional adecuado para entornos corporativos
 
 ---
 
-## 📦 Requirements
+## ✨ Características
 
-### System Requirements
+### Características Principales
 
-- **Python**: 3.7 or higher
-- **Operating System**: Windows, Linux, or macOS
-- **RAM**: Minimum 2GB (4GB+ recommended)
-- **Network**: Internet connection for target testing
+- 🔄 **Múltiples Modos de Ataque**: MIXED, CONSTANT, BURST, RAMP_UP
+- 📊 **Monitoreo en Tiempo Real**: Métricas de CPU, memoria y red
+- 🎯 **Gestión Inteligente de Recursos**: Throttling automático basado en recursos del sistema
+- 📈 **Reportes Completos**: Reportes HTML detallados con gráficos y recomendaciones
+- 🌐 **Panel Web**: Interfaz web moderna para configuración y monitoreo
+- 🔧 **Auto-Instalación de Herramientas**: Instala automáticamente herramientas de prueba faltantes
+- 🛡️ **Características de Seguridad**: Bypass de WAF, modo stealth, soporte de proxy
+- ⚡ **Alto Rendimiento**: Optimizado para máximo throughput
+- 📱 **Multi-Protocolo**: Soporte para HTTP/1.1, HTTP/2, WebSocket
+- 🎨 **UI Profesional**: Diseño y branding listo para empresas
 
-### Python Dependencies
+### Características Avanzadas
+
+- **Connection Pooling**: Conexiones reutilizables para mejor rendimiento
+- **Optimización TCP**: Optimizaciones avanzadas de la pila TCP
+- **Multiplexing HTTP/2**: Soporte para protocolo HTTP/2
+- **Rate Adaptive**: Ajuste dinámico de tasa basado en respuesta del servidor
+- **Gestión de Memoria**: Monitoreo y throttling inteligente de memoria
+- **Pruebas Distribuidas**: Soporte para pruebas distribuidas multi-nodo
+- **Fingerprinting**: Fingerprinting y análisis automático del target
+- **Detección de Vulnerabilidades**: Análisis de headers de seguridad y detección de vulnerabilidades
+
+---
+
+## 📦 Requisitos
+
+### Requisitos del Sistema
+
+- **Python**: 3.7 o superior
+- **Sistema Operativo**: Windows, Linux, o macOS
+- **RAM**: Mínimo 2GB (4GB+ recomendado)
+- **Red**: Conexión a internet para pruebas de target
+
+### Dependencias de Python
 
 - Flask
 - Flask-Cors
@@ -97,9 +98,9 @@ Professional tool for authorized security testing and performance analysis.
 - urllib3
 - psutil
 
-### Optional Tools
+### Herramientas Opcionales
 
-The tool supports 40+ external testing tools. See [Supported Tools](#-supported-tools) for the complete list. Tools can be installed automatically using:
+La herramienta soporta 40+ herramientas de prueba externas. Ver [Herramientas Soportadas](#-herramientas-soportadas) para la lista completa. Las herramientas se pueden instalar automáticamente usando:
 
 ```bash
 python loadtest.py --install-tools
@@ -107,18 +108,18 @@ python loadtest.py --install-tools
 
 ---
 
-## 🚀 Installation
+## 🚀 Instalación
 
-### Quick Installation
+### Instalación Rápida
 
 #### Linux/macOS
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/loadtest-enterprise.git
-cd loadtest-enterprise
+# Clonar el repositorio
+git clone https://github.com/Remiily/Load-Test-Tool.git
+cd Load-Test-Tool
 
-# Run installation script
+# Ejecutar script de instalación
 chmod +x install.sh
 ./install.sh
 ```
@@ -126,212 +127,221 @@ chmod +x install.sh
 #### Windows
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/loadtest-enterprise.git
-cd loadtest-enterprise
+# Clonar el repositorio
+git clone https://github.com/Remiily/Load-Test-Tool.git
+cd Load-Test-Tool
 
-# Run installation script
+# Ejecutar script de instalación
 install.bat
 ```
 
-### Manual Installation
+### Instalación Manual
 
-1. **Install Python dependencies:**
+1. **Instalar dependencias de Python:**
 
 ```bash
 pip install -r requirements.txt
 ```
 
-2. **Verify installation:**
+2. **Verificar instalación:**
 
 ```bash
 python loadtest.py --show-tools
 ```
 
-3. **Install testing tools (optional):**
+3. **Instalar herramientas de prueba (opcional):**
 
 ```bash
 python loadtest.py --install-tools
 ```
 
-### Installation with Virtual Environment (Recommended)
+### Instalación con Entorno Virtual (Recomendado)
 
 ```bash
-# Create virtual environment
+# Crear entorno virtual
 python3 -m venv venv
 
-# Activate virtual environment
-# On Linux/macOS:
+# Activar entorno virtual
+# En Linux/macOS:
 source venv/bin/activate
-# On Windows:
+# En Windows:
 venv\Scripts\activate
 
-# Install dependencies
+# Instalar dependencias
 pip install -r requirements.txt
 ```
 
-For detailed installation instructions, see [INSTALL.md](INSTALL.md).
+Para instrucciones detalladas de instalación, ver [INSTALL.md](INSTALL.md).
 
 ---
 
-## 🏃 Quick Start
+## 🏃 Inicio Rápido
 
-### Basic Usage
+### Uso Básico
 
 ```bash
-# Run a basic load test
+# Ejecutar una prueba de carga básica
 python loadtest.py -t https://example.com -d 60 -p MODERATE
 
-# Start web panel
+# Iniciar panel web
 python loadtest.py --web
 
-# Check available tools
+# Verificar herramientas disponibles
 python loadtest.py --show-tools
 
-# Install missing tools
+# Instalar herramientas faltantes
 python loadtest.py --install-tools
 ```
 
-### Web Panel
+### Panel Web
 
-Start the web interface:
+Inicia la interfaz web:
 
 ```bash
 python loadtest.py --web
 ```
 
-Then open your browser at: `http://localhost:5000`
+Luego abre tu navegador en: `http://localhost:5000`
 
 ---
 
-## 📖 Usage
+## 📖 Uso
 
-### Command Line Interface
+### Interfaz de Línea de Comandos
 
-#### Basic Syntax
+#### Sintaxis Básica
 
 ```bash
-python loadtest.py -t <target> [options]
+python loadtest.py -t <target> [opciones]
 ```
 
-#### Required Arguments
+#### Argumentos Requeridos
 
-- `-t, --target`: Target URL or IP address
+- `-t, --target`: URL del target o dirección IP
 
-#### Common Options
+#### Opciones Comunes
 
 ```bash
-# Duration and power level
--d, --duration <seconds>     Test duration (default: 60)
--p, --power <level>          Power level: TEST, LIGHT, MODERATE, MEDIUM, 
-                             HEAVY, EXTREME, DEVASTATOR, APOCALYPSE, GODMODE
+# Duración y nivel de potencia
+-d, --duration <segundos>     Duración de la prueba (default: 60)
+-p, --power <nivel>           Nivel de potencia: TEST, LIGHT, MODERATE, MEDIUM, 
+                              HEAVY, EXTREME, DEVASTATOR, APOCALYPSE, GODMODE
 
-# Connections and threads
--c, --connections <num>      Maximum connections (default: 10000)
---threads <num>              Maximum threads (default: 400)
+# Conexiones y threads
+-c, --connections <num>       Máximo de conexiones (default: 10000)
+--threads <num>               Máximo de threads (default: 400)
 
-# Attack mode
--m, --mode <mode>            Attack mode: MIXED, CONSTANT, BURST, RAMP_UP
+# Modo de ataque
+-m, --mode <modo>             Modo de ataque: MIXED, CONSTANT, BURST, RAMP_UP
 
-# Advanced options
---bypass-waf                 Enable WAF bypass techniques
---stealth                    Enable stealth mode
---large-payloads             Use large payloads
---no-auto-throttle           Disable automatic throttling
---no-memory-monitoring       Disable memory monitoring
+# Opciones avanzadas
+--bypass-waf                  Activar técnicas de bypass de WAF
+--stealth                     Activar modo stealth
+--large-payloads              Usar payloads grandes
+--no-auto-throttle            Desactivar throttling automático
+--no-memory-monitoring        Desactivar monitoreo de memoria
 
-# Other options
---web                        Start web panel
---web-port <port>            Web panel port (default: 5000)
---show-tools                 Show available tools status
---install-tools              Install missing tools
---show-params                Show all configurable parameters
---debug                      Enable debug mode
---dry-run                    Dry run (simulate without executing)
+# Otras opciones
+--web                         Iniciar panel web
+--web-port <puerto>           Puerto para panel web (default: 5000)
+--show-tools                  Mostrar estado de herramientas disponibles
+--install-tools               Instalar herramientas faltantes
+--show-params                 Mostrar todos los parámetros configurables
+--check-update                Verificar si hay actualizaciones disponibles
+--update                      Actualizar la herramienta desde GitHub
+--no-auto-update-check        Desactivar verificación automática de actualizaciones
+--debug                       Activar modo debug
+--dry-run                     Simulación sin ejecutar
 ```
 
-#### Examples
+#### Ejemplos
 
 ```bash
-# Light test for 30 seconds
+# Prueba ligera por 30 segundos
 python loadtest.py -t https://example.com -d 30 -p LIGHT
 
-# Heavy load test with custom connections
+# Prueba de carga pesada con conexiones personalizadas
 python loadtest.py -t https://example.com -d 120 -p HEAVY -c 20000 --threads 500
 
-# Stealth mode with WAF bypass
+# Modo stealth con bypass de WAF
 python loadtest.py -t https://example.com -d 60 -p MODERATE --stealth --bypass-waf
 
-# Burst attack mode
+# Modo de ataque burst
 python loadtest.py -t https://example.com -d 60 -p MEDIUM -m BURST
 
-# Web panel on custom port
+# Panel web en puerto personalizado
 python loadtest.py --web --web-port 8080
+
+# Verificar actualizaciones
+python loadtest.py --check-update
+
+# Actualizar la herramienta
+python loadtest.py --update
 ```
 
 ---
 
-## ⚙️ Configuration
+## ⚙️ Configuración
 
-### Power Levels
+### Niveles de Potencia
 
-| Level | Multiplier | Description |
-|-------|-----------|-------------|
-| TEST | 1x | Minimal load for testing |
-| LIGHT | 3x | Light load |
-| MODERATE | 8x | Moderate load (default) |
-| MEDIUM | 16x | Medium load |
-| HEAVY | 30x | Heavy load |
-| EXTREME | 60x | Extreme load |
-| DEVASTATOR | 120x | Very high load |
-| APOCALYPSE | 250x | Maximum load |
-| GODMODE | 500x | Extreme maximum load |
+| Nivel | Multiplicador | Descripción |
+|-------|--------------|-------------|
+| TEST | 1x | Carga mínima para pruebas |
+| LIGHT | 3x | Carga ligera |
+| MODERATE | 8x | Carga moderada (default) |
+| MEDIUM | 16x | Carga media |
+| HEAVY | 30x | Carga pesada |
+| EXTREME | 60x | Carga extrema |
+| DEVASTATOR | 120x | Carga muy alta |
+| APOCALYPSE | 250x | Carga máxima |
+| GODMODE | 500x | Carga extrema máxima |
 
-### Attack Modes
+### Modos de Ataque
 
-- **MIXED**: Combines multiple attack techniques
-- **CONSTANT**: Constant rate of requests
-- **BURST**: Burst pattern with intervals
-- **RAMP_UP**: Gradually increasing load
+- **MIXED**: Combina múltiples técnicas de ataque
+- **CONSTANT**: Tasa constante de requests
+- **BURST**: Patrón de ráfagas con intervalos
+- **RAMP_UP**: Carga gradualmente creciente
 
-### Memory Thresholds
+### Umbrales de Memoria
 
-- **Warning**: 60% - Early warning
-- **Critical**: 75% - Immediate action
-- **OOM**: 85% - Stop to prevent system restart
-- **Emergency**: 90% - Aggressive process termination
+- **Advertencia**: 60% - Advertencia temprana
+- **Crítico**: 75% - Acción inmediata
+- **OOM**: 85% - Detener para prevenir reinicio del sistema
+- **Emergencia**: 90% - Terminación agresiva de procesos
 
 ---
 
-## 🛠️ Supported Tools
+## 🛠️ Herramientas Soportadas
 
-LoadTest Enterprise supports 40+ industry-standard testing tools across multiple categories:
+LoadTest Enterprise soporta 40+ herramientas estándar de la industria en múltiples categorías:
 
-### HTTP Load Testing
+### Pruebas de Carga HTTP
 - wrk, vegeta, bombardier, hey, ab, siege
 - h2load, locust, k6, artillery, tsung, jmeter
 
-### Layer 4 Testing
+### Pruebas Layer 4
 - hping3, nping, slowhttptest, masscan, zmap
 
-### WebSocket Testing
+### Pruebas WebSocket
 - websocat, wscat
 
-### Advanced Tools
+### Herramientas Avanzadas
 - gatling, tsung, wrk2, drill, http2bench, weighttp, httperf, autocannon
 
-### Specialized Tools
-- goldeneye, hulk, slowloris, and more
+### Herramientas Especializadas
+- goldeneye, hulk, slowloris, y más
 
-### Tool Status
+### Estado de Herramientas
 
-Check which tools are installed:
+Verificar qué herramientas están instaladas:
 
 ```bash
 python loadtest.py --show-tools
 ```
 
-Install missing tools automatically:
+Instalar herramientas faltantes automáticamente:
 
 ```bash
 python loadtest.py --install-tools
@@ -339,64 +349,64 @@ python loadtest.py --install-tools
 
 ---
 
-## 📊 Reports
+## 📊 Reportes
 
-### Report Generation
+### Generación de Reportes
 
-Reports are automatically generated after each test run and saved in the `loadtest_output/reports/` directory.
+Los reportes se generan automáticamente después de cada ejecución de prueba y se guardan en el directorio `loadtest_output/reports/`.
 
-### Report Contents
+### Contenido de Reportes
 
-- **General Information**: Target, duration, power level
-- **Statistics**: Requests sent, responses received, error rates
-- **HTTP Codes**: Distribution of HTTP status codes
-- **Latency Analysis**: P50, P75, P90, P95, P99 percentiles
-- **Performance Metrics**: RPS, throughput, response times
-- **Error Analysis**: Detailed error breakdown
-- **Recommendations**: Actionable recommendations based on results
-- **Charts**: Visual representation of metrics
+- **Información General**: Target, duración, nivel de potencia
+- **Estadísticas**: Requests enviados, respuestas recibidas, tasas de error
+- **Códigos HTTP**: Distribución de códigos de estado HTTP
+- **Análisis de Latencia**: Percentiles P50, P75, P90, P95, P99
+- **Métricas de Rendimiento**: RPS, throughput, tiempos de respuesta
+- **Análisis de Errores**: Desglose detallado de errores
+- **Recomendaciones**: Recomendaciones accionables basadas en resultados
+- **Gráficos**: Representación visual de métricas
 
-### Viewing Reports
+### Ver Reportes
 
-Reports are saved as HTML files. Open them in any web browser:
+Los reportes se guardan como archivos HTML. Ábrelos en cualquier navegador web:
 
 ```bash
-# Reports are saved in:
+# Los reportes se guardan en:
 loadtest_output/reports/report_YYYYMMDD_HHMMSS.html
 ```
 
 ---
 
-## 🌐 Web Panel
+## 🌐 Panel Web
 
-The web panel provides a modern interface for:
+El panel web proporciona una interfaz moderna para:
 
-- **Configuration**: Easy setup of test parameters
-- **Real-Time Monitoring**: Live statistics and metrics
-- **Tool Management**: View and install testing tools
-- **Report Viewing**: Browse and view generated reports
-- **Fingerprinting**: Target analysis and recommendations
-- **Attack Control**: Start/stop tests from the interface
+- **Configuración**: Configuración fácil de parámetros de prueba
+- **Monitoreo en Tiempo Real**: Estadísticas y métricas en vivo
+- **Gestión de Herramientas**: Ver e instalar herramientas de prueba
+- **Visualización de Reportes**: Navegar y ver reportes generados
+- **Fingerprinting**: Análisis del target y recomendaciones
+- **Control de Ataques**: Iniciar/detener pruebas desde la interfaz
 
-### Starting the Web Panel
+### Iniciar el Panel Web
 
 ```bash
 python loadtest.py --web
 ```
 
-Access at: `http://localhost:5000`
+Acceder en: `http://localhost:5000`
 
 ---
 
-## 💡 Examples
+## 💡 Ejemplos
 
-### Example 1: Basic Load Test
+### Ejemplo 1: Prueba de Carga Básica
 
 ```bash
 python loadtest.py -t https://api.example.com -d 60 -p MODERATE
 ```
 
-### Example 2: Stress Test with Custom Settings
+### Ejemplo 2: Prueba de Estrés con Configuración Personalizada
 
 ```bash
 python loadtest.py -t https://example.com \
@@ -407,7 +417,7 @@ python loadtest.py -t https://example.com \
   -m RAMP_UP
 ```
 
-### Example 3: Security Testing
+### Ejemplo 3: Pruebas de Seguridad
 
 ```bash
 python loadtest.py -t https://example.com \
@@ -418,132 +428,192 @@ python loadtest.py -t https://example.com \
   --large-payloads
 ```
 
-### Example 4: Web Panel Usage
+### Ejemplo 4: Uso del Panel Web
 
 ```bash
-# Start web panel
+# Iniciar panel web
 python loadtest.py --web
 
-# Access in browser
+# Acceder en navegador
 # http://localhost:5000
 ```
 
 ---
 
-## 🔧 Troubleshooting
+## 🔄 Sistema de Auto-Actualización
 
-### Common Issues
+LoadTest Enterprise incluye un sistema de actualización automática que verifica nuevas versiones desde GitHub.
 
-#### Issue: "No module named 'flask'"
+### Características
 
-**Solution:**
+- **Verificación Automática**: Verifica actualizaciones una vez al día cuando ejecutas la herramienta
+- **Verificación Manual**: Usa `--check-update` para verificar manualmente actualizaciones
+- **Actualización con Un Clic**: Usa `--update` para descargar e instalar actualizaciones automáticamente
+- **Actualizaciones Seguras**: Crea backups de archivos antes de actualizar
+- **Comparación de Versiones**: Compara versión local con versión en GitHub
+
+### Uso
+
+```bash
+# Verificar actualizaciones manualmente
+python loadtest.py --check-update
+
+# Actualizar a la última versión
+python loadtest.py --update
+
+# Desactivar verificación automática de actualizaciones
+python loadtest.py --no-auto-update-check -t https://example.com
+```
+
+### Cómo Funciona
+
+1. **Verificación Automática**: Cuando ejecutas la herramienta, verifica automáticamente actualizaciones (una vez cada 24 horas)
+2. **Detección de Versión**: Compara tu versión local con la versión en GitHub
+3. **Descarga Segura**: Descarga archivos y crea backups antes de reemplazar
+4. **Actualización de Archivos**: Actualiza archivos principales (loadtest.py, loadtest_web.py, requirements.txt, etc.)
+5. **Reinicio Requerido**: Después de actualizar, reinicia la herramienta para usar la nueva versión
+
+### Proceso de Actualización
+
+Cuando ejecutas `--update`, la herramienta:
+
+1. Verifica si hay una versión más nueva disponible
+2. Descarga archivos actualizados desde GitHub
+3. Crea backups de archivos existentes (extensión `.backup`)
+4. Reemplaza archivos con nuevas versiones
+5. Muestra un resumen de archivos actualizados
+
+### Repositorio
+
+La herramienta verifica actualizaciones desde: `https://github.com/Remiily/Load-Test-Tool`
+
+---
+
+## 🔧 Solución de Problemas
+
+### Problemas Comunes
+
+#### Problema: "No module named 'flask'"
+
+**Solución:**
 ```bash
 pip install Flask Flask-Cors
 ```
 
-#### Issue: "Tool not found"
+#### Problema: "Tool not found"
 
-**Solution:**
+**Solución:**
 ```bash
-# Install missing tools
+# Instalar herramientas faltantes
 python loadtest.py --install-tools
 
-# Or install manually
+# O instalar manualmente
 # Linux: sudo apt install <tool-name>
 # macOS: brew install <tool-name>
 # Windows: choco install <tool-name>
 ```
 
-#### Issue: "Permission denied"
+#### Problema: "Permission denied"
 
-**Solution:**
-- On Linux/macOS, some tools may require sudo for installation
-- Use virtual environment to avoid permission issues
+**Solución:**
+- En Linux/macOS, algunas herramientas pueden requerir sudo para instalación
+- Usar entorno virtual para evitar problemas de permisos
 
-#### Issue: "Memory errors"
+#### Problema: "Memory errors"
 
-**Solution:**
-- Reduce power level: `-p LIGHT` or `-p MODERATE`
-- Reduce connections: `-c 5000`
-- Enable auto-throttle (default): Memory monitoring is enabled by default
+**Solución:**
+- Reducir nivel de potencia: `-p LIGHT` o `-p MODERATE`
+- Reducir conexiones: `-c 5000`
+- Activar auto-throttle (default): El monitoreo de memoria está activado por defecto
 
-#### Issue: "Web panel not starting"
+#### Problema: "Web panel not starting"
 
-**Solution:**
+**Solución:**
 ```bash
-# Check if port is available
-# Try different port
+# Verificar si el puerto está disponible
+# Probar puerto diferente
 python loadtest.py --web --web-port 8080
 
-# Check if loadtest_web.py exists
+# Verificar si loadtest_web.py existe
 ls loadtest_web.py
 ```
 
-For more troubleshooting help, see [INSTALL.md](INSTALL.md).
+#### Problema: "Update failed"
+
+**Solución:**
+```bash
+# Verificar conexión a internet
+# Verificar que GitHub sea accesible
+# Intentar actualización manual descargando archivos desde GitHub
+
+# Restaurar desde backup si es necesario
+# Los archivos de backup tienen extensión .backup
+```
+
+Para más ayuda con solución de problemas, ver [INSTALL.md](INSTALL.md).
 
 ---
 
-## 🤝 Contributing
+## 🤝 Contribuir
 
-We welcome contributions! Please follow these steps:
+¡Aceptamos contribuciones! Por favor sigue estos pasos:
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+1. Fork el repositorio
+2. Crea una rama de característica (`git checkout -b feature/AmazingFeature`)
+3. Commit tus cambios (`git commit -m 'Add some AmazingFeature'`)
+4. Push a la rama (`git push origin feature/AmazingFeature`)
+5. Abre un Pull Request
 
-### Contribution Guidelines
+### Guías de Contribución
 
-- Follow PEP 8 style guidelines
-- Add comments for complex code
-- Update documentation as needed
-- Test your changes thoroughly
-- Ensure backward compatibility
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- Seguir guías de estilo PEP 8
+- Agregar comentarios para código complejo
+- Actualizar documentación según sea necesario
+- Probar tus cambios exhaustivamente
+- Asegurar compatibilidad hacia atrás
 
 ---
 
-## ⚠️ Disclaimer
+## 📄 Licencia
 
-**IMPORTANT**: This tool is designed for **authorized security testing and performance analysis only**. 
-
-- Only use on systems you own or have explicit written permission to test
-- Unauthorized use of this tool may violate laws and regulations
-- The authors and contributors are not responsible for misuse of this software
-- Always comply with applicable laws and regulations
-- Use responsibly and ethically
-
-**By using this tool, you agree to use it only for legitimate purposes and accept full responsibility for your actions.**
+Este proyecto está licenciado bajo la Licencia MIT - ver el archivo [LICENSE](LICENSE) para detalles.
 
 ---
 
-## 📞 Support
+## ⚠️ Descargo de Responsabilidad
 
-- **Documentation**: See [INSTALL.md](INSTALL.md) for detailed installation instructions
-- **Issues**: Report issues on the GitHub Issues page
-- **Questions**: Open a discussion on GitHub Discussions
+**IMPORTANTE**: Esta herramienta está diseñada **solo para pruebas de seguridad autorizadas y análisis de rendimiento**.
+
+- Solo usar en sistemas que posees o tienes permiso escrito explícito para probar
+- El uso no autorizado de esta herramienta puede violar leyes y regulaciones
+- Los autores y contribuidores no son responsables del uso indebido de este software
+- Siempre cumplir con leyes y regulaciones aplicables
+- Usar responsablemente y éticamente
+
+**Al usar esta herramienta, aceptas usarla solo para propósitos legítimos y aceptas plena responsabilidad por tus acciones.**
 
 ---
 
-## 🙏 Acknowledgments
+## 📞 Soporte
 
-- All the developers of the supported testing tools
-- The open-source community
-- Security professionals who provided feedback
+- **Documentación**: Ver [INSTALL.md](INSTALL.md) para instrucciones detalladas de instalación
+- **Issues**: Reportar problemas en la página de GitHub Issues
+- **Preguntas**: Abrir una discusión en GitHub Discussions
+
+---
+
+## 🙏 Agradecimientos
+
+- Todos los desarrolladores de las herramientas de prueba soportadas
+- La comunidad de código abierto
+- Profesionales de seguridad que proporcionaron retroalimentación
 
 ---
 
 <div align="center">
 
-**LoadTest Enterprise** - Professional Web Load Testing & Performance Analysis
+**LoadTest Enterprise** - Pruebas de Carga Web Profesionales y Análisis de Rendimiento
 
-Made with ❤️ for the security and DevOps community
+Hecho con ❤️ para la comunidad de seguridad y DevOps
 
 </div>
-

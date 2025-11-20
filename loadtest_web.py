@@ -602,10 +602,10 @@ def get_attack_status():
 if __name__ == '__main__':
     print(f"""
     ╔══════════════════════════════════════════════════════════════╗
-    ║         LoadTest Enterprise Web Panel v{VERSION}            ║
+    ║         LoadTest Enterprise Panel Web v{VERSION}             ║
     ║                                                              ║
     ║  🌐 Panel Web: http://localhost:5000                        ║
-    ║  Professional Security Testing & Analysis Tool             ║
+    ║  Plataforma Profesional de Pruebas de Seguridad             ║
     ╚══════════════════════════════════════════════════════════════╝
     """)
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)
