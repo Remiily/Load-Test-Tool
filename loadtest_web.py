@@ -350,11 +350,34 @@ def start_attack():
 
 @app.route('/api/stop', methods=['POST'])
 def stop_attack():
-    """Detiene el ataque actual"""
+    """Detiene el ataque actual y limpia recursos"""
     global monitoring_active
     monitoring_active = False
     loadtest.monitoring_active = False
-    return jsonify({"status": "success", "message": "Ataque detenido"})
+    
+    # Limpiar conexiones y recursos
+    try:
+        if hasattr(loadtest, 'ConnectionManager'):
+            loadtest.ConnectionManager.clear_sessions()
+    except:
+        pass
+    
+    # Terminar procesos
+    try:
+        for process in loadtest.running_processes[:]:
+            try:
+                process.terminate()
+                process.wait(timeout=2)
+            except:
+                try:
+                    process.kill()
+                except:
+                    pass
+        loadtest.running_processes.clear()
+    except:
+        pass
+    
+    return jsonify({"status": "success", "message": "Ataque detenido y recursos liberados"})
 
 @app.route('/api/fingerprint', methods=['POST'])
 def run_fingerprint():
