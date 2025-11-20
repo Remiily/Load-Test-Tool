@@ -115,7 +115,7 @@ python loadtest.py --install-tools
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/yourusername/loadtest-enterprise.git
 cd loadtest-enterprise
 
 # Run installation script
@@ -127,7 +127,7 @@ chmod +x install.sh
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/yourusername/loadtest-enterprise.git
 cd loadtest-enterprise
 
 # Run installation script

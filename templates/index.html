@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HEXSTRIKE ULTIMATE | RED TEAM OPERATIONS</title>
+    <title>LoadTest Enterprise | Performance Analysis</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -844,9 +844,9 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>HEXSTRIKE ULTIMATE</h1>
-            <div class="version">v<span id="version">{{ version }}</span> | RED TEAM OPERATIONS</div>
-            <div class="subtitle">[ AUTHORIZED PENTESTING & STRESS TESTING PLATFORM ]</div>
+            <h1>LoadTest Enterprise</h1>
+            <div class="version">v<span id="version">{{ version }}</span> | Enterprise Edition</div>
+            <div class="subtitle">[ Professional Security Testing & Performance Analysis Platform ]</div>
         </div>
         
         <div class="tabs">
@@ -1867,7 +1867,7 @@
                 const url = URL.createObjectURL(blob);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `hexstrike_params_${new Date().toISOString().split('T')[0]}.json`;
+                a.download = `loadtest_params_${new Date().toISOString().split('T')[0]}.json`;
                 a.click();
                 URL.revokeObjectURL(url);
                 showAlert('Parámetros exportados correctamente', 'success');

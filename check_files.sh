@@ -11,8 +11,8 @@ ERRORS=0
 
 # Verificar archivos principales
 files=(
-    "hexstrike.py"
-    "hexstrike_web.py"
+    "loadtest.py"
+    "loadtest_web.py"
     "requirements.txt"
 )
 
@@ -53,8 +53,8 @@ else
     echo "❌ Faltan $ERRORS archivo(s)"
     echo ""
     echo "Asegúrate de copiar todos los archivos del proyecto:"
-    echo "  - hexstrike.py"
-    echo "  - hexstrike_web.py"
+    echo "  - loadtest.py"
+    echo "  - loadtest_web.py"
     echo "  - requirements.txt"
     echo "  - templates/ (carpeta completa)"
     exit 1

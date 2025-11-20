@@ -38,6 +38,9 @@ except ImportError:
 
 VERSION = "1.0.0"
 TOOL_NAME = "LoadTest Enterprise"
+GITHUB_REPO = "Remiily/Load-Test-Tool"
+GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}"
+GITHUB_RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 SCRIPT_DIR = Path(__file__).parent.absolute()
 OUTPUT_DIR = SCRIPT_DIR / "loadtest_output"
 LOGS_DIR = OUTPUT_DIR / "logs"
@@ -81,6 +84,7 @@ MEMORY_THRESHOLD_OOM = 85  # Reducido de 95 - detener todo para evitar reinicio
 MEMORY_THRESHOLD_EMERGENCY = 90  # NUEVO - emergencia, matar procesos agresivamente
 STEALTH_MODE = False
 WAF_BYPASS = False
+SOCKET_ATTACK = False  # Ataque socket-based de bajo nivel
 PROXY_LIST = []
 PROXY_ROTATION = "round-robin"
 DEBUG_MODE = False
@@ -5820,6 +5824,7 @@ Ejemplos:
     USE_LARGE_PAYLOADS = args.large_payloads
     WAF_BYPASS = args.bypass_waf
     STEALTH_MODE = args.stealth
+    SOCKET_ATTACK = args.socket_attack
     AUTO_THROTTLE = not args.no_auto_throttle
     MEMORY_MONITORING = not args.no_memory_monitoring
     DEBUG_MODE = args.debug
