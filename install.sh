@@ -1,10 +1,10 @@
 #!/bin/bash
-# HEXSTRIKE ULTIMATE - Script de Instalación para Linux/Mac
+# LoadTest Enterprise - Script de Instalación para Linux/Mac
 
 set -e
 
 echo "╔═══════════════════════════════════════════════════════════╗"
-echo "║     HEXSTRIKE ULTIMATE - Instalación Automática           ║"
+echo "║     LoadTest Enterprise - Instalación Automática          ║"
 echo "╚═══════════════════════════════════════════════════════════╝"
 echo ""
 
@@ -129,18 +129,18 @@ if [ "$USE_VENV" = true ]; then
     echo "  source venv/bin/activate"
     echo ""
     echo "Luego ejecuta:"
-    echo "  python hexstrike.py --web"
+    echo "  python loadtest.py --web"
 else
     echo "Para iniciar el panel web:"
-    echo "  python3 hexstrike.py --web"
+    echo "  python3 loadtest.py --web"
 fi
 
 echo ""
 echo "O verificar herramientas:"
 if [ "$USE_VENV" = true ]; then
-    echo "  source venv/bin/activate && python hexstrike.py --show-tools"
+    echo "  source venv/bin/activate && python loadtest.py --show-tools"
 else
-    echo "  python3 hexstrike.py --show-tools"
+    echo "  python3 loadtest.py --show-tools"
 fi
 echo ""
 

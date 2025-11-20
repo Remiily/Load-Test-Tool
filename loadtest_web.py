@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HEXSTRIKE ULTIMATE - Web Panel
+LoadTest Enterprise - Web Panel
 Panel de control web para configuración y monitoreo
 """
 
@@ -17,8 +17,8 @@ import os
 
 # Importar funciones del módulo principal
 sys.path.insert(0, str(Path(__file__).parent))
-import hexstrike
-from hexstrike import (
+import loadtest
+from loadtest import (
     TARGET, DURATION, POWER_LEVEL, ATTACK_MODE, MAX_CONNECTIONS, MAX_THREADS,
     USE_LARGE_PAYLOADS, WAF_BYPASS, STEALTH_MODE, AUTO_THROTTLE, MEMORY_MONITORING,
     MEMORY_THRESHOLD_WARN, MEMORY_THRESHOLD_CRITICAL, MEMORY_THRESHOLD_OOM,
@@ -28,9 +28,9 @@ from hexstrike import (
     generate_stress_recommendations, DOMAIN, IP_ADDRESS, TARGET_TYPE, NETWORK_TYPE
 )
 
-# Acceso a variables globales del módulo hexstrike
-def get_hexstrike_var(var_name):
-    return getattr(hexstrike, var_name, None)
+# Acceso a variables globales del módulo loadtest
+def get_loadtest_var(var_name):
+    return getattr(loadtest, var_name, None)
 
 # Configurar rutas de templates y static
 script_dir = Path(__file__).parent.absolute().resolve()
@@ -77,13 +77,13 @@ def get_config():
         "payload_size_kb": PAYLOAD_SIZE_KB,
         "power_levels": POWER_LEVELS,
         "attack_modes": ["MIXED", "CONSTANT", "BURST", "RAMP_UP"],
-        "socket_attack": get_hexstrike_var('SOCKET_REUSE') or True,
-        "tcp_optimization": get_hexstrike_var('TCP_OPTIMIZATION') or True,
-        "keep_alive_pooling": get_hexstrike_var('KEEP_ALIVE_POOLING') or True,
-        "connection_warmup": get_hexstrike_var('CONNECTION_WARMUP') or True,
-        "rate_adaptive": get_hexstrike_var('RATE_ADAPTIVE') or True,
-        "connection_pool_size": get_hexstrike_var('CONNECTION_POOL_SIZE') or 1000,
-        "max_payload_mb": get_hexstrike_var('MAX_PAYLOAD_SIZE_MB') or 10
+        "socket_attack": get_loadtest_var('SOCKET_REUSE') or True,
+        "tcp_optimization": get_loadtest_var('TCP_OPTIMIZATION') or True,
+        "keep_alive_pooling": get_loadtest_var('KEEP_ALIVE_POOLING') or True,
+        "connection_warmup": get_loadtest_var('CONNECTION_WARMUP') or True,
+        "rate_adaptive": get_loadtest_var('RATE_ADAPTIVE') or True,
+        "connection_pool_size": get_loadtest_var('CONNECTION_POOL_SIZE') or 1000,
+        "max_payload_mb": get_loadtest_var('MAX_PAYLOAD_SIZE_MB') or 10
     })
 
 @app.route('/api/config', methods=['POST'])
@@ -97,74 +97,74 @@ def set_config():
     
     data = request.json
     
-    # Actualizar variables globales en el módulo hexstrike
+    # Actualizar variables globales en el módulo loadtest
     if "target" in data:
         TARGET = data["target"]
-        hexstrike.TARGET = data["target"]
+        loadtest.TARGET = data["target"]
     if "duration" in data:
         DURATION = int(data["duration"])
-        hexstrike.DURATION = int(data["duration"])
+        loadtest.DURATION = int(data["duration"])
     if "power_level" in data:
         POWER_LEVEL = data["power_level"]
-        hexstrike.POWER_LEVEL = data["power_level"]
-        hexstrike.MULTIPLIER = POWER_LEVELS.get(data["power_level"], 8)
+        loadtest.POWER_LEVEL = data["power_level"]
+        loadtest.MULTIPLIER = POWER_LEVELS.get(data["power_level"], 8)
     if "attack_mode" in data:
         ATTACK_MODE = data["attack_mode"]
-        hexstrike.ATTACK_MODE = data["attack_mode"]
+        loadtest.ATTACK_MODE = data["attack_mode"]
     if "max_connections" in data:
         MAX_CONNECTIONS = int(data["max_connections"])
-        hexstrike.MAX_CONNECTIONS = int(data["max_connections"])
+        loadtest.MAX_CONNECTIONS = int(data["max_connections"])
     if "max_threads" in data:
         MAX_THREADS = int(data["max_threads"])
-        hexstrike.MAX_THREADS = int(data["max_threads"])
+        loadtest.MAX_THREADS = int(data["max_threads"])
     if "use_large_payloads" in data:
         USE_LARGE_PAYLOADS = bool(data["use_large_payloads"])
-        hexstrike.USE_LARGE_PAYLOADS = bool(data["use_large_payloads"])
+        loadtest.USE_LARGE_PAYLOADS = bool(data["use_large_payloads"])
     if "waf_bypass" in data:
         WAF_BYPASS = bool(data["waf_bypass"])
-        hexstrike.WAF_BYPASS = bool(data["waf_bypass"])
+        loadtest.WAF_BYPASS = bool(data["waf_bypass"])
     if "stealth_mode" in data:
         STEALTH_MODE = bool(data["stealth_mode"])
-        hexstrike.STEALTH_MODE = bool(data["stealth_mode"])
+        loadtest.STEALTH_MODE = bool(data["stealth_mode"])
     if "auto_throttle" in data:
         AUTO_THROTTLE = bool(data["auto_throttle"])
-        hexstrike.AUTO_THROTTLE = bool(data["auto_throttle"])
+        loadtest.AUTO_THROTTLE = bool(data["auto_throttle"])
     if "memory_monitoring" in data:
         MEMORY_MONITORING = bool(data["memory_monitoring"])
-        hexstrike.MEMORY_MONITORING = bool(data["memory_monitoring"])
+        loadtest.MEMORY_MONITORING = bool(data["memory_monitoring"])
     if "memory_threshold_warn" in data:
         MEMORY_THRESHOLD_WARN = int(data["memory_threshold_warn"])
-        hexstrike.MEMORY_THRESHOLD_WARN = int(data["memory_threshold_warn"])
+        loadtest.MEMORY_THRESHOLD_WARN = int(data["memory_threshold_warn"])
     if "memory_threshold_critical" in data:
         MEMORY_THRESHOLD_CRITICAL = int(data["memory_threshold_critical"])
-        hexstrike.MEMORY_THRESHOLD_CRITICAL = int(data["memory_threshold_critical"])
+        loadtest.MEMORY_THRESHOLD_CRITICAL = int(data["memory_threshold_critical"])
     if "memory_threshold_oom" in data:
         MEMORY_THRESHOLD_OOM = int(data["memory_threshold_oom"])
-        hexstrike.MEMORY_THRESHOLD_OOM = int(data["memory_threshold_oom"])
+        loadtest.MEMORY_THRESHOLD_OOM = int(data["memory_threshold_oom"])
     if "payload_size_kb" in data:
         PAYLOAD_SIZE_KB = int(data["payload_size_kb"])
-        hexstrike.PAYLOAD_SIZE_KB = int(data["payload_size_kb"])
+        loadtest.PAYLOAD_SIZE_KB = int(data["payload_size_kb"])
     if "socket_attack" in data:
         SOCKET_REUSE = bool(data["socket_attack"])
-        hexstrike.SOCKET_REUSE = bool(data["socket_attack"])
+        loadtest.SOCKET_REUSE = bool(data["socket_attack"])
     if "tcp_optimization" in data:
         TCP_OPTIMIZATION = bool(data["tcp_optimization"])
-        hexstrike.TCP_OPTIMIZATION = bool(data["tcp_optimization"])
+        loadtest.TCP_OPTIMIZATION = bool(data["tcp_optimization"])
     if "keep_alive_pooling" in data:
         KEEP_ALIVE_POOLING = bool(data["keep_alive_pooling"])
-        hexstrike.KEEP_ALIVE_POOLING = bool(data["keep_alive_pooling"])
+        loadtest.KEEP_ALIVE_POOLING = bool(data["keep_alive_pooling"])
     if "connection_warmup" in data:
         CONNECTION_WARMUP = bool(data["connection_warmup"])
-        hexstrike.CONNECTION_WARMUP = bool(data["connection_warmup"])
+        loadtest.CONNECTION_WARMUP = bool(data["connection_warmup"])
     if "rate_adaptive" in data:
         RATE_ADAPTIVE = bool(data["rate_adaptive"])
-        hexstrike.RATE_ADAPTIVE = bool(data["rate_adaptive"])
+        loadtest.RATE_ADAPTIVE = bool(data["rate_adaptive"])
     if "connection_pool_size" in data:
         CONNECTION_POOL_SIZE = int(data["connection_pool_size"])
-        hexstrike.CONNECTION_POOL_SIZE = int(data["connection_pool_size"])
+        loadtest.CONNECTION_POOL_SIZE = int(data["connection_pool_size"])
     if "max_payload_mb" in data:
         MAX_PAYLOAD_SIZE_MB = int(data["max_payload_mb"])
-        hexstrike.MAX_PAYLOAD_SIZE_MB = int(data["max_payload_mb"])
+        loadtest.MAX_PAYLOAD_SIZE_MB = int(data["max_payload_mb"])
     
     attack_config.update(data)
     
@@ -173,9 +173,9 @@ def set_config():
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     """Obtiene estadísticas avanzadas en tiempo real"""
-    vulns = get_hexstrike_var('VULNERABILITIES') or []
-    ports = get_hexstrike_var('OPEN_PORTS') or []
-    endpoints = get_hexstrike_var('DISCOVERED_ENDPOINTS') or []
+    vulns = get_loadtest_var('VULNERABILITIES') or []
+    ports = get_loadtest_var('OPEN_PORTS') or []
+    endpoints = get_loadtest_var('DISCOVERED_ENDPOINTS') or []
     
     requests_sent = attack_stats.get("requests_sent", 0)
     responses_received = attack_stats.get("responses_received", 0)
@@ -229,7 +229,7 @@ def get_stats():
         pass
     
     # Obtener duración configurada
-    duration = get_hexstrike_var('DURATION') or 60
+    duration = get_loadtest_var('DURATION') or 60
     
     return jsonify({
         "requests_sent": requests_sent,
@@ -309,15 +309,15 @@ def start_attack():
     # Iniciar ataque en thread separado
     def run_attack():
         try:
-            # Importar y ejecutar main del módulo hexstrike
-            import hexstrike
+            # Importar y ejecutar main del módulo loadtest
+            import loadtest
             # Activar modo web panel para evitar interacciones de consola
-            hexstrike.WEB_PANEL_MODE = True
-            hexstrike.DEBUG_MODE = True  # Activar debug para logging completo
+            loadtest.WEB_PANEL_MODE = True
+            loadtest.DEBUG_MODE = True  # Activar debug para logging completo
             
             # Configurar sys.argv para simular línea de comandos
             original_argv = sys.argv
-            sys.argv = ['hexstrike.py', '-t', TARGET, '-d', str(DURATION), '-p', POWER_LEVEL]
+            sys.argv = ['loadtest.py', '-t', TARGET, '-d', str(DURATION), '-p', POWER_LEVEL]
             if WAF_BYPASS:
                 sys.argv.append('--bypass-waf')
             if USE_LARGE_PAYLOADS:
@@ -330,7 +330,7 @@ def start_attack():
                 sys.argv.append('--no-memory-monitoring')
             sys.argv.extend(['--connections', str(MAX_CONNECTIONS), '--threads', str(MAX_THREADS)])
             
-            hexstrike.main()
+            loadtest.main()
             sys.argv = original_argv
         except Exception as e:
             import traceback
@@ -338,8 +338,8 @@ def start_attack():
             print(error_msg)
             # Loggear el error
             try:
-                import hexstrike
-                hexstrike.log_message("ERROR", error_msg, force_console=True)
+                import loadtest
+                loadtest.log_message("ERROR", error_msg, force_console=True)
             except:
                 pass
     
@@ -353,7 +353,7 @@ def stop_attack():
     """Detiene el ataque actual"""
     global monitoring_active
     monitoring_active = False
-    hexstrike.monitoring_active = False
+    loadtest.monitoring_active = False
     return jsonify({"status": "success", "message": "Ataque detenido"})
 
 @app.route('/api/fingerprint', methods=['POST'])
@@ -370,30 +370,30 @@ def run_fingerprint():
         # Actualizar TARGET en ambos módulos
         target = target.strip()
         TARGET = target
-        hexstrike.TARGET = target
+        loadtest.TARGET = target
         
         # Limpiar variables previas
-        hexstrike.DOMAIN = ""
-        hexstrike.IP_ADDRESS = ""
-        hexstrike.TARGET_TYPE = "DOMAIN"
-        hexstrike.NETWORK_TYPE = "PUBLIC"
+        loadtest.DOMAIN = ""
+        loadtest.IP_ADDRESS = ""
+        loadtest.TARGET_TYPE = "DOMAIN"
+        loadtest.NETWORK_TYPE = "PUBLIC"
         
         # Validar y parsear target
         validation_result = validate_critical_variables()
         print(f"DEBUG: validate_critical_variables() retornó: {validation_result}")
-        print(f"DEBUG: TARGET={hexstrike.TARGET}, DOMAIN={hexstrike.DOMAIN}, IP={hexstrike.IP_ADDRESS}")
+        print(f"DEBUG: TARGET={loadtest.TARGET}, DOMAIN={loadtest.DOMAIN}, IP={loadtest.IP_ADDRESS}")
         
         if not validation_result:
             # Validación falló - obtener información de debug
             debug_info = {
                 "target_original": target,
-                "target_after_validation": hexstrike.TARGET,
-                "domain": hexstrike.DOMAIN,
-                "ip_address": hexstrike.IP_ADDRESS,
-                "target_type": hexstrike.TARGET_TYPE,
-                "network_type": hexstrike.NETWORK_TYPE,
-                "protocol": getattr(hexstrike, 'PROTOCOL', None),
-                "port": getattr(hexstrike, 'PORT', None)
+                "target_after_validation": loadtest.TARGET,
+                "domain": loadtest.DOMAIN,
+                "ip_address": loadtest.IP_ADDRESS,
+                "target_type": loadtest.TARGET_TYPE,
+                "network_type": loadtest.NETWORK_TYPE,
+                "protocol": getattr(loadtest, 'PROTOCOL', None),
+                "port": getattr(loadtest, 'PORT', None)
             }
             print(f"DEBUG [validate_critical_variables failed]: {debug_info}")
             return jsonify({
@@ -403,7 +403,7 @@ def run_fingerprint():
             }), 400
         
         # Si la validación fue exitosa, ejecutar fingerprint
-        print(f"DEBUG: Ejecutando fingerprint_target() para {hexstrike.TARGET}")
+        print(f"DEBUG: Ejecutando fingerprint_target() para {loadtest.TARGET}")
         fingerprint = fingerprint_target()
         
         # Generar recomendaciones automáticas de stress
@@ -471,15 +471,15 @@ def show_all_params():
             "ip_address": IP_ADDRESS,
             "target_type": TARGET_TYPE,
             "network_type": NETWORK_TYPE,
-            "protocol": get_hexstrike_var('PROTOCOL'),
-            "port": get_hexstrike_var('PORT')
+            "protocol": get_loadtest_var('PROTOCOL'),
+            "port": get_loadtest_var('PORT')
         },
         "attack_config": {
             "duration": DURATION,
             "power_level": POWER_LEVEL,
             "multiplier": POWER_LEVELS.get(POWER_LEVEL, 0),
             "attack_mode": ATTACK_MODE,
-            "attack_pattern": get_hexstrike_var('ATTACK_PATTERN'),
+            "attack_pattern": get_loadtest_var('ATTACK_PATTERN'),
             "max_connections": MAX_CONNECTIONS,
             "max_threads": MAX_THREADS,
             "payload_size_kb": PAYLOAD_SIZE_KB,
@@ -495,13 +495,13 @@ def show_all_params():
         "evasion_config": {
             "waf_bypass": WAF_BYPASS,
             "stealth_mode": STEALTH_MODE,
-            "proxy_list": get_hexstrike_var('PROXY_LIST') or [],
-            "proxy_rotation": get_hexstrike_var('PROXY_ROTATION') or 'round-robin'
+            "proxy_list": get_loadtest_var('PROXY_LIST') or [],
+            "proxy_rotation": get_loadtest_var('PROXY_ROTATION') or 'round-robin'
         },
         "system_config": {
-            "debug_mode": get_hexstrike_var('DEBUG_MODE') or False,
-            "dry_run": get_hexstrike_var('DRY_RUN') or False,
-            "network_mode": get_hexstrike_var('NETWORK_MODE') or 'AUTO'
+            "debug_mode": get_loadtest_var('DEBUG_MODE') or False,
+            "dry_run": get_loadtest_var('DRY_RUN') or False,
+            "network_mode": get_loadtest_var('NETWORK_MODE') or 'AUTO'
         },
         "power_levels": POWER_LEVELS,
         "available_tools": TOOLS
@@ -514,9 +514,9 @@ def get_logs():
         lines = int(request.args.get('lines', 100))
         log_type = request.args.get('type', 'debug')  # 'debug' o 'general'
         
-        log_file = LOGS_DIR / f"hexstrike_{'debug' if log_type == 'debug' else ''}{datetime.now().strftime('%Y%m%d')}.log"
+        log_file = LOGS_DIR / f"loadtest_{'debug' if log_type == 'debug' else ''}{datetime.now().strftime('%Y%m%d')}.log"
         if not log_file.exists():
-            log_file = LOGS_DIR / f"hexstrike_debug_{datetime.now().strftime('%Y%m%d')}.log"
+            log_file = LOGS_DIR / f"loadtest_debug_{datetime.now().strftime('%Y%m%d')}.log"
         
         if log_file.exists():
             with open(log_file, 'r', encoding='utf-8') as f:
@@ -602,10 +602,10 @@ def get_attack_status():
 if __name__ == '__main__':
     print(f"""
     ╔══════════════════════════════════════════════════════════════╗
-    ║         HEXSTRIKE ULTIMATE Web Panel v{VERSION}            ║
+    ║         LoadTest Enterprise Web Panel v{VERSION}            ║
     ║                                                              ║
     ║  🌐 Panel Web: http://localhost:5000                        ║
-    ║  ⚠️  SOLO PARA USO AUTORIZADO                               ║
+    ║  Professional Security Testing & Analysis Tool             ║
     ╚══════════════════════════════════════════════════════════════╝
     """)
     app.run(host='0.0.0.0', port=5000, debug=True, threaded=True)

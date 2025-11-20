@@ -1,4 +1,4 @@
-# HEXSTRIKE ULTIMATE - Dependencias de Python
+# LoadTest Enterprise - Dependencias de Python
 # Instalar con: pip install -r requirements.txt
 # O con Python 3: pip3 install -r requirements.txt
 

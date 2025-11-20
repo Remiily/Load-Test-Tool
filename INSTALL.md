@@ -1,4 +1,4 @@
-# HEXSTRIKE ULTIMATE - Guía de Instalación
+# LoadTest Enterprise - Guía de Instalación
 
 ## Requisitos Previos
 
@@ -31,7 +31,7 @@ python -c "import flask; import flask_cors; import requests; import psutil; prin
 ### 3. Ejecutar Panel Web
 
 ```bash
-python hexstrike.py --web
+python loadtest.py --web
 ```
 
 Luego abre tu navegador en: `http://localhost:5000`
@@ -47,7 +47,7 @@ sudo apt install python3 python3-pip -y
 pip3 install -r requirements.txt
 
 # Ejecutar
-python3 hexstrike.py --web
+python3 loadtest.py --web
 ```
 
 ## Instalación en Windows
@@ -60,7 +60,7 @@ python3 hexstrike.py --web
 pip install -r requirements.txt
 
 # Ejecutar
-python hexstrike.py --web
+python loadtest.py --web
 ```
 
 ## Instalación en macOS
@@ -73,7 +73,7 @@ brew install python3
 pip3 install -r requirements.txt
 
 # Ejecutar
-python3 hexstrike.py --web
+python3 loadtest.py --web
 ```
 
 ## Instalación con Entorno Virtual (Recomendado)
@@ -92,7 +92,7 @@ venv\Scripts\activate
 pip install -r requirements.txt
 
 # Ejecutar
-python hexstrike.py --web
+python loadtest.py --web
 ```
 
 ## Estructura de Archivos
@@ -100,9 +100,9 @@ python hexstrike.py --web
 Asegúrate de tener esta estructura:
 
 ```
-hexstrike/
-├── hexstrike.py          # Script principal
-├── hexstrike_web.py      # Panel web
+loadtest/
+├── loadtest.py          # Script principal
+├── loadtest_web.py      # Panel web
 ├── requirements.txt      # Dependencias
 ├── templates/            # Templates HTML
 │   └── index.html       # Panel web
@@ -127,9 +127,9 @@ pip install requests urllib3
 pip install psutil
 ```
 
-### Error: "hexstrike_web.py no encontrado"
-- Asegúrate de que `hexstrike_web.py` esté en el mismo directorio que `hexstrike.py`
-- Verifica que el archivo existe: `ls -la hexstrike_web.py` (Linux/Mac) o `dir hexstrike_web.py` (Windows)
+### Error: "loadtest_web.py no encontrado"
+- Asegúrate de que `loadtest_web.py` esté en el mismo directorio que `loadtest.py`
+- Verifica que el archivo existe: `ls -la loadtest_web.py` (Linux/Mac) o `dir loadtest_web.py` (Windows)
 
 ### Error: "templates/index.html no encontrado"
 - Asegúrate de que la carpeta `templates` exista con el archivo `index.html`
@@ -144,21 +144,21 @@ Para máximo rendimiento, también puedes instalar herramientas externas (opcion
 sudo apt install wrk vegeta hping3 apache2-utils siege -y
 
 # O instalar automáticamente desde el script:
-python hexstrike.py --install-tools
+python loadtest.py --install-tools
 ```
 
 ## Verificar Instalación Completa
 
 ```bash
 # Verificar herramientas instaladas
-python hexstrike.py --show-tools
+python loadtest.py --show-tools
 
 # Ver todos los parámetros
-python hexstrike.py --show-params
+python loadtest.py --show-params
 
 # Probar panel web
-python hexstrike.py --web
+python loadtest.py --web
 ```
 
-¡Listo! Ya puedes usar HEXSTRIKE ULTIMATE.
+¡Listo! Ya puedes usar LoadTest Enterprise.
 

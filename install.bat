@@ -1,8 +1,8 @@
 @echo off
-REM HEXSTRIKE ULTIMATE - Script de Instalación para Windows
+REM LoadTest Enterprise - Script de Instalación para Windows
 
 echo ╔═══════════════════════════════════════════════════════════╗
-echo ║     HEXSTRIKE ULTIMATE - Instalación Automática           ║
+echo ║     LoadTest Enterprise - Instalación Automática          ║
 echo ╚═══════════════════════════════════════════════════════════╝
 echo.
 
@@ -54,10 +54,10 @@ echo ║  ✓ Instalación completada exitosamente                    ║
 echo ╚═══════════════════════════════════════════════════════════╝
 echo.
 echo Para iniciar el panel web:
-echo   python hexstrike.py --web
+echo   python loadtest.py --web
 echo.
 echo O verificar herramientas:
-echo   python hexstrike.py --show-tools
+echo   python loadtest.py --show-tools
 echo.
 pause
 
