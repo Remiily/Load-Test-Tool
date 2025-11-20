@@ -1,0 +1,20 @@
+# HEXSTRIKE ULTIMATE - Dependencias de Python
+# Instalar con: pip install -r requirements.txt
+# O con Python 3: pip3 install -r requirements.txt
+
+# Framework Web
+Flask>=2.3.0
+Flask-Cors>=4.0.0
+
+# HTTP Requests
+requests>=2.31.0
+urllib3>=2.0.0
+
+# Monitoreo del Sistema
+psutil>=5.9.0
+
+# Herramientas opcionales pero recomendadas
+# Para mejor rendimiento en stress testing
+# gevent>=23.7.0  # Opcional: para mayor rendimiento
+# eventlet>=0.33.0  # Opcional: para concurrencia
+

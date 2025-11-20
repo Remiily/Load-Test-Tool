@@ -1,0 +1,2051 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HEXSTRIKE ULTIMATE | RED TEAM OPERATIONS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&family=Rajdhani:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --cyber-green: #00ff41;
+            --cyber-cyan: #00ffff;
+            --cyber-magenta: #ff00ff;
+            --cyber-blue: #0080ff;
+            --cyber-orange: #ff8000;
+            --cyber-red: #ff0040;
+            --cyber-yellow: #ffff00;
+            --bg-dark: #0a0a0a;
+            --bg-darker: #050505;
+            --bg-card: #111111;
+            --bg-card-hover: #1a1a1a;
+            --text-primary: #e0e0e0;
+            --text-secondary: #888888;
+            --border-color: #222222;
+            --glow-green: rgba(0, 255, 65, 0.3);
+            --glow-cyan: rgba(0, 255, 255, 0.3);
+            --glow-magenta: rgba(255, 0, 255, 0.3);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Rajdhani', sans-serif;
+            background: var(--bg-dark);
+            background-image: 
+                linear-gradient(0deg, transparent 24%, rgba(0, 255, 65, 0.03) 25%, rgba(0, 255, 65, 0.03) 26%, transparent 27%, transparent 74%, rgba(0, 255, 65, 0.03) 75%, rgba(0, 255, 65, 0.03) 76%, transparent 77%, transparent),
+                linear-gradient(90deg, transparent 24%, rgba(0, 255, 65, 0.03) 25%, rgba(0, 255, 65, 0.03) 26%, transparent 27%, transparent 74%, rgba(0, 255, 65, 0.03) 75%, rgba(0, 255, 65, 0.03) 76%, transparent 77%, transparent);
+            background-size: 50px 50px;
+            color: var(--text-primary);
+            min-height: 100vh;
+            padding: 0;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at 20% 50%, rgba(0, 255, 65, 0.05) 0%, transparent 50%),
+                        radial-gradient(circle at 80% 80%, rgba(0, 255, 255, 0.05) 0%, transparent 50%);
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, var(--bg-card) 0%, var(--bg-darker) 100%);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--cyber-green);
+            padding: 30px;
+            margin-bottom: 30px;
+            box-shadow: 0 0 30px var(--glow-green),
+                        0 0 60px rgba(0, 255, 65, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .header::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent 30%, rgba(0, 255, 65, 0.05) 50%, transparent 70%);
+            animation: scan 3s linear infinite;
+        }
+        
+        @keyframes scan {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+        
+        .header h1 {
+            font-family: 'Orbitron', monospace;
+            font-size: 2.5em;
+            font-weight: 900;
+            color: var(--cyber-green);
+            text-shadow: 0 0 10px var(--cyber-green),
+                         0 0 20px var(--cyber-green),
+                         0 0 30px var(--cyber-green);
+            margin-bottom: 10px;
+            letter-spacing: 3px;
+            position: relative;
+            z-index: 1;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        
+        .header h1::before {
+            content: '⚡';
+            animation: pulse 2s ease-in-out infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.1); }
+        }
+        
+        .header .version {
+            font-family: 'Share Tech Mono', monospace;
+            color: var(--cyber-cyan);
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .header .subtitle {
+            font-family: 'Share Tech Mono', monospace;
+            color: var(--text-secondary);
+            font-size: 0.85em;
+            margin-top: 10px;
+            letter-spacing: 1px;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .tabs {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 30px;
+            background: var(--bg-card);
+            padding: 5px;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .tab {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 600;
+            padding: 15px 25px;
+            background: transparent;
+            border: none;
+            border-radius: 6px;
+            color: var(--text-secondary);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-size: 0.9em;
+        }
+        
+        .tab:hover {
+            color: var(--cyber-cyan);
+            background: rgba(0, 255, 255, 0.1);
+        }
+        
+        .tab.active {
+            background: linear-gradient(135deg, var(--cyber-green) 0%, var(--cyber-cyan) 100%);
+            color: var(--bg-dark);
+            font-weight: 700;
+            box-shadow: 0 0 15px var(--glow-green);
+        }
+        
+        .tab.active::after {
+            content: '';
+            position: absolute;
+            bottom: -2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 80%;
+            height: 3px;
+            background: var(--cyber-green);
+            box-shadow: 0 0 10px var(--cyber-green);
+        }
+        
+        .tab-content {
+            display: none;
+            animation: fadeIn 0.3s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 25px;
+            margin-bottom: 30px;
+        }
+        
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--cyber-cyan);
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 255, 255, 0.1), transparent);
+            transition: left 0.5s;
+        }
+        
+        .card:hover {
+            border-left-color: var(--cyber-green);
+            box-shadow: 0 0 25px var(--glow-cyan),
+                        0 8px 25px rgba(0, 0, 0, 0.7);
+            transform: translateY(-2px);
+        }
+        
+        .card:hover::before {
+            left: 100%;
+        }
+        
+        .card h2 {
+            font-family: 'Orbitron', monospace;
+            font-size: 1.5em;
+            color: var(--cyber-cyan);
+            margin-bottom: 20px;
+            border-bottom: 2px solid var(--border-color);
+            padding-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .card h2::before {
+            content: '▸';
+            color: var(--cyber-green);
+            font-size: 1.2em;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        
+        .form-group input,
+        .form-group select,
+        .form-group textarea {
+            width: 100%;
+            padding: 12px 15px;
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            color: var(--text-primary);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.9em;
+            transition: all 0.3s ease;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--cyber-green);
+            box-shadow: 0 0 10px var(--glow-green);
+            background: var(--bg-card);
+        }
+        
+        .form-group input[type="checkbox"] {
+            width: auto;
+            margin-right: 10px;
+            cursor: pointer;
+            accent-color: var(--cyber-green);
+        }
+        
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            padding: 10px;
+            background: var(--bg-darker);
+            border-radius: 6px;
+            transition: all 0.3s ease;
+        }
+        
+        .checkbox-group:hover {
+            background: var(--bg-card);
+            border: 1px solid var(--cyber-cyan);
+        }
+        
+        .btn {
+            font-family: 'Rajdhani', sans-serif;
+            font-weight: 700;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+        
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, var(--cyber-green) 0%, var(--cyber-cyan) 100%);
+            color: var(--bg-dark);
+        }
+        
+        .btn-primary:hover {
+            box-shadow: 0 0 25px var(--glow-green),
+                        0 0 50px rgba(0, 255, 65, 0.3);
+            transform: translateY(-2px);
+        }
+        
+        .btn-danger {
+            background: linear-gradient(135deg, var(--cyber-red) 0%, #ff0066 100%);
+            color: white;
+        }
+        
+        .btn-danger:hover {
+            box-shadow: 0 0 25px rgba(255, 0, 64, 0.5);
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: linear-gradient(135deg, var(--cyber-cyan) 0%, var(--cyber-blue) 100%);
+            color: var(--bg-dark);
+        }
+        
+        .btn-secondary:hover {
+            box-shadow: 0 0 25px var(--glow-cyan);
+            transform: translateY(-2px);
+        }
+        
+        .btn-warning {
+            background: linear-gradient(135deg, var(--cyber-orange) 0%, var(--cyber-yellow) 100%);
+            color: var(--bg-dark);
+        }
+        
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 25px;
+            flex-wrap: wrap;
+        }
+        
+        .full-width {
+            grid-column: 1 / -1;
+        }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .stat-card {
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--cyber-green);
+            padding: 20px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-card:hover {
+            border-left-color: var(--cyber-cyan);
+            box-shadow: 0 0 20px var(--glow-green);
+            transform: translateX(5px);
+        }
+        
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.85em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            font-weight: 600;
+        }
+        
+        .stat-value {
+            color: var(--cyber-green);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 2em;
+            font-weight: bold;
+            text-shadow: 0 0 10px var(--cyber-green);
+        }
+        
+        .status-indicator {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            margin-right: 10px;
+            animation: blink 2s ease-in-out infinite;
+        }
+        
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+        
+        .status-active {
+            background: var(--cyber-green);
+            box-shadow: 0 0 15px var(--cyber-green);
+        }
+        
+        .status-inactive {
+            background: var(--text-secondary);
+        }
+        
+        .alert {
+            padding: 20px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            border-left: 4px solid;
+            animation: slideIn 0.3s ease-out;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+        
+        .alert-success {
+            background: rgba(0, 255, 65, 0.1);
+            border-color: var(--cyber-green);
+            color: var(--cyber-green);
+        }
+        
+        .alert-error {
+            background: rgba(255, 0, 64, 0.1);
+            border-color: var(--cyber-red);
+            color: var(--cyber-red);
+        }
+        
+        .alert-info {
+            background: rgba(0, 255, 255, 0.1);
+            border-color: var(--cyber-cyan);
+            color: var(--cyber-cyan);
+        }
+        
+        .alert-warning {
+            background: rgba(255, 128, 0, 0.1);
+            border-color: var(--cyber-orange);
+            color: var(--cyber-orange);
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 25px;
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            overflow: hidden;
+            margin: 15px 0;
+            position: relative;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--cyber-green) 0%, var(--cyber-cyan) 100%);
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--bg-dark);
+            font-family: 'Share Tech Mono', monospace;
+            font-weight: bold;
+            font-size: 0.85em;
+            text-shadow: none;
+            box-shadow: 0 0 15px var(--glow-green);
+        }
+        
+        .workflow-step {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--cyber-green);
+            padding: 30px;
+            border-radius: 8px;
+            margin-bottom: 25px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .workflow-step h3 {
+            font-family: 'Orbitron', monospace;
+            color: var(--cyber-green);
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .step-indicator {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 40px;
+            padding: 30px;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            position: relative;
+        }
+        
+        .step {
+            flex: 1;
+            text-align: center;
+            padding: 15px;
+            position: relative;
+        }
+        
+        .step-number {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: var(--bg-darker);
+            border: 2px solid var(--border-color);
+            color: var(--text-secondary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 15px;
+            font-weight: bold;
+            font-family: 'Orbitron', monospace;
+            font-size: 1.2em;
+            transition: all 0.3s ease;
+        }
+        
+        .step.active .step-number {
+            background: linear-gradient(135deg, var(--cyber-green) 0%, var(--cyber-cyan) 100%);
+            border-color: var(--cyber-green);
+            color: var(--bg-dark);
+            box-shadow: 0 0 20px var(--glow-green);
+            transform: scale(1.1);
+        }
+        
+        .step.completed .step-number {
+            background: var(--cyber-green);
+            border-color: var(--cyber-green);
+            color: var(--bg-dark);
+            box-shadow: 0 0 15px var(--glow-green);
+        }
+        
+        .step.completed .step-number::before {
+            content: "✓";
+            font-size: 1.5em;
+        }
+        
+        .step-label {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+        
+        .step.active .step-label {
+            color: var(--cyber-green);
+        }
+        
+        .step-line {
+            position: absolute;
+            top: 55px;
+            left: 60%;
+            width: 80%;
+            height: 2px;
+            background: var(--border-color);
+            z-index: -1;
+        }
+        
+        .step.completed .step-line {
+            background: linear-gradient(90deg, var(--cyber-green) 0%, transparent 100%);
+            box-shadow: 0 0 10px var(--glow-green);
+        }
+        
+        .recommendation-card {
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--cyber-orange);
+            padding: 20px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        
+        .recommendation-card h4 {
+            color: var(--cyber-orange);
+            margin-bottom: 15px;
+            font-family: 'Orbitron', monospace;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        
+        .recommendation-item {
+            margin: 12px 0;
+            padding: 12px;
+            background: var(--bg-card);
+            border-radius: 6px;
+            border-left: 3px solid var(--cyber-cyan);
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.9em;
+        }
+        
+        .recommendation-item strong {
+            color: var(--cyber-green);
+            margin-right: 10px;
+        }
+        
+        .fingerprint-info {
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            border-radius: 6px;
+            margin: 15px 0;
+            font-family: 'Share Tech Mono', monospace;
+        }
+        
+        .fingerprint-info table {
+            width: 100%;
+            font-size: 0.9em;
+        }
+        
+        .fingerprint-info td {
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .fingerprint-info td:first-child {
+            color: var(--text-secondary);
+            width: 200px;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        
+        .fingerprint-info td:last-child {
+            color: var(--cyber-green);
+        }
+        
+        .params-display {
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            padding: 20px;
+            border-radius: 6px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.85em;
+            max-height: 600px;
+            overflow-y: auto;
+            color: var(--cyber-green);
+        }
+        
+        .params-display pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin: 0;
+        }
+        
+        .params-display::-webkit-scrollbar {
+            width: 10px;
+        }
+        
+        .params-display::-webkit-scrollbar-track {
+            background: var(--bg-card);
+        }
+        
+        .params-display::-webkit-scrollbar-thumb {
+            background: var(--cyber-green);
+            border-radius: 5px;
+        }
+        
+        .params-display::-webkit-scrollbar-thumb:hover {
+            background: var(--cyber-cyan);
+        }
+        
+        .terminal-output {
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            border-left: 4px solid var(--cyber-green);
+            padding: 20px;
+            border-radius: 6px;
+            font-family: 'Share Tech Mono', monospace;
+            font-size: 0.9em;
+            color: var(--cyber-green);
+            max-height: 400px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+        
+        .terminal-output::before {
+            content: '$ ';
+            color: var(--cyber-green);
+        }
+        
+        .tool-status {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        
+        .tool-item {
+            background: var(--bg-darker);
+            border: 1px solid var(--border-color);
+            padding: 15px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.3s ease;
+        }
+        
+        .tool-item:hover {
+            border-color: var(--cyber-cyan);
+            box-shadow: 0 0 10px var(--glow-cyan);
+        }
+        
+        .tool-item.installed {
+            border-left: 4px solid var(--cyber-green);
+        }
+        
+        .tool-item.not-installed {
+            border-left: 4px solid var(--text-secondary);
+            opacity: 0.6;
+        }
+        
+        .tool-icon {
+            font-size: 1.5em;
+        }
+        
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .tabs {
+                flex-direction: column;
+            }
+            
+            .header h1 {
+                font-size: 1.8em;
+            }
+            
+            .step-indicator {
+                flex-direction: column;
+            }
+            
+            .step-line {
+                display: none;
+            }
+        }
+        
+        /* Efectos de typing para terminal */
+        @keyframes typing {
+            from { width: 0; }
+            to { width: 100%; }
+        }
+        
+        .glitch {
+            position: relative;
+            color: var(--cyber-green);
+            animation: glitch 2s infinite;
+        }
+        
+        @keyframes glitch {
+            0%, 100% { transform: translate(0); }
+            20% { transform: translate(-2px, 2px); }
+            40% { transform: translate(-2px, -2px); }
+            60% { transform: translate(2px, 2px); }
+            80% { transform: translate(2px, -2px); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>HEXSTRIKE ULTIMATE</h1>
+            <div class="version">v<span id="version">{{ version }}</span> | RED TEAM OPERATIONS</div>
+            <div class="subtitle">[ AUTHORIZED PENTESTING & STRESS TESTING PLATFORM ]</div>
+        </div>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('workflow')">⚡ FLUJO GUIADO</button>
+            <button class="tab" onclick="switchTab('config')">⚙️ CONFIGURACIÓN</button>
+            <button class="tab" onclick="switchTab('monitor')">📊 MONITOR</button>
+            <button class="tab" onclick="switchTab('reports')">📄 REPORTES</button>
+            <button class="tab" onclick="switchTab('tools')">🛠️ HERRAMIENTAS</button>
+            <button class="tab" onclick="switchTab('params')">📋 PARÁMETROS</button>
+        </div>
+        
+        <!-- Tab Flujo Guiado -->
+        <div id="workflow" class="tab-content active">
+            <div class="card full-width">
+                <h2>⚡ FLUJO GUIADO: TARGET → FINGERPRINT → RECOMENDACIONES → STRESS</h2>
+                
+                <div class="step-indicator">
+                    <div class="step active" id="indicator-step1">
+                        <div class="step-number">1</div>
+                        <div class="step-label">Target</div>
+                        <div class="step-line"></div>
+                    </div>
+                    <div class="step" id="indicator-step2">
+                        <div class="step-number">2</div>
+                        <div class="step-label">Fingerprint</div>
+                        <div class="step-line"></div>
+                    </div>
+                    <div class="step" id="indicator-step3">
+                        <div class="step-number">3</div>
+                        <div class="step-label">Recomendaciones</div>
+                        <div class="step-line"></div>
+                    </div>
+                    <div class="step" id="indicator-step4">
+                        <div class="step-number">4</div>
+                        <div class="step-label">Configurar</div>
+                        <div class="step-line"></div>
+                    </div>
+                    <div class="step" id="indicator-step5">
+                        <div class="step-number">5</div>
+                        <div class="step-label">Stress Test</div>
+                    </div>
+                </div>
+                
+                <div class="workflow-step" id="step1">
+                    <h3>Paso 1: Definir Target</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 20px;">Ingresa la URL, IP o dominio del target que quieres analizar y probar.</p>
+                    <div class="form-group">
+                        <label>Target (URL, IP o Dominio)</label>
+                        <input type="text" id="workflow_target" placeholder="https://example.com o 192.168.1.1" style="font-size: 16px; padding: 12px;">
+                    </div>
+                    <button class="btn btn-primary" onclick="workflowStep1()" style="margin-top: 10px;">🔍 SIGUIENTE: EJECUTAR FINGERPRINT →</button>
+                </div>
+                
+                <div class="workflow-step" id="step2" style="display: none;">
+                    <h3>Paso 2: Fingerprint del Target</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 20px;">Analizando el target para detectar tecnologías, servicios, vulnerabilidades y generar recomendaciones.</p>
+                    <div id="fingerprint-progress" class="alert alert-info">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="fingerprint-progress-bar" style="width: 0%;">Ejecutando fingerprint...</div>
+                        </div>
+                    </div>
+                    <div id="fingerprint-results" style="display: none;"></div>
+                    <button class="btn btn-primary" onclick="workflowStep2()" id="btn-step2" style="display: none; margin-top: 15px;">✓ CONTINUAR: VER RECOMENDACIONES →</button>
+                </div>
+                
+                <div class="workflow-step" id="step3" style="display: none;">
+                    <h3>Paso 3: Recomendaciones de Configuración</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 20px;">Basado en el fingerprint, se generan recomendaciones automáticas de configuración optimizada.</p>
+                    <div id="recommendations-display"></div>
+                    <div class="btn-group" style="margin-top: 20px;">
+                        <button class="btn btn-primary" onclick="workflowStep3()">⚙️ APLICAR RECOMENDACIONES AUTOMÁTICAMENTE →</button>
+                        <button class="btn btn-secondary" onclick="workflowStep3Manual()">📝 CONFIGURAR MANUALMENTE</button>
+                    </div>
+                </div>
+                
+                <div class="workflow-step" id="step4" style="display: none;">
+                    <h3>Paso 4: Configuración Final y Confirmación</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 20px;">Revisa la configuración antes de iniciar el stress test.</p>
+                    <div id="final-config-display"></div>
+                    <div class="btn-group" style="margin-top: 20px;">
+                        <button class="btn btn-primary" onclick="workflowStep4Start()">🚀 INICIAR STRESS TEST →</button>
+                        <button class="btn btn-secondary" onclick="switchTab('config')">✏️ EDITAR CONFIGURACIÓN AVANZADA</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tab Configuración -->
+        <div id="config" class="tab-content">
+            <div class="grid">
+                <div class="card">
+                    <h2>🎯 Target</h2>
+                    <div class="form-group">
+                        <label>Target (URL, IP o Dominio)</label>
+                        <input type="text" id="target" placeholder="https://example.com o 192.168.1.1">
+                    </div>
+                    <div class="form-group">
+                        <label>Duración (segundos)</label>
+                        <input type="number" id="duration" value="60" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Nivel de Potencia</label>
+                        <select id="power_level">
+                            <option value="TEST">TEST (1x)</option>
+                            <option value="LIGHT">LIGHT (3x)</option>
+                            <option value="MODERATE" selected>MODERATE (8x)</option>
+                            <option value="MEDIUM">MEDIUM (16x)</option>
+                            <option value="HEAVY">HEAVY (30x)</option>
+                            <option value="EXTREME">EXTREME (60x)</option>
+                            <option value="DEVASTATOR">DEVASTATOR (120x)</option>
+                            <option value="APOCALYPSE">APOCALYPSE (250x)</option>
+                            <option value="GODMODE">GODMODE (500x)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Modo de Ataque</label>
+                        <select id="attack_mode">
+                            <option value="MIXED" selected>MIXED</option>
+                            <option value="CONSTANT">CONSTANT</option>
+                            <option value="BURST">BURST</option>
+                            <option value="RAMP_UP">RAMP_UP</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>⚡ Recursos</h2>
+                    <div class="form-group">
+                        <label>Max Conexiones</label>
+                        <input type="number" id="max_connections" value="10000" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Threads</label>
+                        <input type="number" id="max_threads" value="400" min="1">
+                    </div>
+                    <div class="form-group">
+                        <label>Tamaño Payload (KB)</label>
+                        <input type="number" id="payload_size_kb" value="1024" min="1">
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="use_large_payloads" checked>
+                        <label for="use_large_payloads">Usar Payloads Grandes</label>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>🛡️ Evasión</h2>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="waf_bypass">
+                        <label for="waf_bypass">Bypass WAF</label>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="stealth_mode">
+                        <label for="stealth_mode">Modo Stealth</label>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>⚙️ Optimizaciones Avanzadas</h2>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="socket_attack" checked>
+                        <label for="socket_attack">Ataque Socket-based (bajo nivel)</label>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="tcp_optimization" checked>
+                        <label for="tcp_optimization">Optimización TCP</label>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="keep_alive_pooling" checked>
+                        <label for="keep_alive_pooling">Keep-Alive Pooling</label>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="connection_warmup" checked>
+                        <label for="connection_warmup">Pre-calentar Conexiones</label>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="rate_adaptive" checked>
+                        <label for="rate_adaptive">Ajuste Dinámico de Tasa</label>
+                    </div>
+                    <div class="form-group">
+                        <label>Connection Pool Size</label>
+                        <input type="number" id="connection_pool_size" value="1000" min="100" max="10000">
+                    </div>
+                    <div class="form-group">
+                        <label>Max Payload Size (MB)</label>
+                        <input type="number" id="max_payload_mb" value="10" min="1" max="100">
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>📊 Monitoreo</h2>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="memory_monitoring" checked>
+                        <label for="memory_monitoring">Monitoreo de Memoria</label>
+                    </div>
+                    <div class="form-group checkbox-group">
+                        <input type="checkbox" id="auto_throttle" checked>
+                        <label for="auto_throttle">Auto-Throttle</label>
+                    </div>
+                    <div class="form-group">
+                        <label>Umbral Memoria WARN (%)</label>
+                        <input type="number" id="memory_threshold_warn" value="75" min="0" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label>Umbral Memoria CRITICAL (%)</label>
+                        <input type="number" id="memory_threshold_critical" value="85" min="0" max="100">
+                    </div>
+                    <div class="form-group">
+                        <label>Umbral Memoria OOM (%)</label>
+                        <input type="number" id="memory_threshold_oom" value="95" min="0" max="100">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card full-width">
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="saveConfig()">💾 GUARDAR CONFIGURACIÓN</button>
+                    <button class="btn btn-secondary" onclick="runFingerprint()">🔍 EJECUTAR FINGERPRINT</button>
+                    <button class="btn btn-primary" onclick="startAttack()">🚀 INICIAR ATAQUE</button>
+                    <button class="btn btn-danger" onclick="stopAttack()">⏹️ DETENER ATAQUE</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tab Monitor -->
+        <div id="monitor" class="tab-content">
+            <div class="card full-width">
+                <h2>📊 ESTADÍSTICAS EN TIEMPO REAL</h2>
+                <div style="margin-bottom: 25px; font-size: 1.2em; padding: 15px; background: var(--bg-darker); border-radius: 6px; border-left: 4px solid var(--cyber-green);">
+                    <span class="status-indicator" id="status-indicator"></span>
+                    <span id="status-text" style="color: var(--text-primary); font-weight: 700; text-transform: uppercase; letter-spacing: 2px;">INACTIVO</span>
+                    <span id="elapsed-time" style="float: right; color: var(--cyber-cyan); font-family: 'Share Tech Mono', monospace;">00:00</span>
+                </div>
+                
+                <div class="stats-grid" id="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-label">Requests Enviados</div>
+                        <div class="stat-value" id="requests-sent">0</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 5px;" id="requests-trend">+0/s</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Responses Recibidas</div>
+                        <div class="stat-value" id="responses-received">0</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 5px;" id="responses-trend">+0/s</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Requests/seg</div>
+                        <div class="stat-value" id="rps">0</div>
+                        <div style="font-size: 0.8em; color: var(--cyber-green); margin-top: 5px;" id="rps-trend">↑ Estable</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Errores</div>
+                        <div class="stat-value" id="errors" style="color: var(--cyber-red);">0</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 5px;" id="errors-trend">0% tasa</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Latencia Promedio</div>
+                        <div class="stat-value" id="avg-latency">0ms</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 5px;" id="latency-trend">Estable</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Latencia P95</div>
+                        <div class="stat-value" id="p95-latency">0ms</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 5px;">Percentil 95</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Vulnerabilidades</div>
+                        <div class="stat-value" id="vulnerabilities-count">0</div>
+                        <div style="font-size: 0.8em; color: var(--cyber-orange); margin-top: 5px;">Detectadas</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-label">Puertos Abiertos</div>
+                        <div class="stat-value" id="open-ports-count">0</div>
+                        <div style="font-size: 0.8em; color: var(--text-secondary); margin-top: 5px;">Escaneados</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="grid">
+                <div class="card">
+                    <h2>📈 CÓDIGOS HTTP</h2>
+                    <div id="http-codes-chart" style="min-height: 300px; padding: 20px;">
+                        <div style="color: var(--text-secondary); text-align: center; padding: 50px;">Esperando datos...</div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h2>⏱️ LATENCIA (ms)</h2>
+                    <div id="latency-chart" style="min-height: 300px; padding: 20px;">
+                        <div style="color: var(--text-secondary); text-align: center; padding: 50px;">Esperando datos...</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card full-width">
+                <h2>📊 GRÁFICO DE REQUESTS EN TIEMPO REAL</h2>
+                <div id="requests-chart" style="min-height: 200px; padding: 20px; background: var(--bg-darker); border-radius: 6px;">
+                    <canvas id="requests-canvas" style="width: 100%; height: 200px;"></canvas>
+                </div>
+            </div>
+            
+            <div class="card full-width">
+                <h2>🔍 DETALLES DE RESPUESTAS</h2>
+                <div id="response-details" style="font-family: 'Share Tech Mono', monospace; font-size: 0.9em; max-height: 300px; overflow-y: auto; background: var(--bg-darker); padding: 15px; border-radius: 6px;">
+                    <div style="color: var(--text-secondary); text-align: center; padding: 20px;">Iniciando monitoreo...</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Tab Reportes -->
+        <div id="reports" class="tab-content">
+            <div class="card">
+                <h2>📄 REPORTES DISPONIBLES</h2>
+                <div id="reports-list"></div>
+            </div>
+        </div>
+        
+        <!-- Tab Herramientas -->
+        <div id="tools" class="tab-content">
+            <div class="card">
+                <h2>🛠️ ESTADO DE HERRAMIENTAS</h2>
+                <div class="tool-status" id="tools-list"></div>
+            </div>
+        </div>
+        
+        <!-- Tab Parámetros -->
+        <div id="params" class="tab-content">
+            <div class="card">
+                <h2>📋 TODOS LOS PARÁMETROS</h2>
+                <button class="btn btn-secondary" onclick="loadAllParams()" style="margin-bottom: 20px;">🔄 ACTUALIZAR</button>
+                <div class="params-display" id="params-display">
+                    <pre>Cargando parámetros...</pre>
+                </div>
+            </div>
+        </div>
+        
+        <div id="alerts"></div>
+    </div>
+    
+    <script>
+        let statsInterval = null;
+        let POWER_LEVELS = {
+            "TEST": 1, "LIGHT": 3, "MODERATE": 8, "MEDIUM": 16, "HEAVY": 30,
+            "EXTREME": 60, "DEVASTATOR": 120, "APOCALYPSE": 250, "GODMODE": 500
+        };
+        
+        window.onload = function() {
+            loadConfig();
+            loadReports();
+            loadTools();
+            startStatsUpdate();
+            fetch('/api/config').then(r => r.json()).then(config => {
+                if (config.power_levels) {
+                    POWER_LEVELS = config.power_levels;
+                }
+            });
+        };
+        
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            document.querySelectorAll('.tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            document.getElementById(tabName).classList.add('active');
+            event.target.classList.add('active');
+        }
+        
+        async function loadConfig() {
+            try {
+                const response = await fetch('/api/config');
+                const config = await response.json();
+                
+                document.getElementById('target').value = config.target || '';
+                document.getElementById('duration').value = config.duration || 60;
+                document.getElementById('power_level').value = config.power_level || 'MODERATE';
+                document.getElementById('attack_mode').value = config.attack_mode || 'MIXED';
+                document.getElementById('max_connections').value = config.max_connections || 10000;
+                document.getElementById('max_threads').value = config.max_threads || 400;
+                document.getElementById('payload_size_kb').value = config.payload_size_kb || 1024;
+                document.getElementById('use_large_payloads').checked = config.use_large_payloads || false;
+                document.getElementById('waf_bypass').checked = config.waf_bypass || false;
+                document.getElementById('stealth_mode').checked = config.stealth_mode || false;
+                document.getElementById('memory_monitoring').checked = config.memory_monitoring !== false;
+                document.getElementById('auto_throttle').checked = config.auto_throttle !== false;
+                document.getElementById('memory_threshold_warn').value = config.memory_threshold_warn || 75;
+                document.getElementById('memory_threshold_critical').value = config.memory_threshold_critical || 85;
+                document.getElementById('memory_threshold_oom').value = config.memory_threshold_oom || 95;
+                document.getElementById('socket_attack').checked = config.socket_attack !== false;
+                document.getElementById('tcp_optimization').checked = config.tcp_optimization !== false;
+                document.getElementById('keep_alive_pooling').checked = config.keep_alive_pooling !== false;
+                document.getElementById('connection_warmup').checked = config.connection_warmup !== false;
+                document.getElementById('rate_adaptive').checked = config.rate_adaptive !== false;
+                document.getElementById('connection_pool_size').value = config.connection_pool_size || 1000;
+                document.getElementById('max_payload_mb').value = config.max_payload_mb || 10;
+            } catch (error) {
+                showAlert('Error cargando configuración: ' + error.message, 'error');
+            }
+        }
+        
+        async function saveConfig() {
+            const config = {
+                target: document.getElementById('target').value,
+                duration: parseInt(document.getElementById('duration').value),
+                power_level: document.getElementById('power_level').value,
+                attack_mode: document.getElementById('attack_mode').value,
+                max_connections: parseInt(document.getElementById('max_connections').value),
+                max_threads: parseInt(document.getElementById('max_threads').value),
+                payload_size_kb: parseInt(document.getElementById('payload_size_kb').value),
+                use_large_payloads: document.getElementById('use_large_payloads').checked,
+                waf_bypass: document.getElementById('waf_bypass').checked,
+                stealth_mode: document.getElementById('stealth_mode').checked,
+                memory_monitoring: document.getElementById('memory_monitoring').checked,
+                auto_throttle: document.getElementById('auto_throttle').checked,
+                memory_threshold_warn: parseInt(document.getElementById('memory_threshold_warn').value),
+                memory_threshold_critical: parseInt(document.getElementById('memory_threshold_critical').value),
+                memory_threshold_oom: parseInt(document.getElementById('memory_threshold_oom').value),
+                socket_attack: document.getElementById('socket_attack').checked,
+                tcp_optimization: document.getElementById('tcp_optimization').checked,
+                keep_alive_pooling: document.getElementById('keep_alive_pooling').checked,
+                connection_warmup: document.getElementById('connection_warmup').checked,
+                rate_adaptive: document.getElementById('rate_adaptive').checked,
+                connection_pool_size: parseInt(document.getElementById('connection_pool_size').value),
+                max_payload_mb: parseInt(document.getElementById('max_payload_mb').value)
+            };
+            
+            try {
+                const response = await fetch('/api/config', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(config)
+                });
+                const result = await response.json();
+                showAlert(result.message || 'Configuración guardada', 'success');
+            } catch (error) {
+                showAlert('Error guardando configuración: ' + error.message, 'error');
+            }
+        }
+        
+        async function startAttack() {
+            await saveConfig();
+            try {
+                // Mostrar loading
+                const loadingAlert = showAlert('Iniciando ataque...', 'info');
+                
+                const response = await fetch('/api/start', {method: 'POST'});
+                const result = await response.json();
+                if (result.status === 'success') {
+                    showAlert('✅ Ataque iniciado correctamente', 'success');
+                    // Cambiar a pestaña de monitor automáticamente
+                    setTimeout(() => {
+                        switchTab('monitor');
+                        document.querySelector('.tab[onclick*="monitor"]').classList.add('active');
+                    }, 500);
+                    // Reiniciar historiales
+                    rpsHistory = [];
+                    latencyHistory = [];
+                } else {
+                    showAlert('❌ Error: ' + result.message, 'error');
+                }
+            } catch (error) {
+                showAlert('❌ Error iniciando ataque: ' + error.message, 'error');
+            }
+        }
+        
+        async function stopAttack() {
+            try {
+                const response = await fetch('/api/stop', {method: 'POST'});
+                const result = await response.json();
+                showAlert(result.message || 'Ataque detenido', 'info');
+            } catch (error) {
+                showAlert('Error deteniendo ataque: ' + error.message, 'error');
+            }
+        }
+        
+        async function runFingerprint() {
+            const target = document.getElementById('target').value;
+            if (!target) {
+                showAlert('Especifica un target primero', 'error');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/fingerprint', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({target: target})
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    showAlert('Fingerprint completado', 'success');
+                } else {
+                    showAlert(result.message, 'error');
+                }
+            } catch (error) {
+                showAlert('Error ejecutando fingerprint: ' + error.message, 'error');
+            }
+        }
+        
+        function startStatsUpdate() {
+            if (statsInterval) clearInterval(statsInterval);
+            updateStats(); // Actualizar inmediatamente
+            statsInterval = setInterval(updateStats, 2000); // Luego cada 2 segundos
+        }
+        
+        let lastStats = {
+            requests_sent: 0,
+            responses_received: 0,
+            errors: 0,
+            timestamp: Date.now()
+        };
+        let rpsHistory = [];
+        let latencyHistory = [];
+        const MAX_HISTORY = 50;
+        
+        async function updateStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const stats = await response.json();
+                const now = Date.now();
+                const timeDiff = (now - lastStats.timestamp) / 1000;
+                
+                // Calcular tendencias
+                const requestsDiff = stats.requests_sent - lastStats.requests_sent;
+                const responsesDiff = stats.responses_received - lastStats.responses_received;
+                const errorsDiff = stats.errors - lastStats.errors;
+                const requestsPerSec = timeDiff > 0 ? Math.round(requestsDiff / timeDiff) : 0;
+                const responsesPerSec = timeDiff > 0 ? Math.round(responsesDiff / timeDiff) : 0;
+                
+                // Actualizar valores principales
+                document.getElementById('requests-sent').textContent = formatNumber(stats.requests_sent || 0);
+                document.getElementById('responses-received').textContent = formatNumber(stats.responses_received || 0);
+                document.getElementById('errors').textContent = formatNumber(stats.errors || 0);
+                document.getElementById('vulnerabilities-count').textContent = stats.vulnerabilities_count || 0;
+                document.getElementById('open-ports-count').textContent = stats.open_ports_count || 0;
+                
+                // Actualizar tendencias
+                document.getElementById('requests-trend').textContent = `+${formatNumber(requestsPerSec)}/s`;
+                document.getElementById('responses-trend').textContent = `+${formatNumber(responsesPerSec)}/s`;
+                document.getElementById('errors-trend').textContent = stats.requests_sent > 0 
+                    ? `${((stats.errors / stats.requests_sent) * 100).toFixed(1)}% tasa` 
+                    : '0% tasa';
+                
+                // Calcular latencias
+                if (stats.latencies && stats.latencies.length > 0) {
+                    const latencies = stats.latencies;
+                    const avgLatency = latencies.reduce((a, b) => a + b, 0) / latencies.length;
+                    const sortedLatencies = [...latencies].sort((a, b) => a - b);
+                    const p95Index = Math.floor(sortedLatencies.length * 0.95);
+                    const p95Latency = sortedLatencies[p95Index] || 0;
+                    
+                    document.getElementById('avg-latency').textContent = Math.round(avgLatency) + 'ms';
+                    document.getElementById('p95-latency').textContent = Math.round(p95Latency) + 'ms';
+                    
+                    // Agregar a historial
+                    latencyHistory.push(avgLatency);
+                    if (latencyHistory.length > MAX_HISTORY) latencyHistory.shift();
+                }
+                
+                // Calcular RPS
+                if (stats.start_time) {
+                    const elapsed = (new Date() - new Date(stats.start_time)) / 1000;
+                    const rps = elapsed > 0 ? Math.round(stats.requests_sent / elapsed) : 0;
+                    document.getElementById('rps').textContent = formatNumber(rps);
+                    
+                    // Agregar a historial
+                    rpsHistory.push(rps);
+                    if (rpsHistory.length > MAX_HISTORY) rpsHistory.shift();
+                    
+                    // Actualizar tiempo transcurrido
+                    const minutes = Math.floor(elapsed / 60);
+                    const seconds = Math.floor(elapsed % 60);
+                    document.getElementById('elapsed-time').textContent = 
+                        `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+                    
+                    // Tendencia RPS
+                    if (rpsHistory.length >= 2) {
+                        const trend = rpsHistory[rpsHistory.length - 1] - rpsHistory[rpsHistory.length - 2];
+                        const trendEl = document.getElementById('rps-trend');
+                        if (trend > 0) {
+                            trendEl.textContent = `↑ +${formatNumber(trend)}`;
+                            trendEl.style.color = 'var(--cyber-green)';
+                        } else if (trend < 0) {
+                            trendEl.textContent = `↓ ${formatNumber(trend)}`;
+                            trendEl.style.color = 'var(--cyber-red)';
+                        } else {
+                            trendEl.textContent = '→ Estable';
+                            trendEl.style.color = 'var(--text-secondary)';
+                        }
+                    }
+                }
+                
+                // Actualizar gráfico de códigos HTTP
+                updateHttpCodesChart(stats.http_codes || {});
+                
+                // Actualizar gráfico de latencia
+                updateLatencyChart();
+                
+                // Actualizar gráfico de requests
+                updateRequestsChart();
+                
+                // Actualizar detalles de respuestas
+                updateResponseDetails(stats);
+                
+                // Estado del monitoreo
+                const indicator = document.getElementById('status-indicator');
+                const statusText = document.getElementById('status-text');
+                if (stats.monitoring_active) {
+                    indicator.className = 'status-indicator status-active';
+                    statusText.textContent = 'ACTIVO';
+                    statusText.style.color = 'var(--cyber-green)';
+                } else {
+                    indicator.className = 'status-indicator status-inactive';
+                    statusText.textContent = 'INACTIVO';
+                    statusText.style.color = 'var(--text-secondary)';
+                }
+                
+                lastStats = {
+                    requests_sent: stats.requests_sent || 0,
+                    responses_received: stats.responses_received || 0,
+                    errors: stats.errors || 0,
+                    timestamp: now
+                };
+            } catch (error) {
+                console.error('Error actualizando stats:', error);
+            }
+        }
+        
+        function updateHttpCodesChart(httpCodes) {
+            const chartDiv = document.getElementById('http-codes-chart');
+            const total = Object.values(httpCodes).reduce((a, b) => a + b, 0);
+            
+            if (total === 0) {
+                chartDiv.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 50px;">Esperando datos...</div>';
+                return;
+            }
+            
+            let html = '<div style="display: grid; gap: 10px;">';
+            const sortedCodes = Object.entries(httpCodes)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 10);
+            
+            sortedCodes.forEach(([code, count]) => {
+                const percentage = ((count / total) * 100).toFixed(1);
+                const color = code >= 500 ? 'var(--cyber-red)' : 
+                             code >= 400 ? 'var(--cyber-orange)' : 
+                             code >= 300 ? 'var(--cyber-yellow)' : 
+                             code >= 200 ? 'var(--cyber-green)' : 'var(--text-secondary)';
+                
+                html += `
+                    <div style="display: flex; align-items: center; gap: 15px; padding: 10px; background: var(--bg-darker); border-radius: 6px; border-left: 4px solid ${color};">
+                        <div style="min-width: 60px; font-weight: bold; color: ${color}; font-family: 'Share Tech Mono', monospace;">HTTP ${code}</div>
+                        <div style="flex: 1; background: var(--bg-card); border-radius: 4px; height: 25px; position: relative; overflow: hidden;">
+                            <div style="background: ${color}; height: 100%; width: ${percentage}%; transition: width 0.5s; box-shadow: 0 0 10px ${color};"></div>
+                            <div style="position: absolute; top: 50%; left: 10px; transform: translateY(-50%); color: var(--text-primary); font-size: 0.85em; font-weight: bold; text-shadow: 1px 1px 2px rgba(0,0,0,0.8);">${percentage}%</div>
+                        </div>
+                        <div style="min-width: 80px; text-align: right; color: var(--cyber-cyan); font-family: 'Share Tech Mono', monospace; font-weight: bold;">${formatNumber(count)}</div>
+                    </div>
+                `;
+            });
+            html += '</div>';
+            chartDiv.innerHTML = html;
+        }
+        
+        function updateLatencyChart() {
+            const chartDiv = document.getElementById('latency-chart');
+            
+            if (latencyHistory.length === 0) {
+                chartDiv.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 50px;">Esperando datos...</div>';
+                return;
+            }
+            
+            const maxLatency = Math.max(...latencyHistory, 1);
+            const chartHeight = 250;
+            const barWidth = Math.max(5, (chartDiv.offsetWidth - 40) / latencyHistory.length);
+            
+            let html = `<div style="display: flex; align-items: flex-end; gap: 2px; height: ${chartHeight}px; padding: 10px; background: var(--bg-darker); border-radius: 6px;">`;
+            
+            latencyHistory.forEach((latency, index) => {
+                const height = (latency / maxLatency) * chartHeight;
+                const color = latency > 1000 ? 'var(--cyber-red)' : 
+                             latency > 500 ? 'var(--cyber-orange)' : 
+                             latency > 200 ? 'var(--cyber-yellow)' : 'var(--cyber-green)';
+                
+                html += `
+                    <div style="flex: 1; background: ${color}; height: ${height}px; min-height: 2px; border-radius: 2px 2px 0 0; 
+                                transition: height 0.3s; box-shadow: 0 0 5px ${color}; 
+                                position: relative;" title="${Math.round(latency)}ms">
+                    </div>
+                `;
+            });
+            
+            html += '</div>';
+            html += `<div style="margin-top: 10px; display: flex; justify-content: space-between; color: var(--text-secondary); font-size: 0.85em;">
+                <span>Min: ${Math.round(Math.min(...latencyHistory))}ms</span>
+                <span>Max: ${Math.round(Math.max(...latencyHistory))}ms</span>
+                <span>Promedio: ${Math.round(latencyHistory.reduce((a, b) => a + b, 0) / latencyHistory.length)}ms</span>
+            </div>`;
+            
+            chartDiv.innerHTML = html;
+        }
+        
+        function updateRequestsChart() {
+            const canvas = document.getElementById('requests-canvas');
+            if (!canvas) return;
+            
+            const ctx = canvas.getContext('2d');
+            canvas.width = canvas.offsetWidth;
+            canvas.height = 200;
+            
+            if (rpsHistory.length < 2) {
+                ctx.fillStyle = 'var(--text-secondary)';
+                ctx.font = '14px Share Tech Mono';
+                ctx.textAlign = 'center';
+                ctx.fillText('Esperando datos...', canvas.width / 2, canvas.height / 2);
+                return;
+            }
+            
+            const maxRps = Math.max(...rpsHistory, 1);
+            const padding = 40;
+            const chartWidth = canvas.width - padding * 2;
+            const chartHeight = canvas.height - padding * 2;
+            
+            // Limpiar canvas
+            ctx.fillStyle = 'var(--bg-darker)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // Dibujar grid
+            ctx.strokeStyle = 'var(--border-color)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 5; i++) {
+                const y = padding + (chartHeight / 5) * i;
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(canvas.width - padding, y);
+                ctx.stroke();
+                
+                ctx.fillStyle = 'var(--text-secondary)';
+                ctx.font = '10px Share Tech Mono';
+                ctx.textAlign = 'right';
+                ctx.fillText(Math.round(maxRps - (maxRps / 5) * i).toString(), padding - 10, y + 4);
+            }
+            
+            // Dibujar línea de RPS
+            ctx.strokeStyle = 'var(--cyber-green)';
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = 'var(--cyber-green)';
+            ctx.beginPath();
+            
+            rpsHistory.forEach((rps, index) => {
+                const x = padding + (chartWidth / (rpsHistory.length - 1)) * index;
+                const y = padding + chartHeight - (rps / maxRps) * chartHeight;
+                
+                if (index === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+            
+            ctx.stroke();
+            ctx.shadowBlur = 0;
+            
+            // Dibujar puntos
+            ctx.fillStyle = 'var(--cyber-green)';
+            rpsHistory.forEach((rps, index) => {
+                const x = padding + (chartWidth / (rpsHistory.length - 1)) * index;
+                const y = padding + chartHeight - (rps / maxRps) * chartHeight;
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            // Etiquetas
+            ctx.fillStyle = 'var(--cyber-cyan)';
+            ctx.font = '12px Share Tech Mono';
+            ctx.textAlign = 'center';
+            ctx.fillText('Requests por Segundo', canvas.width / 2, canvas.height - 5);
+        }
+        
+        function updateResponseDetails(stats) {
+            const detailsDiv = document.getElementById('response-details');
+            let html = '<div style="display: grid; gap: 8px;">';
+            
+            if (stats.http_codes && Object.keys(stats.http_codes).length > 0) {
+                html += '<div style="color: var(--cyber-cyan); font-weight: bold; margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;">CÓDIGOS HTTP:</div>';
+                Object.entries(stats.http_codes)
+                    .sort((a, b) => b[1] - a[1])
+                    .slice(0, 10)
+                    .forEach(([code, count]) => {
+                        const color = code >= 500 ? 'var(--cyber-red)' : 
+                                     code >= 400 ? 'var(--cyber-orange)' : 
+                                     code >= 200 ? 'var(--cyber-green)' : 'var(--text-secondary)';
+                        html += `<div style="padding: 5px;">
+                            <span style="color: ${color}; font-weight: bold;">[${code}]</span>
+                            <span style="color: var(--text-primary);">${count.toLocaleString()} respuestas</span>
+                        </div>`;
+                    });
+            }
+            
+            if (stats.errors > 0) {
+                html += '<div style="color: var(--cyber-red); font-weight: bold; margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 10px;">ERRORES:</div>';
+                html += `<div style="padding: 5px; color: var(--cyber-red);">Total: ${stats.errors.toLocaleString()} errores detectados</div>`;
+            }
+            
+            html += '</div>';
+            detailsDiv.innerHTML = html;
+        }
+        
+        async function loadReports() {
+            try {
+                const response = await fetch('/api/reports');
+                const data = await response.json();
+                const reportsList = document.getElementById('reports-list');
+                
+                if (data.reports && data.reports.length > 0) {
+                    let html = '<div style="display: grid; gap: 15px;">';
+                    data.reports.forEach(report => {
+                        const sizeKB = (report.size / 1024).toFixed(2);
+                        html += `
+                            <div class="recommendation-item" style="display: flex; justify-content: space-between; align-items: center; padding: 15px;">
+                                <div style="flex: 1;">
+                                    <a href="/api/reports/${report.path}" target="_blank" 
+                                       style="color: var(--cyber-green); text-decoration: none; font-weight: 600; font-size: 1.1em; display: block; margin-bottom: 5px;">
+                                        📄 ${report.name}
+                                    </a>
+                                    <div style="color: var(--text-secondary); font-size: 0.85em; font-family: 'Share Tech Mono', monospace;">
+                                        ${new Date(report.modified).toLocaleString()} • ${sizeKB} KB
+                                    </div>
+                                </div>
+                                <button class="btn btn-secondary" onclick="window.open('/api/reports/${report.path}', '_blank')" style="padding: 10px 20px; margin-left: 15px;">
+                                    👁️ VER
+                                </button>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    reportsList.innerHTML = html;
+                } else {
+                    reportsList.innerHTML = '<div style="text-align: center; padding: 50px; color: var(--text-secondary);"><p>No hay reportes disponibles</p><p style="margin-top: 10px; font-size: 0.9em;">Los reportes se generan automáticamente al finalizar los ataques</p></div>';
+                }
+            } catch (error) {
+                console.error('Error cargando reportes:', error);
+                showAlert('Error cargando reportes: ' + error.message, 'error');
+            }
+        }
+        
+        async function loadTools() {
+            try {
+                const response = await fetch('/api/tools');
+                const data = await response.json();
+                const toolsList = document.getElementById('tools-list');
+                
+                let totalTools = 0;
+                let installedTools = 0;
+                
+                let html = '';
+                for (const [category, tools] of Object.entries(data.categories)) {
+                    html += `<div style="grid-column: 1 / -1;"><h3 style="color: var(--cyber-cyan); margin: 20px 0 15px 0; font-family: 'Orbitron', monospace; text-transform: uppercase; letter-spacing: 1px; border-bottom: 2px solid var(--border-color); padding-bottom: 10px;">${category}</h3></div>`;
+                    for (const tool of tools) {
+                        totalTools++;
+                        const installed = data.tools[tool] || false;
+                        if (installed) installedTools++;
+                        html += `
+                            <div class="tool-item ${installed ? 'installed' : 'not-installed'}" style="position: relative;">
+                                <span class="tool-icon" style="font-size: 1.8em; ${installed ? 'color: var(--cyber-green);' : 'color: var(--text-secondary);'}">${installed ? '✓' : '✗'}</span>
+                                <span style="font-family: 'Share Tech Mono', monospace; font-weight: ${installed ? 'bold' : 'normal'}; color: ${installed ? 'var(--cyber-green)' : 'var(--text-secondary)'};">${tool}</span>
+                                ${installed ? '<span style="position: absolute; right: 10px; color: var(--cyber-green); font-size: 0.8em;">LISTO</span>' : '<span style="position: absolute; right: 10px; color: var(--text-secondary); font-size: 0.8em;">NO DISPONIBLE</span>'}
+                            </div>
+                        `;
+                    }
+                }
+                toolsList.innerHTML = html;
+                
+                // Actualizar resumen
+                const summaryEl = document.getElementById('tools-summary');
+                if (summaryEl) {
+                    summaryEl.textContent = `${installedTools} / ${totalTools} instaladas`;
+                    summaryEl.style.color = installedTools === totalTools ? 'var(--cyber-green)' : 
+                                           installedTools > totalTools / 2 ? 'var(--cyber-yellow)' : 'var(--cyber-orange)';
+                }
+            } catch (error) {
+                console.error('Error cargando herramientas:', error);
+                showAlert('Error cargando herramientas: ' + error.message, 'error');
+            }
+        }
+        
+        async function loadAllParams() {
+            try {
+                const response = await fetch('/api/params');
+                const params = await response.json();
+                const formatted = JSON.stringify(params, null, 2);
+                document.getElementById('params-display').innerHTML = 
+                    '<pre style="color: var(--cyber-green); font-size: 0.9em; line-height: 1.6;">' + 
+                    formatted.replace(/"([^"]+)":/g, '<span style="color: var(--cyber-cyan);">"$1"</span>:')
+                             .replace(/: "([^"]+)"/g, ': <span style="color: var(--cyber-green);">"$1"</span>')
+                             .replace(/: (\d+)/g, ': <span style="color: var(--cyber-yellow);">$1</span>')
+                             .replace(/: (true|false)/g, ': <span style="color: var(--cyber-magenta);">$1</span>') +
+                    '</pre>';
+            } catch (error) {
+                showAlert('Error cargando parámetros: ' + error.message, 'error');
+            }
+        }
+        
+        function exportParams() {
+            const paramsText = document.getElementById('params-display').textContent;
+            try {
+                const params = JSON.parse(paramsText);
+                const blob = new Blob([JSON.stringify(params, null, 2)], {type: 'application/json'});
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `hexstrike_params_${new Date().toISOString().split('T')[0]}.json`;
+                a.click();
+                URL.revokeObjectURL(url);
+                showAlert('Parámetros exportados correctamente', 'success');
+            } catch (error) {
+                showAlert('Error exportando parámetros: ' + error.message, 'error');
+            }
+        }
+        
+        function copyParams() {
+            const paramsText = document.getElementById('params-display').textContent;
+            navigator.clipboard.writeText(paramsText).then(() => {
+                showAlert('Parámetros copiados al portapapeles', 'success');
+            }).catch(err => {
+                showAlert('Error copiando: ' + err.message, 'error');
+            });
+        }
+        
+        let currentFingerprint = null;
+        let currentRecommendations = null;
+        
+        async function workflowStep1() {
+            const target = document.getElementById('workflow_target').value.trim();
+            if (!target) {
+                showAlert('Por favor ingresa un target', 'error');
+                return;
+            }
+            
+            document.getElementById('target').value = target;
+            document.getElementById('step1').style.display = 'none';
+            document.getElementById('step2').style.display = 'block';
+            updateStepIndicator(2);
+            await executeFingerprint(target);
+        }
+        
+        async function executeFingerprint(target) {
+            const progressBar = document.getElementById('fingerprint-progress-bar');
+            const resultsDiv = document.getElementById('fingerprint-results');
+            
+            try {
+                progressBar.style.width = '30%';
+                progressBar.textContent = 'Conectando al target...';
+                
+                const response = await fetch('/api/fingerprint', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({target: target})
+                });
+                
+                progressBar.style.width = '60%';
+                progressBar.textContent = 'Analizando tecnologías...';
+                
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    currentFingerprint = result.fingerprint;
+                    currentRecommendations = result.stress_recommendations;
+                    
+                    progressBar.style.width = '100%';
+                    progressBar.textContent = 'Fingerprint completado ✓';
+                    
+                    displayFingerprintResults(result.fingerprint);
+                    document.getElementById('fingerprint-progress').style.display = 'none';
+                    resultsDiv.style.display = 'block';
+                    document.getElementById('btn-step2').style.display = 'block';
+                } else {
+                    throw new Error(result.message || 'Error en fingerprint');
+                }
+            } catch (error) {
+                progressBar.style.width = '100%';
+                progressBar.style.background = 'var(--cyber-red)';
+                progressBar.textContent = 'Error: ' + error.message;
+                showAlert('Error ejecutando fingerprint: ' + error.message, 'error');
+            }
+        }
+        
+        function displayFingerprintResults(fingerprint) {
+            const resultsDiv = document.getElementById('fingerprint-results');
+            let html = '<div class="fingerprint-info"><table>';
+            
+            html += `<tr><td>Tipo de Target</td><td>${fingerprint.target_type || 'N/A'} (${fingerprint.network_type || 'N/A'})</td></tr>`;
+            html += `<tr><td>Servidor</td><td>${fingerprint.server || 'Unknown'}</td></tr>`;
+            html += `<tr><td>Framework</td><td>${fingerprint.framework || 'No detectado'}</td></tr>`;
+            if (fingerprint.waf && fingerprint.waf.detected) {
+                html += `<tr><td>WAF</td><td>${fingerprint.waf.name || 'Desconocido'}</td></tr>`;
+            }
+            if (fingerprint.cdn) {
+                html += `<tr><td>CDN</td><td>${fingerprint.cdn}</td></tr>`;
+            }
+            if (fingerprint.discovered_endpoints && fingerprint.discovered_endpoints.length > 0) {
+                html += `<tr><td>Endpoints</td><td>${fingerprint.discovered_endpoints.length} descubierto(s)</td></tr>`;
+            }
+            if (fingerprint.open_ports && fingerprint.open_ports.length > 0) {
+                html += `<tr><td>Puertos Abiertos</td><td>${fingerprint.open_ports.length}</td></tr>`;
+            }
+            if (fingerprint.vulnerabilities && fingerprint.vulnerabilities.length > 0) {
+                const high = fingerprint.vulnerabilities.filter(v => v.severity === 'HIGH').length;
+                html += `<tr><td>Vulnerabilidades</td><td>${fingerprint.vulnerabilities.length} total (${high} críticas)</td></tr>`;
+            }
+            
+            html += '</table></div>';
+            resultsDiv.innerHTML = html;
+        }
+        
+        function workflowStep2() {
+            document.getElementById('step2').style.display = 'none';
+            document.getElementById('step3').style.display = 'block';
+            updateStepIndicator(3);
+            displayRecommendations(currentRecommendations);
+        }
+        
+        function displayRecommendations(recommendations) {
+            const displayDiv = document.getElementById('recommendations-display');
+            let html = '<div class="recommendation-card">';
+            html += '<h4>💡 Recomendaciones Generadas</h4>';
+            html += `<p style="color: var(--text-secondary); margin-bottom: 15px;">${recommendations.reasoning || 'Basadas en el análisis del fingerprint'}</p>`;
+            
+            html += '<div class="recommendation-item">';
+            html += `<strong>Nivel de Potencia:</strong> ${recommendations.recommended_power_level} (x${POWER_LEVELS[recommendations.recommended_power_level] || 0})`;
+            html += '</div>';
+            
+            html += '<div class="recommendation-item">';
+            html += `<strong>Duración:</strong> ${recommendations.recommended_duration} segundos`;
+            html += '</div>';
+            
+            html += '<div class="recommendation-item">';
+            html += `<strong>Max Conexiones:</strong> ${recommendations.recommended_connections.toLocaleString()}`;
+            html += '</div>';
+            
+            html += '<div class="recommendation-item">';
+            html += `<strong>Max Threads:</strong> ${recommendations.recommended_threads}`;
+            html += '</div>';
+            
+            if (recommendations.recommended_waf_bypass) {
+                html += '<div class="recommendation-item">';
+                html += '<strong>Bypass WAF:</strong> Activado (recomendado)';
+                html += '</div>';
+            }
+            
+            if (recommendations.recommended_stealth) {
+                html += '<div class="recommendation-item">';
+                html += '<strong>Modo Stealth:</strong> Activado (recomendado)';
+                html += '</div>';
+            }
+            
+            if (recommendations.recommended_large_payloads) {
+                html += '<div class="recommendation-item">';
+                html += '<strong>Payloads Grandes:</strong> Activado (recomendado)';
+                html += '</div>';
+            }
+            
+            html += '</div>';
+            displayDiv.innerHTML = html;
+        }
+        
+        async function workflowStep3() {
+            try {
+                const response = await fetch('/api/apply-recommendations', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({recommendations: currentRecommendations})
+                });
+                
+                const result = await response.json();
+                if (result.status === 'success') {
+                    document.getElementById('power_level').value = currentRecommendations.recommended_power_level;
+                    document.getElementById('duration').value = currentRecommendations.recommended_duration;
+                    document.getElementById('max_connections').value = currentRecommendations.recommended_connections;
+                    document.getElementById('max_threads').value = currentRecommendations.recommended_threads;
+                    document.getElementById('waf_bypass').checked = currentRecommendations.recommended_waf_bypass;
+                    document.getElementById('stealth_mode').checked = currentRecommendations.recommended_stealth;
+                    document.getElementById('use_large_payloads').checked = currentRecommendations.recommended_large_payloads;
+                    
+                    await saveConfig();
+                    
+                    document.getElementById('step3').style.display = 'none';
+                    document.getElementById('step4').style.display = 'block';
+                    updateStepIndicator(4);
+                    displayFinalConfig();
+                    
+                    showAlert('Recomendaciones aplicadas correctamente', 'success');
+                }
+            } catch (error) {
+                showAlert('Error aplicando recomendaciones: ' + error.message, 'error');
+            }
+        }
+        
+        function workflowStep3Manual() {
+            switchTab('config');
+            showAlert('Puedes configurar manualmente y luego volver al flujo guiado', 'info');
+        }
+        
+        function displayFinalConfig() {
+            const displayDiv = document.getElementById('final-config-display');
+            let html = '<div class="fingerprint-info"><table>';
+            
+            html += `<tr><td>Target</td><td>${document.getElementById('target').value || document.getElementById('workflow_target').value}</td></tr>`;
+            html += `<tr><td>Nivel de Potencia</td><td>${document.getElementById('power_level').value}</td></tr>`;
+            html += `<tr><td>Duración</td><td>${document.getElementById('duration').value} segundos</td></tr>`;
+            html += `<tr><td>Max Conexiones</td><td>${parseInt(document.getElementById('max_connections').value).toLocaleString()}</td></tr>`;
+            html += `<tr><td>Max Threads</td><td>${document.getElementById('max_threads').value}</td></tr>`;
+            html += `<tr><td>Modo de Ataque</td><td>${document.getElementById('attack_mode').value}</td></tr>`;
+            html += `<tr><td>Bypass WAF</td><td>${document.getElementById('waf_bypass').checked ? 'Sí' : 'No'}</td></tr>`;
+            html += `<tr><td>Modo Stealth</td><td>${document.getElementById('stealth_mode').checked ? 'Sí' : 'No'}</td></tr>`;
+            html += `<tr><td>Payloads Grandes</td><td>${document.getElementById('use_large_payloads').checked ? 'Sí' : 'No'}</td></tr>`;
+            
+            html += '</table></div>';
+            displayDiv.innerHTML = html;
+        }
+        
+        async function workflowStep4Start() {
+            await saveConfig();
+            await startAttack();
+            switchTab('monitor');
+            updateStepIndicator(5);
+            showAlert('Stress test iniciado. Ve a la pestaña Monitor para ver estadísticas en tiempo real.', 'success');
+        }
+        
+        function updateStepIndicator(step) {
+            for (let i = 1; i <= 5; i++) {
+                const indicator = document.getElementById(`indicator-step${i}`);
+                if (i < step) {
+                    indicator.className = 'step completed';
+                } else if (i === step) {
+                    indicator.className = 'step active';
+                } else {
+                    indicator.className = 'step';
+                }
+            }
+        }
+        
+        function formatNumber(num) {
+            if (num >= 1000000) return (num / 1000000).toFixed(2) + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(2) + 'K';
+            return num.toString();
+        }
+        
+        function showAlert(message, type) {
+            const alertsDiv = document.getElementById('alerts');
+            const alert = document.createElement('div');
+            alert.className = `alert alert-${type}`;
+            alert.innerHTML = `<strong>${type.toUpperCase()}:</strong> ${message}`;
+            alert.style.position = 'fixed';
+            alert.style.top = '20px';
+            alert.style.right = '20px';
+            alert.style.minWidth = '300px';
+            alert.style.maxWidth = '500px';
+            alert.style.zIndex = '10000';
+            alert.style.boxShadow = '0 4px 20px rgba(0,0,0,0.5)';
+            alert.style.animation = 'slideIn 0.3s ease-out';
+            alertsDiv.appendChild(alert);
+            
+            // Botón de cerrar
+            const closeBtn = document.createElement('button');
+            closeBtn.innerHTML = '×';
+            closeBtn.style.cssText = 'position: absolute; top: 5px; right: 10px; background: transparent; border: none; color: inherit; font-size: 1.5em; cursor: pointer; line-height: 1;';
+            closeBtn.onclick = () => alert.remove();
+            alert.appendChild(closeBtn);
+            
+            setTimeout(() => {
+                if (alert.parentNode) {
+                    alert.style.animation = 'slideOut 0.3s ease-out';
+                    setTimeout(() => alert.remove(), 300);
+                }
+            }, 5000);
+            
+            return alert;
+        }
+        
+        // Agregar animación slideOut
+        const style = document.createElement('style');
+        style.textContent += `
+            @keyframes slideOut {
+                from {
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+                to {
+                    opacity: 0;
+                    transform: translateX(100%);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
