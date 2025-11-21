@@ -175,3 +175,6 @@ INTERNAL_*.md
 # verify_before_push.sh
 # setup_security.sh
 
+
+# Snyk Security Extension - AI Rules (auto-generated)
+.cursor/rules/snyk_rules.mdc
