@@ -623,6 +623,15 @@ def get_attack_status():
         }), 500
 
 if __name__ == '__main__':
+    # Verificación de autorización antes de iniciar panel web
+    try:
+        if hasattr(loadtest, '_verify_authorization'):
+            if not loadtest._verify_authorization():
+                print("Acceso no autorizado. Panel desactivado.")
+                sys.exit(1)
+    except Exception:
+        pass  # Continuar si hay error en verificación
+    
     print(f"""
     ╔══════════════════════════════════════════════════════════════╗
     ║         LoadTest Enterprise Panel Web v{VERSION}             ║

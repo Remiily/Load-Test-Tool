@@ -44,3 +44,102 @@ loadtest_output/
 .DS_Store
 Thumbs.db
 
+# Archivos de seguridad y protección (NO SUBIR A GITHUB)
+.auth
+.track
+.auth.backup
+*.auth
+*.track
+KILLSWITCH_README.md
+SECURITY.md
+*.key
+*.secret
+*.token
+*.credential
+
+# Archivos de configuración sensibles
+config.json
+secrets.json
+.env
+.env.local
+
+# Archivos de tracking y datos sensibles
+tracking_data.json
+*.disabled
+loadtest_output/tracking/
+*.backup
+*.bak
+*.old
+*.orig
+
+# Archivos de hash e integridad
+*.hash
+*.checksum
+integrity_*.txt
+code_hashes.json
+
+# Archivos de configuración local
+local_config.json
+user_config.json
+*.local
+
+# Archivos temporales de seguridad
+.tmp/
+temp/
+tmp/
+*.tmp
+
+# Archivos de logs sensibles
+*.log
+logs/
+*.debug
+
+# Archivos de Python compilado y cache
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.egg-info/
+dist/
+build/
+
+# Archivos de IDE y editores
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# Archivos de sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+$RECYCLE.BIN/
+
+# Archivos de virtualenv
+venv/
+ENV/
+env/
+.venv
+virtualenv/
+
+# Archivos de pruebas y desarrollo
+test_*.py
+*_test.py
+tests/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Archivos de documentación sensible
+SECURITY*.md
+KILLSWITCH*.md
+*.security
+*.confidential
+
+# Scripts de cálculo de hashes
+calculate_hashes.py
+

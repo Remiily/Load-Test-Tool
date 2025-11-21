@@ -37,6 +37,7 @@ Herramienta profesional para pruebas de seguridad autorizadas y análisis de ren
 - [Panel Web](#-panel-web)
 - [Ejemplos](#-ejemplos)
 - [Sistema de Auto-Actualización](#-sistema-de-auto-actualización)
+- [Seguridad y Protección](#-seguridad-y-protección)
 - [Solución de Problemas](#-solución-de-problemas)
 - [Contribuir](#-contribuir)
 - [Licencia](#-licencia)
@@ -1360,6 +1361,26 @@ El sistema crea y gestiona los siguientes directorios:
    - Generación de reportes
    - Cierre de conexiones
    - Terminación de procesos
+
+---
+
+## 🔒 Seguridad y Protección
+
+LoadTest Enterprise incluye un sistema de protección empresarial integrado para prevenir uso no autorizado, robo o modificación de la herramienta.
+
+### Características de Seguridad
+
+- **Kill-Switch Remoto**: Control centralizado para desactivar la herramienta remotamente
+- **Verificación de Integridad**: Detecta modificaciones no autorizadas del código
+- **Tracking Automático**: Registra ubicación y uso de la herramienta
+- **Protección Multi-Capa**: Código de protección distribuido en múltiples ubicaciones
+- **Auto-Destrucción**: Se desactiva automáticamente si se detecta uso no autorizado
+
+### Documentación de Seguridad
+
+Para información detallada sobre el sistema de seguridad, consulta `SECURITY.md` (documento confidencial).
+
+**Nota**: El sistema de seguridad está integrado y no puede ser desactivado o eliminado sin afectar la funcionalidad de la herramienta.
 
 ---
 
