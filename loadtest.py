@@ -17,6 +17,7 @@ import random
 import string
 import ipaddress
 import re
+import shlex
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
@@ -2284,11 +2285,19 @@ def auto_install_all_tools():
             
             try:
                 # Determinar si necesita shell=True (Windows y algunos comandos)
-                use_shell = system == "Windows" or manager in ["npm", "pip", "cargo", "go"] or "git clone" in command
+                # Los gestores de paquetes del sistema (apt-get, yum, dnf, pacman) también necesitan shell=True
+                use_shell = system == "Windows" or manager in ["npm", "pip", "cargo", "go", "apt-get", "yum", "dnf", "pacman", "snap"] or "git clone" in command
+                
+                # Preparar el comando según si usa shell o no
+                if use_shell:
+                    cmd = command
+                else:
+                    # Dividir el comando en lista para subprocess cuando no usa shell
+                    cmd = shlex.split(command)
                 
                 # Ejecutar comando de instalación
                 result = subprocess.run(
-                    command,
+                    cmd,
                     shell=use_shell,
                     check=False,
                     timeout=600,  # 10 minutos máximo
