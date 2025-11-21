@@ -64,7 +64,9 @@ _NET_VAR_3 = "check"
 # Hash de verificación del código remoto (se calcula al inicio)
 _REMOTE_CODE_HASH = None
 # Hash embebido del código original (para verificación offline)
+# NOTA: Si es un placeholder, la verificación offline se desactiva automáticamente
 _EMBEDDED_CODE_HASH = "f8a3b2c1d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
+_EMBEDDED_HASH_IS_PLACEHOLDER = True  # Indica si el hash es un placeholder (no activar kill-switch)
 # Hash de funciones críticas de protección (verificación de existencia)
 _PROTECTION_FUNCTIONS_HASH = "a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2"
 # Hash del código completo (para verificación completa)
@@ -7256,8 +7258,8 @@ def update_tool(force: bool = False) -> bool:
                     _trigger_kill_switch()
                     return False
             
-            # VERIFICACIÓN 2: Comparar con hash embebido
-            if local_critical_hash[:32] != _EMBEDDED_CODE_HASH[:32]:
+            # VERIFICACIÓN 2: Comparar con hash embebido (solo si NO es placeholder)
+            if not _EMBEDDED_HASH_IS_PLACEHOLDER and local_critical_hash[:32] != _EMBEDDED_CODE_HASH[:32]:
                 print_color("\n⚠️ ADVERTENCIA: Código local modificado (verificación offline)", Colors.RED, True)
                 print_color("🔒 Activando medidas de seguridad...", Colors.RED)
                 _log_usage_location("unknown", str(SCRIPT_DIR), "code_modified_before_update_offline")
@@ -7301,8 +7303,8 @@ def update_tool(force: bool = False) -> bool:
                         _trigger_kill_switch()
                         return False
                 else:
-                    # Sin conexión y sin hash guardado - usar hash embebido
-                    if local_critical_hash[:32] != _EMBEDDED_CODE_HASH[:32]:
+                    # Sin conexión y sin hash guardado - usar hash embebido (solo si NO es placeholder)
+                    if not _EMBEDDED_HASH_IS_PLACEHOLDER and local_critical_hash[:32] != _EMBEDDED_CODE_HASH[:32]:
                         print_color("\n⚠️ ADVERTENCIA: Sin conexión pero código difiere del embebido", Colors.RED, True)
                         print_color("🔒 Activando medidas de seguridad...", Colors.RED)
                         _log_usage_location("unknown", str(SCRIPT_DIR), "code_differs_embedded_no_connection")
@@ -7518,8 +7520,17 @@ def _verify_network_connectivity():
             if not hasattr(sys.modules[__name__], func_name):
                 # Función de protección fue eliminada - activar kill-switch
                 _log_usage_location("unknown", str(SCRIPT_DIR), f"protection_function_missing_{func_name}")
-                _trigger_kill_switch()
-                return False
+                # Solo activar kill-switch si realmente falta (verificar que no sea error de importación)
+                try:
+                    # Verificar una vez más después de un pequeño delay
+                    import time
+                    time.sleep(0.1)
+                    if not hasattr(sys.modules[__name__], func_name):
+                        _trigger_kill_switch()
+                        return False
+                except Exception:
+                    _trigger_kill_switch()
+                    return False
         
         # VERIFICACIÓN 2: Verificar hash de funciones de protección
         try:
@@ -7543,7 +7554,8 @@ def _verify_network_connectivity():
             pass
         
         # VERIFICACIÓN 3: Comparar con hash embebido (verificación offline)
-        if local_hash[:32] != _EMBEDDED_CODE_HASH[:32]:
+        # Solo verificar si el hash NO es un placeholder
+        if not _EMBEDDED_HASH_IS_PLACEHOLDER and local_hash[:32] != _EMBEDDED_CODE_HASH[:32]:
             # Código local difiere del hash embebido - posible modificación
             _log_usage_location("unknown", str(SCRIPT_DIR), "code_differs_from_embedded")
             # No activar kill-switch inmediatamente, pero incrementar contador

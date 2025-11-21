@@ -44,11 +44,14 @@ loadtest_output/
 .DS_Store
 Thumbs.db
 
-# Archivos de seguridad y protección (NO SUBIR A GITHUB)
-.auth
+# Archivos de seguridad y protección
+# NOTA: .auth DEBE estar en GitHub para que funcione el sistema
+# Solo ignorar archivos .auth locales/backup, NO el .auth principal
 .track
 .auth.backup
-*.auth
+.auth.local
+*.auth.backup
+*.auth.local
 *.track
 KILLSWITCH_README.md
 SECURITY.md
