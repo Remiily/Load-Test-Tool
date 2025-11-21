@@ -510,7 +510,42 @@ def check_python_module(module: str) -> bool:
 def check_command_exists(command: str) -> bool:
     """Verifica si un comando existe en el sistema"""
     import shutil
-    return shutil.which(command) is not None
+    
+    # Buscar en PATH estándar
+    if shutil.which(command):
+        return True
+    
+    # Buscar en ubicaciones comunes adicionales
+    common_paths = [
+        "/usr/local/bin",
+        "/usr/bin",
+        "/bin",
+        "/opt/bin",
+        os.path.expanduser("~/.local/bin"),
+        os.path.expanduser("~/go/bin"),
+        os.path.expanduser("~/.cargo/bin"),
+    ]
+    
+    # Agregar rutas comunes al PATH temporalmente
+    env_path = os.environ.get("PATH", "")
+    for path in common_paths:
+        if path not in env_path and os.path.exists(path):
+            env_path = f"{path}:{env_path}"
+    
+    # Buscar en las rutas extendidas
+    for path in common_paths:
+        full_path = os.path.join(path, command)
+        if os.path.exists(full_path) and os.access(full_path, os.X_OK):
+            return True
+    
+    # Intentar con PATH extendido
+    old_path = os.environ.get("PATH", "")
+    try:
+        os.environ["PATH"] = env_path
+        result = shutil.which(command) is not None
+        return result
+    finally:
+        os.environ["PATH"] = old_path
 
 def validate_attack_config():
     """Valida configuración de ataque"""
@@ -1975,10 +2010,14 @@ def get_install_commands() -> Dict[str, List[str]]:
                 "snap install vegeta"
             ],
             "bombardier": [
-                "snap install bombardier"
+                "snap install bombardier",
+                "go install github.com/codesenberg/bombardier@latest",
+                "apt-get install -y gpg && curl -fsSL https://bombardier.codeberg.page/gpg | gpg --dearmor -o /usr/share/keyrings/bombardier.gpg && echo 'deb [signed-by=/usr/share/keyrings/bombardier.gpg] https://bombardier.codeberg.page/deb stable main' | tee /etc/apt/sources.list.d/bombardier.list && apt-get update && apt-get install -y bombardier"
             ],
             "hey": [
-                "snap install hey"
+                "snap install hey",
+                "go install github.com/rakyll/hey@latest",
+                "wget -O /tmp/hey.deb https://github.com/rakyll/hey/releases/latest/download/hey_linux_amd64.deb && dpkg -i /tmp/hey.deb || apt-get install -f -y"
             ],
             "autocannon": [
                 "npm install -g autocannon"
@@ -1988,13 +2027,15 @@ def get_install_commands() -> Dict[str, List[str]]:
             ],
             "websocat": [
                 "apt-get install -y websocat",
-                "cargo install websocat"
+                "cargo install websocat",
+                "wget -O /usr/local/bin/websocat https://github.com/vi/websocat/releases/latest/download/websocat.x86_64-unknown-linux-musl && chmod +x /usr/local/bin/websocat"
             ],
             "locust": [
-                "pip install locust"
+                "pip install locust",
+                "pip3 install locust"
             ],
             "k6": [
-                "apt-get install -y k6",
+                "apt-get install -y gpg && gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D6B && echo 'deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main' | tee /etc/apt/sources.list.d/k6.list && apt-get update && apt-get install -y k6",
                 "yum install -y k6",
                 "dnf install -y k6",
                 "snap install k6"
@@ -2003,56 +2044,64 @@ def get_install_commands() -> Dict[str, List[str]]:
                 "npm install -g artillery"
             ],
             "gatling": [
-                "apt-get install -y gatling",
-                "yum install -y gatling",
-                "dnf install -y gatling"
+                "wget -O /tmp/gatling.zip https://repo1.maven.org/maven2/io/gatling/highcharts/gatling-charts-highcharts-bundle/3.9.5/gatling-charts-highcharts-bundle-3.9.5-bundle.zip && unzip -q /tmp/gatling.zip -d /opt && ln -sf /opt/gatling-charts-highcharts-bundle-*/bin/gatling.sh /usr/local/bin/gatling && chmod +x /usr/local/bin/gatling"
             ],
             "drill": [
-                "apt-get install -y drill",
-                "yum install -y drill",
-                "dnf install -y drill"
+                "apt-get install -y build-essential libldns-dev && git clone https://github.com/fcambus/drill.git /tmp/drill && cd /tmp/drill && ./configure && make && make install"
             ],
             "http2bench": [
-                "go get github.com/fstab/h2c/http2bench"
+                "go install github.com/fstab/h2c/http2bench@latest"
+            ],
+            "wrk2": [
+                "apt-get install -y build-essential libssl-dev git && git clone https://github.com/giltene/wrk2.git /tmp/wrk2 && cd /tmp/wrk2 && make && cp wrk /usr/local/bin/wrk2 && chmod +x /usr/local/bin/wrk2"
+            ],
+            "weighttp": [
+                "apt-get install -y build-essential libev-dev && git clone https://github.com/lighttpd/weighttp.git /tmp/weighttp && cd /tmp/weighttp && ./waf configure && ./waf build && ./waf install"
             ],
             "goldeneye": [
                 "pip install goldeneye",
-                "git clone https://github.com/jseidl/GoldenEye.git /tmp/goldeneye && cd /tmp/goldeneye && python3 goldeneye.py --help"
+                "pip3 install goldeneye",
+                "git clone https://github.com/jseidl/GoldenEye.git /tmp/goldeneye && cd /tmp/goldeneye && chmod +x goldeneye.py && cp goldeneye.py /usr/local/bin/goldeneye && chmod +x /usr/local/bin/goldeneye"
             ],
             "hulk": [
                 "pip install hulk",
-                "git clone https://github.com/grafov/hulk.git /tmp/hulk"
+                "pip3 install hulk",
+                "git clone https://github.com/grafov/hulk.git /tmp/hulk && cd /tmp/hulk && chmod +x hulk.py && cp hulk.py /usr/local/bin/hulk && chmod +x /usr/local/bin/hulk"
             ],
             "slowloris": [
                 "pip install slowloris",
+                "pip3 install slowloris",
                 "apt-get install -y slowloris",
-                "yum install -y slowloris"
+                "yum install -y slowloris",
+                "git clone https://github.com/gkbrk/slowloris.git /tmp/slowloris && cd /tmp/slowloris && chmod +x slowloris.py && cp slowloris.py /usr/local/bin/slowloris && chmod +x /usr/local/bin/slowloris"
             ],
             "torshammer": [
                 "pip install torshammer",
-                "git clone https://github.com/dotfighter/torshammer.git /tmp/torshammer"
+                "pip3 install torshammer",
+                "git clone https://github.com/dotfighter/torshammer.git /tmp/torshammer && cd /tmp/torshammer && chmod +x torshammer.py && cp torshammer.py /usr/local/bin/torshammer && chmod +x /usr/local/bin/torshammer"
             ],
             "ddos-ripper": [
-                "git clone https://github.com/palahadi/DDoS-Ripper.git /tmp/ddos-ripper"
+                "git clone https://github.com/palahadi/DDoS-Ripper.git /tmp/ddos-ripper && cd /tmp/ddos-ripper && chmod +x DRipper.py && cp DRipper.py /usr/local/bin/ddos-ripper && chmod +x /usr/local/bin/ddos-ripper"
             ],
             "pyloris": [
                 "pip install pyloris",
-                "git clone https://github.com/epsylon/pyloris.git /tmp/pyloris"
+                "pip3 install pyloris",
+                "git clone https://github.com/epsylon/pyloris.git /tmp/pyloris && cd /tmp/pyloris && chmod +x pyloris.py && cp pyloris.py /usr/local/bin/pyloris && chmod +x /usr/local/bin/pyloris"
             ],
             "xerxes": [
-                "git clone https://github.com/zanyarjamal/xerxes.git /tmp/xerxes && cd /tmp/xerxes && gcc xerxes.c -o xerxes"
+                "apt-get install -y build-essential && git clone https://github.com/zanyarjamal/xerxes.git /tmp/xerxes && cd /tmp/xerxes && gcc xerxes.c -o xerxes && cp xerxes /usr/local/bin/xerxes && chmod +x /usr/local/bin/xerxes"
             ],
             "hoic": [
-                "git clone https://github.com/hoic/hoic.git /tmp/hoic"
+                "git clone https://github.com/hoic/hoic.git /tmp/hoic && cd /tmp/hoic && chmod +x hoic && cp hoic /usr/local/bin/hoic && chmod +x /usr/local/bin/hoic || (cd /tmp/hoic && gcc -o hoic hoic.c && cp hoic /usr/local/bin/hoic && chmod +x /usr/local/bin/hoic)"
             ],
             "loic": [
-                "git clone https://github.com/NewEraCracker/LOIC.git /tmp/loic"
+                "git clone https://github.com/NewEraCracker/LOIC.git /tmp/loic && cd /tmp/loic && chmod +x loic.py && cp loic.py /usr/local/bin/loic && chmod +x /usr/local/bin/loic"
             ],
             "rudy": [
-                "git clone https://github.com/sahilsehgal05/rudy.git /tmp/rudy"
+                "git clone https://github.com/sahilsehgal05/rudy.git /tmp/rudy && cd /tmp/rudy && chmod +x rudy.py && cp rudy.py /usr/local/bin/rudy && chmod +x /usr/local/bin/rudy"
             ],
             "reaper": [
-                "git clone https://github.com/zer0d4y/reaper.git /tmp/reaper"
+                "git clone https://github.com/zer0d4y/reaper.git /tmp/reaper && cd /tmp/reaper && chmod +x reaper.py && cp reaper.py /usr/local/bin/reaper && chmod +x /usr/local/bin/reaper"
             ]
         }
     else:  # macOS
@@ -2243,6 +2292,147 @@ def auto_install_all_tools():
         print_color("💡 Instala al menos uno: chocolatey (Windows), apt/yum (Linux), o brew (macOS)", Colors.YELLOW)
         return
     
+    # Instalar dependencias básicas necesarias para compilación
+    if system == "Linux":
+        print_color("\n📦 Instalando dependencias básicas...", Colors.CYAN)
+        basic_deps_installed = False
+        
+        # Intentar instalar dependencias básicas
+        deps_commands = []
+        if "apt-get" in available_managers:
+            deps_commands = [
+                "apt-get update",
+                "apt-get install -y build-essential git gcc g++ make curl wget python3-pip",
+                "apt-get install -y libssl-dev libev-dev libldns-dev"
+            ]
+        elif "yum" in available_managers:
+            deps_commands = [
+                "yum groupinstall -y 'Development Tools'",
+                "yum install -y git gcc gcc-c++ make curl wget python3-pip openssl-devel libev-devel"
+            ]
+        elif "dnf" in available_managers:
+            deps_commands = [
+                "dnf groupinstall -y 'Development Tools'",
+                "dnf install -y git gcc gcc-c++ make curl wget python3-pip openssl-devel libev-devel"
+            ]
+        elif "pacman" in available_managers:
+            deps_commands = [
+                "pacman -S --noconfirm base-devel git curl wget python-pip openssl libev"
+            ]
+        
+        for dep_cmd in deps_commands:
+            try:
+                result = subprocess.run(
+                    dep_cmd,
+                    shell=True,
+                    check=False,
+                    timeout=300,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True
+                )
+                if result.returncode == 0:
+                    basic_deps_installed = True
+            except Exception:
+                pass
+        
+        if basic_deps_installed:
+            print_color("  ✓ Dependencias básicas instaladas", Colors.GREEN)
+        else:
+            print_color("  ⚠ No se pudieron instalar todas las dependencias, continuando...", Colors.YELLOW)
+        
+        # Verificar e instalar Go si no está disponible
+        if "go" not in available_managers:
+            print_color("  📥 Instalando Go...", Colors.CYAN)
+            go_install_commands = []
+            if "apt-get" in available_managers:
+                go_install_commands = [
+                    "apt-get install -y golang-go",
+                    "snap install go --classic"
+                ]
+            elif "yum" in available_managers:
+                go_install_commands = [
+                    "yum install -y golang"
+                ]
+            elif "dnf" in available_managers:
+                go_install_commands = [
+                    "dnf install -y golang"
+                ]
+            elif "pacman" in available_managers:
+                go_install_commands = [
+                    "pacman -S --noconfirm go"
+                ]
+            
+            # También intentar instalación manual de Go
+            go_install_commands.append(
+                "wget -O /tmp/go.tar.gz https://go.dev/dl/go1.21.5.linux-amd64.tar.gz && rm -rf /usr/local/go && tar -C /usr/local -xzf /tmp/go.tar.gz && echo 'export PATH=$PATH:/usr/local/go/bin' >> /etc/profile && export PATH=$PATH:/usr/local/go/bin"
+            )
+            
+            for go_cmd in go_install_commands:
+                try:
+                    result = subprocess.run(
+                        go_cmd,
+                        shell=True,
+                        check=False,
+                        timeout=300,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    if result.returncode == 0:
+                        # Verificar si Go está disponible ahora
+                        if check_package_manager("go"):
+                            package_managers["go"] = True
+                            available_managers.append("go")
+                            print_color("    ✓ Go instalado", Colors.GREEN)
+                            break
+                except Exception:
+                    pass
+        
+        # Verificar e instalar Node.js/npm si no está disponible
+        if "npm" not in available_managers:
+            print_color("  📥 Instalando Node.js/npm...", Colors.CYAN)
+            npm_install_commands = []
+            if "apt-get" in available_managers:
+                npm_install_commands = [
+                    "curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && apt-get install -y nodejs",
+                    "apt-get install -y nodejs npm",
+                    "snap install node --classic"
+                ]
+            elif "yum" in available_managers:
+                npm_install_commands = [
+                    "curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - && yum install -y nodejs"
+                ]
+            elif "dnf" in available_managers:
+                npm_install_commands = [
+                    "curl -fsSL https://rpm.nodesource.com/setup_20.x | bash - && dnf install -y nodejs"
+                ]
+            elif "pacman" in available_managers:
+                npm_install_commands = [
+                    "pacman -S --noconfirm nodejs npm"
+                ]
+            
+            for npm_cmd in npm_install_commands:
+                try:
+                    result = subprocess.run(
+                        npm_cmd,
+                        shell=True,
+                        check=False,
+                        timeout=300,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True
+                    )
+                    if result.returncode == 0:
+                        # Verificar si npm está disponible ahora
+                        if check_package_manager("npm"):
+                            package_managers["npm"] = True
+                            available_managers.append("npm")
+                            print_color("    ✓ Node.js/npm instalado", Colors.GREEN)
+                            break
+                except Exception:
+                    pass
+    
     print()
     
     installed_count = 0
@@ -2295,6 +2485,21 @@ def auto_install_all_tools():
                     # Dividir el comando en lista para subprocess cuando no usa shell
                     cmd = shlex.split(command)
                 
+                # Preparar entorno con PATH extendido para herramientas Go y otras
+                env = os.environ.copy()
+                go_bin = os.path.expanduser("~/go/bin")
+                local_bin = os.path.expanduser("~/.local/bin")
+                cargo_bin = os.path.expanduser("~/.cargo/bin")
+                
+                current_path = env.get("PATH", "")
+                paths_to_add = []
+                for bin_path in [go_bin, local_bin, cargo_bin, "/usr/local/bin"]:
+                    if bin_path not in current_path and os.path.exists(bin_path):
+                        paths_to_add.append(bin_path)
+                
+                if paths_to_add:
+                    env["PATH"] = ":".join(paths_to_add + [current_path])
+                
                 # Ejecutar comando de instalación
                 result = subprocess.run(
                     cmd,
@@ -2303,7 +2508,8 @@ def auto_install_all_tools():
                     timeout=600,  # 10 minutos máximo
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,
-                    text=True
+                    text=True,
+                    env=env
                 )
                 
                 if result.returncode == 0:
