@@ -6404,7 +6404,64 @@ def check_github_version_from_file() -> Optional[str]:
         log_message("DEBUG", f"Error verificando versión desde archivo: {e}")
         return None
 
-def check_for_updates(silent: bool = False) -> Tuple[bool, Optional[str]]:
+def get_file_hash(filepath: Path) -> Optional[str]:
+    """Calcula el hash SHA256 de un archivo"""
+    try:
+        import hashlib
+        if not filepath.exists():
+            return None
+        with open(filepath, 'rb') as f:
+            file_hash = hashlib.sha256()
+            # Leer en chunks para archivos grandes
+            while chunk := f.read(8192):
+                file_hash.update(chunk)
+            return file_hash.hexdigest()
+    except Exception as e:
+        log_message("DEBUG", f"Error calculando hash de {filepath}: {e}")
+        return None
+
+def check_file_differences() -> Tuple[bool, List[str]]:
+    """Compara archivos locales con remotos para detectar diferencias"""
+    try:
+        import urllib.request
+        import hashlib
+        
+        files_to_check = ["loadtest.py", "loadtest_web.py"]
+        different_files = []
+        
+        for filename in files_to_check:
+            file_path = SCRIPT_DIR / filename
+            if not file_path.exists():
+                continue
+            
+            # Obtener hash local
+            local_hash = get_file_hash(file_path)
+            if not local_hash:
+                continue
+            
+            # Obtener archivo remoto y calcular hash
+            try:
+                url = f"{GITHUB_RAW_URL}/{filename}"
+                req = urllib.request.Request(url)
+                req.add_header('User-Agent', 'LoadTest-Enterprise/1.0')
+                
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    remote_content = response.read()
+                    remote_hash = hashlib.sha256(remote_content).hexdigest()
+                    
+                    if local_hash != remote_hash:
+                        different_files.append(filename)
+            except Exception as e:
+                log_message("DEBUG", f"Error comparando {filename}: {e}")
+                # Si no se puede comparar, asumir que puede haber diferencias
+                different_files.append(filename)
+        
+        return len(different_files) > 0, different_files
+    except Exception as e:
+        log_message("DEBUG", f"Error verificando diferencias de archivos: {e}")
+        return False, []
+
+def check_for_updates(silent: bool = False, check_content: bool = True) -> Tuple[bool, Optional[str]]:
     """Verifica si hay actualizaciones disponibles"""
     if not silent:
         print_color("\n🔍 Verificando actualizaciones...", Colors.CYAN, True)
@@ -6424,6 +6481,16 @@ def check_for_updates(silent: bool = False) -> Tuple[bool, Optional[str]]:
     current_version = VERSION
     comparison = compare_versions(current_version, latest_version)
     
+    # Si las versiones son iguales pero check_content=True, verificar diferencias en archivos
+    if comparison == 0 and check_content:
+        has_differences, different_files = check_file_differences()
+        if has_differences:
+            if not silent:
+                print_color(f"  ⚠️ Versión igual (v{current_version}) pero se detectaron diferencias en archivos", Colors.YELLOW)
+                print_color(f"  📝 Archivos diferentes: {', '.join(different_files)}", Colors.YELLOW)
+                print_color(f"  💡 Usa --update para sincronizar con GitHub", Colors.CYAN)
+            return True, latest_version
+    
     if comparison < 0:
         # Hay una versión más nueva
         if not silent:
@@ -6434,11 +6501,17 @@ def check_for_updates(silent: bool = False) -> Tuple[bool, Optional[str]]:
         # Versión actual
         if not silent:
             print_color(f"  ✓ Estás usando la versión más reciente (v{current_version})", Colors.GREEN)
+            if check_content:
+                has_differences, different_files = check_file_differences()
+                if has_differences:
+                    print_color(f"  ⚠️ Nota: Hay diferencias en archivos locales vs remotos", Colors.YELLOW)
+                    print_color(f"  💡 Usa --update para sincronizar", Colors.CYAN)
         return False, latest_version
     else:
         # Versión local más nueva (desarrollo)
         if not silent:
             print_color(f"  ℹ️ Versión local (v{current_version}) es más reciente que la remota (v{latest_version})", Colors.CYAN)
+            print_color(f"  💡 Esto puede indicar cambios locales no versionados", Colors.YELLOW)
         return False, latest_version
 
 def download_file_from_github(filepath: str, save_path: Path) -> bool:
@@ -6477,18 +6550,33 @@ def update_tool(force: bool = False) -> bool:
     """Actualiza la herramienta desde GitHub"""
     print_color("\n🔄 Iniciando actualización...", Colors.CYAN, True)
     
-    # Verificar si hay actualizaciones
-    has_update, latest_version = check_for_updates(silent=True)
+    # Verificar si hay actualizaciones (incluyendo comparación de contenido)
+    has_update, latest_version = check_for_updates(silent=True, check_content=True)
     
+    # Si no hay actualización por versión, verificar diferencias de contenido
     if not has_update and not force:
-        print_color("  ✓ Ya estás usando la versión más reciente", Colors.GREEN)
-        return False
+        has_differences, different_files = check_file_differences()
+        if has_differences:
+            print_color(f"  ⚠️ Se detectaron diferencias en archivos locales vs remotos", Colors.YELLOW)
+            print_color(f"  📝 Archivos diferentes: {', '.join(different_files)}", Colors.YELLOW)
+            print_color(f"  💡 Continuando con actualización para sincronizar...", Colors.CYAN)
+            has_update = True
+        else:
+            # Aún así, intentar actualizar para asegurar sincronización completa
+            print_color("  ℹ️ Versiones iguales y sin diferencias detectadas, pero verificando archivos...", Colors.CYAN)
+            # Continuar con la actualización para asegurar que todo esté sincronizado
+            has_update = True
     
+    # Si no se pudo determinar versión pero hay diferencias o force=True, continuar
     if not latest_version:
-        print_color("  ❌ No se pudo determinar la versión disponible", Colors.RED)
-        return False
-    
-    print_color(f"  📥 Descargando versión v{latest_version}...", Colors.YELLOW)
+        if has_update or force:
+            print_color("  ⚠️ No se pudo determinar la versión, pero continuando con actualización...", Colors.YELLOW)
+            print_color("  📥 Descargando archivos desde GitHub...", Colors.YELLOW)
+        else:
+            print_color("  ❌ No se pudo determinar la versión disponible", Colors.RED)
+            return False
+    else:
+        print_color(f"  📥 Descargando versión v{latest_version}...", Colors.YELLOW)
     
     # Archivos a actualizar
     files_to_update = [
