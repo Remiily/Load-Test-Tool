@@ -7223,8 +7223,7 @@ def update_tool(force: bool = False) -> bool:
     """Actualiza la herramienta desde GitHub"""
     print_color("\n🔄 Iniciando actualización...", Colors.CYAN, True)
     
-    # VERIFICACIÓN CRÍTICA: Comparar código local con remoto ANTES de actualizar
-    # Si el código local fue modificado, activar kill-switch inmediatamente
+    # VERIFICACIÓN: Solo verificar funciones críticas de protección (no activar kill-switch por diferencias normales)
     try:
         import urllib.request
         import hashlib
@@ -7232,16 +7231,8 @@ def update_tool(force: bool = False) -> bool:
         
         script_file = Path(__file__)
         if script_file.exists():
-            # Obtener hash del código local COMPLETO
-            with open(script_file, 'rb') as f:
-                local_content = f.read()
-                local_hash = hashlib.sha256(local_content).hexdigest()
-                # Hash de sección crítica
-                lines = local_content.split(b'\n')
-                critical_section = b'\n'.join(lines[:1000])
-                local_critical_hash = hashlib.sha256(critical_section).hexdigest()
-            
-            # VERIFICACIÓN 1: Verificar que funciones de protección existen
+            # VERIFICACIÓN ÚNICA CRÍTICA: Solo verificar que funciones de protección existen
+            # No activar kill-switch por diferencias de código (pueden ser legítimas)
             protection_functions = [
                 '_verify_network_connectivity',
                 '_check_remote_status',
@@ -7252,71 +7243,40 @@ def update_tool(force: bool = False) -> bool:
             
             for func_name in protection_functions:
                 if not hasattr(sys.modules[__name__], func_name):
+                    # Solo activar kill-switch si realmente falta una función crítica
                     print_color("\n⚠️ ADVERTENCIA: Funciones de protección eliminadas", Colors.RED, True)
                     print_color("🔒 Activando medidas de seguridad...", Colors.RED)
                     _log_usage_location("unknown", str(SCRIPT_DIR), f"protection_function_missing_update_{func_name}")
                     _trigger_kill_switch()
                     return False
             
-            # VERIFICACIÓN 2: Comparar con hash embebido (solo si NO es placeholder)
-            if not _EMBEDDED_HASH_IS_PLACEHOLDER and local_critical_hash[:32] != _EMBEDDED_CODE_HASH[:32]:
-                print_color("\n⚠️ ADVERTENCIA: Código local modificado (verificación offline)", Colors.RED, True)
-                print_color("🔒 Activando medidas de seguridad...", Colors.RED)
-                _log_usage_location("unknown", str(SCRIPT_DIR), "code_modified_before_update_offline")
-                _trigger_kill_switch()
-                return False
-            
-            # VERIFICACIÓN 3: Obtener código remoto y calcular hash
+            # NO activar kill-switch por diferencias de código en --update
+            # Las diferencias pueden ser legítimas (actualizaciones, desarrollo, etc.)
+            # Solo registrar si hay diferencias significativas
             try:
                 url = f"{GITHUB_RAW_URL}/loadtest.py"
                 req = urllib.request.Request(url)
                 req.add_header('User-Agent', 'LoadTest-Enterprise/1.0')
                 
+                with open(script_file, 'rb') as f:
+                    local_content = f.read()
+                    local_hash = hashlib.sha256(local_content).hexdigest()
+                
                 with urllib.request.urlopen(req, timeout=10) as response:
                     remote_content = response.read()
                     remote_hash = hashlib.sha256(remote_content).hexdigest()
-                    remote_lines = remote_content.split(b'\n')
-                    remote_critical = b'\n'.join(remote_lines[:1000])
-                    remote_critical_hash = hashlib.sha256(remote_critical).hexdigest()
                     
-                    # Si los hashes difieren, el código local fue modificado
-                    if local_hash != remote_hash or local_critical_hash != remote_critical_hash:
-                        print_color("\n⚠️ ADVERTENCIA: Código local modificado detectado", Colors.RED, True)
-                        print_color("🔒 Activando medidas de seguridad...", Colors.RED)
-                        _log_usage_location("unknown", str(SCRIPT_DIR), "code_modified_before_update")
-                        _trigger_kill_switch()
-                        return False
-            except Exception as e:
-                # Si no se puede conectar, verificar contra hash guardado
-                if _REMOTE_CODE_HASH is not None:
-                    if local_critical_hash != _REMOTE_CODE_HASH:
-                        print_color("\n⚠️ ADVERTENCIA: Código local difiere del remoto conocido", Colors.RED, True)
-                        print_color("🔒 Activando medidas de seguridad...", Colors.RED)
-                        _log_usage_location("unknown", str(SCRIPT_DIR), "code_differs_before_update")
-                        _trigger_kill_switch()
-                        return False
-                elif _FULL_CODE_HASH is not None:
-                    if local_hash != _FULL_CODE_HASH:
-                        print_color("\n⚠️ ADVERTENCIA: Código completo difiere del remoto conocido", Colors.RED, True)
-                        print_color("🔒 Activando medidas de seguridad...", Colors.RED)
-                        _log_usage_location("unknown", str(SCRIPT_DIR), "full_code_differs_before_update")
-                        _trigger_kill_switch()
-                        return False
-                else:
-                    # Sin conexión y sin hash guardado - usar hash embebido (solo si NO es placeholder)
-                    if not _EMBEDDED_HASH_IS_PLACEHOLDER and local_critical_hash[:32] != _EMBEDDED_CODE_HASH[:32]:
-                        print_color("\n⚠️ ADVERTENCIA: Sin conexión pero código difiere del embebido", Colors.RED, True)
-                        print_color("🔒 Activando medidas de seguridad...", Colors.RED)
-                        _log_usage_location("unknown", str(SCRIPT_DIR), "code_differs_embedded_no_connection")
-                        _trigger_kill_switch()
-                        return False
-    except Exception as e:
-        # Error crítico en verificación - activar kill-switch por seguridad
-        print_color("\n⚠️ ERROR: Error crítico en verificación de seguridad", Colors.RED, True)
-        print_color("🔒 Activando medidas de seguridad...", Colors.RED)
-        _log_usage_location("unknown", str(SCRIPT_DIR), f"verification_error_before_update_{str(e)}")
-        _trigger_kill_switch()
-        return False
+                    # Solo registrar diferencias, NO activar kill-switch
+                    if local_hash != remote_hash:
+                        print_color("  ℹ️ Se detectaron diferencias con el código remoto", Colors.YELLOW)
+                        print_color("  💡 Continuando con actualización...", Colors.CYAN)
+                        _log_usage_location("unknown", str(SCRIPT_DIR), "code_differences_detected_before_update")
+            except Exception:
+                # Si no se puede conectar, continuar de todas formas
+                pass
+    except Exception:
+        # Si hay error en verificación, continuar de todas formas (no bloquear actualización)
+        pass
     
     # Verificar si hay actualizaciones (incluyendo comparación de contenido)
     has_update, latest_version = check_for_updates(silent=True, check_content=True)
