@@ -1987,10 +1987,10 @@ def get_install_commands() -> Dict[str, List[str]]:
                 "pacman -S --noconfirm jmeter"
             ],
             "tsung": [
-                "apt-get install -y tsung",
-                "yum install -y tsung",
-                "dnf install -y tsung",
-                "pacman -S --noconfirm tsung"
+                "apt-get install -y tsung erlang",
+                "yum install -y tsung erlang",
+                "dnf install -y tsung erlang",
+                "pacman -S --noconfirm tsung erlang"
             ],
             "h2load": [
                 "apt-get install -y nghttp2-client",
@@ -2032,76 +2032,99 @@ def get_install_commands() -> Dict[str, List[str]]:
             ],
             "locust": [
                 "pip install locust",
-                "pip3 install locust"
+                "pip3 install locust",
+                "python3 -m pip install locust",
+                "apt-get install -y python3-pip && pip3 install locust"
             ],
             "k6": [
-                "apt-get install -y gpg && gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D6B && echo 'deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main' | tee /etc/apt/sources.list.d/k6.list && apt-get update && apt-get install -y k6",
+                "snap install k6",
+                "curl -L https://github.com/grafana/k6/releases/latest/download/k6-v0.47.0-linux-amd64.deb -o /tmp/k6.deb 2>/dev/null && dpkg -i /tmp/k6.deb || apt-get install -f -y",
+                "wget -O /tmp/k6.deb https://github.com/grafana/k6/releases/latest/download/k6-v0.47.0-linux-amd64.deb 2>/dev/null && dpkg -i /tmp/k6.deb || apt-get install -f -y",
+                "apt-get install -y gpg && gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D6B 2>/dev/null && echo 'deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main' | tee /etc/apt/sources.list.d/k6.list && apt-get update && apt-get install -y k6",
                 "yum install -y k6",
-                "dnf install -y k6",
-                "snap install k6"
+                "dnf install -y k6"
             ],
             "artillery": [
                 "npm install -g artillery"
             ],
             "gatling": [
-                "wget -O /tmp/gatling.zip https://repo1.maven.org/maven2/io/gatling/highcharts/gatling-charts-highcharts-bundle/3.9.5/gatling-charts-highcharts-bundle-3.9.5-bundle.zip && unzip -q /tmp/gatling.zip -d /opt && ln -sf /opt/gatling-charts-highcharts-bundle-*/bin/gatling.sh /usr/local/bin/gatling && chmod +x /usr/local/bin/gatling"
+                "apt-get install -y unzip default-jre && wget -O /tmp/gatling.zip https://repo1.maven.org/maven2/io/gatling/highcharts/gatling-charts-highcharts-bundle/3.9.5/gatling-charts-highcharts-bundle-3.9.5-bundle.zip && unzip -q /tmp/gatling.zip -d /opt && ln -sf /opt/gatling-charts-highcharts-bundle-*/bin/gatling.sh /usr/local/bin/gatling && chmod +x /usr/local/bin/gatling",
+                "apt-get install -y unzip default-jre && wget -O /tmp/gatling.zip https://repo1.maven.org/maven2/io/gatling/highcharts/gatling-charts-highcharts-bundle/latest/gatling-charts-highcharts-bundle-latest-bundle.zip && unzip -q /tmp/gatling.zip -d /opt && ln -sf /opt/gatling-charts-highcharts-bundle-*/bin/gatling.sh /usr/local/bin/gatling && chmod +x /usr/local/bin/gatling"
             ],
             "drill": [
-                "apt-get install -y build-essential libldns-dev && git clone https://github.com/fcambus/drill.git /tmp/drill && cd /tmp/drill && ./configure && make && make install"
+                "apt-get install -y build-essential libldns-dev autoconf automake libtool && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/fcambus/drill.git /tmp/drill 2>/dev/null && cd /tmp/drill && ./autogen.sh 2>/dev/null || autoreconf -fiv 2>/dev/null || true && ./configure && make && make install",
+                "apt-get install -y build-essential libldns-dev autoconf automake libtool && wget -O /tmp/drill.tar.gz https://github.com/fcambus/drill/archive/refs/heads/master.tar.gz 2>/dev/null && cd /tmp && tar -xzf drill.tar.gz 2>/dev/null && cd drill-master && ./autogen.sh 2>/dev/null || autoreconf -fiv 2>/dev/null || true && ./configure && make && make install",
+                "apt-get install -y drill"
             ],
             "http2bench": [
-                "go install github.com/fstab/h2c/http2bench@latest"
+                "go install github.com/fstab/h2c/http2bench@latest",
+                "GOPATH=/tmp/go go install github.com/fstab/h2c/http2bench@latest && cp /tmp/go/bin/http2bench /usr/local/bin/http2bench && chmod +x /usr/local/bin/http2bench"
             ],
             "wrk2": [
-                "apt-get install -y build-essential libssl-dev git && git clone https://github.com/giltene/wrk2.git /tmp/wrk2 && cd /tmp/wrk2 && make && cp wrk /usr/local/bin/wrk2 && chmod +x /usr/local/bin/wrk2"
+                "apt-get install -y build-essential libssl-dev git && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/giltene/wrk2.git /tmp/wrk2 2>/dev/null && cd /tmp/wrk2 && make && cp wrk /usr/local/bin/wrk2 && chmod +x /usr/local/bin/wrk2",
+                "apt-get install -y build-essential libssl-dev && wget -O /tmp/wrk2.tar.gz https://github.com/giltene/wrk2/archive/refs/heads/master.tar.gz 2>/dev/null && cd /tmp && tar -xzf wrk2.tar.gz 2>/dev/null && cd wrk2-master && make && cp wrk /usr/local/bin/wrk2 && chmod +x /usr/local/bin/wrk2",
+                "apt-get install -y build-essential libssl-dev && curl -L https://github.com/giltene/wrk2/archive/refs/heads/master.tar.gz -o /tmp/wrk2.tar.gz 2>/dev/null && cd /tmp && tar -xzf wrk2.tar.gz 2>/dev/null && cd wrk2-master && make && cp wrk /usr/local/bin/wrk2 && chmod +x /usr/local/bin/wrk2"
             ],
             "weighttp": [
-                "apt-get install -y build-essential libev-dev && git clone https://github.com/lighttpd/weighttp.git /tmp/weighttp && cd /tmp/weighttp && ./waf configure && ./waf build && ./waf install"
+                "apt-get install -y build-essential libev-dev waf python3 && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/lighttpd/weighttp.git /tmp/weighttp 2>/dev/null && cd /tmp/weighttp && ./waf configure && ./waf build && ./waf install",
+                "apt-get install -y build-essential libev-dev waf python3 && wget -O /tmp/weighttp.tar.gz https://github.com/lighttpd/weighttp/archive/refs/heads/master.tar.gz 2>/dev/null && cd /tmp && tar -xzf weighttp.tar.gz 2>/dev/null && cd weighttp-master && ./waf configure && ./waf build && ./waf install",
+                "apt-get install -y weighttp"
             ],
             "goldeneye": [
                 "pip install goldeneye",
                 "pip3 install goldeneye",
-                "git clone https://github.com/jseidl/GoldenEye.git /tmp/goldeneye && cd /tmp/goldeneye && chmod +x goldeneye.py && cp goldeneye.py /usr/local/bin/goldeneye && chmod +x /usr/local/bin/goldeneye"
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/jseidl/GoldenEye.git /tmp/goldeneye 2>/dev/null && cd /tmp/goldeneye && chmod +x goldeneye.py && cp goldeneye.py /usr/local/bin/goldeneye && chmod +x /usr/local/bin/goldeneye",
+                "wget -O /tmp/goldeneye.tar.gz https://github.com/jseidl/GoldenEye/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf goldeneye.tar.gz && cd GoldenEye-master && chmod +x goldeneye.py && cp goldeneye.py /usr/local/bin/goldeneye && chmod +x /usr/local/bin/goldeneye"
             ],
             "hulk": [
                 "pip install hulk",
                 "pip3 install hulk",
-                "git clone https://github.com/grafov/hulk.git /tmp/hulk && cd /tmp/hulk && chmod +x hulk.py && cp hulk.py /usr/local/bin/hulk && chmod +x /usr/local/bin/hulk"
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/grafov/hulk.git /tmp/hulk 2>/dev/null && cd /tmp/hulk && chmod +x hulk.py && cp hulk.py /usr/local/bin/hulk && chmod +x /usr/local/bin/hulk",
+                "wget -O /tmp/hulk.tar.gz https://github.com/grafov/hulk/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf hulk.tar.gz && cd hulk-master && chmod +x hulk.py && cp hulk.py /usr/local/bin/hulk && chmod +x /usr/local/bin/hulk"
             ],
             "slowloris": [
                 "pip install slowloris",
                 "pip3 install slowloris",
                 "apt-get install -y slowloris",
                 "yum install -y slowloris",
-                "git clone https://github.com/gkbrk/slowloris.git /tmp/slowloris && cd /tmp/slowloris && chmod +x slowloris.py && cp slowloris.py /usr/local/bin/slowloris && chmod +x /usr/local/bin/slowloris"
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/gkbrk/slowloris.git /tmp/slowloris 2>/dev/null && cd /tmp/slowloris && chmod +x slowloris.py && cp slowloris.py /usr/local/bin/slowloris && chmod +x /usr/local/bin/slowloris"
             ],
             "torshammer": [
                 "pip install torshammer",
                 "pip3 install torshammer",
-                "git clone https://github.com/dotfighter/torshammer.git /tmp/torshammer && cd /tmp/torshammer && chmod +x torshammer.py && cp torshammer.py /usr/local/bin/torshammer && chmod +x /usr/local/bin/torshammer"
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/dotfighter/torshammer.git /tmp/torshammer 2>/dev/null && cd /tmp/torshammer && chmod +x torshammer.py && cp torshammer.py /usr/local/bin/torshammer && chmod +x /usr/local/bin/torshammer",
+                "wget -O /tmp/torshammer.tar.gz https://github.com/dotfighter/torshammer/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf torshammer.tar.gz && cd torshammer-master && chmod +x torshammer.py && cp torshammer.py /usr/local/bin/torshammer && chmod +x /usr/local/bin/torshammer"
             ],
             "ddos-ripper": [
-                "git clone https://github.com/palahadi/DDoS-Ripper.git /tmp/ddos-ripper && cd /tmp/ddos-ripper && chmod +x DRipper.py && cp DRipper.py /usr/local/bin/ddos-ripper && chmod +x /usr/local/bin/ddos-ripper"
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/palahadi/DDoS-Ripper.git /tmp/ddos-ripper 2>/dev/null && cd /tmp/ddos-ripper && chmod +x DRipper.py && cp DRipper.py /usr/local/bin/ddos-ripper && chmod +x /usr/local/bin/ddos-ripper",
+                "wget -O /tmp/ddos-ripper.tar.gz https://github.com/palahadi/DDoS-Ripper/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf ddos-ripper.tar.gz && cd DDoS-Ripper-master && chmod +x DRipper.py && cp DRipper.py /usr/local/bin/ddos-ripper && chmod +x /usr/local/bin/ddos-ripper"
             ],
             "pyloris": [
                 "pip install pyloris",
                 "pip3 install pyloris",
-                "git clone https://github.com/epsylon/pyloris.git /tmp/pyloris && cd /tmp/pyloris && chmod +x pyloris.py && cp pyloris.py /usr/local/bin/pyloris && chmod +x /usr/local/bin/pyloris"
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/epsylon/pyloris.git /tmp/pyloris 2>/dev/null && cd /tmp/pyloris && chmod +x pyloris.py && cp pyloris.py /usr/local/bin/pyloris && chmod +x /usr/local/bin/pyloris",
+                "wget -O /tmp/pyloris.tar.gz https://github.com/epsylon/pyloris/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf pyloris.tar.gz && cd pyloris-master && chmod +x pyloris.py && cp pyloris.py /usr/local/bin/pyloris && chmod +x /usr/local/bin/pyloris"
             ],
             "xerxes": [
-                "apt-get install -y build-essential && git clone https://github.com/zanyarjamal/xerxes.git /tmp/xerxes && cd /tmp/xerxes && gcc xerxes.c -o xerxes && cp xerxes /usr/local/bin/xerxes && chmod +x /usr/local/bin/xerxes"
+                "apt-get install -y build-essential && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/zanyarjamal/xerxes.git /tmp/xerxes 2>/dev/null && cd /tmp/xerxes && gcc xerxes.c -o xerxes && cp xerxes /usr/local/bin/xerxes && chmod +x /usr/local/bin/xerxes",
+                "apt-get install -y build-essential && wget -O /tmp/xerxes.tar.gz https://github.com/zanyarjamal/xerxes/archive/refs/heads/master.tar.gz 2>/dev/null && cd /tmp && tar -xzf xerxes.tar.gz 2>/dev/null && cd xerxes-master && gcc xerxes.c -o xerxes && cp xerxes /usr/local/bin/xerxes && chmod +x /usr/local/bin/xerxes",
+                "apt-get install -y build-essential && curl -L https://github.com/zanyarjamal/xerxes/archive/refs/heads/master.tar.gz -o /tmp/xerxes.tar.gz 2>/dev/null && cd /tmp && tar -xzf xerxes.tar.gz 2>/dev/null && cd xerxes-master && gcc xerxes.c -o xerxes && cp xerxes /usr/local/bin/xerxes && chmod +x /usr/local/bin/xerxes"
             ],
             "hoic": [
-                "git clone https://github.com/hoic/hoic.git /tmp/hoic && cd /tmp/hoic && chmod +x hoic && cp hoic /usr/local/bin/hoic && chmod +x /usr/local/bin/hoic || (cd /tmp/hoic && gcc -o hoic hoic.c && cp hoic /usr/local/bin/hoic && chmod +x /usr/local/bin/hoic)"
+                "apt-get install -y build-essential && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/hoic/hoic.git /tmp/hoic 2>/dev/null && cd /tmp/hoic && (test -f hoic && chmod +x hoic && cp hoic /usr/local/bin/hoic) || (test -f hoic.c && gcc -o hoic hoic.c && cp hoic /usr/local/bin/hoic) && chmod +x /usr/local/bin/hoic",
+                "apt-get install -y build-essential && wget -O /tmp/hoic.tar.gz https://github.com/hoic/hoic/archive/refs/heads/master.tar.gz 2>/dev/null && cd /tmp && tar -xzf hoic.tar.gz 2>/dev/null && cd hoic-master && (test -f hoic && chmod +x hoic && cp hoic /usr/local/bin/hoic) || (test -f hoic.c && gcc -o hoic hoic.c && cp hoic /usr/local/bin/hoic) && chmod +x /usr/local/bin/hoic"
             ],
             "loic": [
-                "git clone https://github.com/NewEraCracker/LOIC.git /tmp/loic && cd /tmp/loic && chmod +x loic.py && cp loic.py /usr/local/bin/loic && chmod +x /usr/local/bin/loic"
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/NewEraCracker/LOIC.git /tmp/loic 2>/dev/null && cd /tmp/loic && chmod +x loic.py 2>/dev/null && cp loic.py /usr/local/bin/loic && chmod +x /usr/local/bin/loic",
+                "wget -O /tmp/loic.tar.gz https://github.com/NewEraCracker/LOIC/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf loic.tar.gz && cd LOIC-master && chmod +x loic.py 2>/dev/null && cp loic.py /usr/local/bin/loic && chmod +x /usr/local/bin/loic"
             ],
             "rudy": [
-                "git clone https://github.com/sahilsehgal05/rudy.git /tmp/rudy && cd /tmp/rudy && chmod +x rudy.py && cp rudy.py /usr/local/bin/rudy && chmod +x /usr/local/bin/rudy"
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/sahilsehgal05/rudy.git /tmp/rudy 2>/dev/null && cd /tmp/rudy && chmod +x rudy.py && cp rudy.py /usr/local/bin/rudy && chmod +x /usr/local/bin/rudy",
+                "wget -O /tmp/rudy.tar.gz https://github.com/sahilsehgal05/rudy/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf rudy.tar.gz && cd rudy-master && chmod +x rudy.py && cp rudy.py /usr/local/bin/rudy && chmod +x /usr/local/bin/rudy"
             ],
             "reaper": [
-                "git clone https://github.com/zer0d4y/reaper.git /tmp/reaper && cd /tmp/reaper && chmod +x reaper.py && cp reaper.py /usr/local/bin/reaper && chmod +x /usr/local/bin/reaper"
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/zer0d4y/reaper.git /tmp/reaper 2>/dev/null && cd /tmp/reaper && chmod +x reaper.py && cp reaper.py /usr/local/bin/reaper && chmod +x /usr/local/bin/reaper",
+                "wget -O /tmp/reaper.tar.gz https://github.com/zer0d4y/reaper/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf reaper.tar.gz && cd reaper-master && chmod +x reaper.py && cp reaper.py /usr/local/bin/reaper && chmod +x /usr/local/bin/reaper"
             ]
         }
     else:  # macOS
@@ -2465,10 +2488,15 @@ def auto_install_all_tools():
             
             # Verificar si el gestor está disponible
             manager_available = False
-            for available_manager in available_managers:
-                if manager == available_manager or available_manager in command:
-                    manager_available = True
-                    break
+            
+            # Si el comando contiene variables de entorno o comandos complejos, asumir disponible
+            if "GIT_TERMINAL_PROMPT" in command or "wget" in command or "curl" in command or "tar" in command or "unzip" in command:
+                manager_available = True
+            else:
+                for available_manager in available_managers:
+                    if manager == available_manager or available_manager in command:
+                        manager_available = True
+                        break
             
             if not manager_available:
                 continue
@@ -2476,7 +2504,14 @@ def auto_install_all_tools():
             try:
                 # Determinar si necesita shell=True (Windows y algunos comandos)
                 # Los gestores de paquetes del sistema (apt-get, yum, dnf, pacman) también necesitan shell=True
-                use_shell = system == "Windows" or manager in ["npm", "pip", "cargo", "go", "apt-get", "yum", "dnf", "pacman", "snap"] or "git clone" in command
+                # También comandos con pipes, redirecciones, o variables de entorno
+                use_shell = (system == "Windows" or 
+                            manager in ["npm", "pip", "cargo", "go", "apt-get", "yum", "dnf", "pacman", "snap", "wget", "curl", "tar", "unzip"] or 
+                            "git clone" in command or 
+                            "&&" in command or 
+                            "||" in command or
+                            "GIT_TERMINAL_PROMPT" in command or
+                            "cd /tmp" in command)
                 
                 # Preparar el comando según si usa shell o no
                 if use_shell:
@@ -2500,17 +2535,38 @@ def auto_install_all_tools():
                 if paths_to_add:
                     env["PATH"] = ":".join(paths_to_add + [current_path])
                 
+                # Configurar git para no pedir credenciales
+                env["GIT_TERMINAL_PROMPT"] = "0"
+                env["GIT_ASKPASS"] = "echo"
+                env["GIT_SSH_COMMAND"] = "ssh -o BatchMode=yes"
+                
+                # Configurar variables para evitar prompts interactivos
+                env["DEBIAN_FRONTEND"] = "noninteractive"
+                env["NEEDRESTART_MODE"] = "a"
+                
                 # Ejecutar comando de instalación
-                result = subprocess.run(
-                    cmd,
-                    shell=use_shell,
-                    check=False,
-                    timeout=600,  # 10 minutos máximo
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True,
-                    env=env
-                )
+                try:
+                    result = subprocess.run(
+                        cmd,
+                        shell=use_shell,
+                        check=False,
+                        timeout=600,  # 10 minutos máximo
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        env=env
+                    )
+                except subprocess.TimeoutExpired:
+                    log_message("ERROR", f"{tool} - timeout al ejecutar: {command[:100]}")
+                    continue
+                except Exception as e:
+                    log_message("ERROR", f"{tool} - error ejecutando comando: {str(e)}")
+                    continue
+                
+                # Log del resultado para debugging
+                if result.returncode != 0 and result.stderr:
+                    error_msg = result.stderr[:200]  # Limitar longitud
+                    log_message("DEBUG", f"{tool} - comando falló: {command[:50]}... Error: {error_msg}")
                 
                 if result.returncode == 0:
                     # Dar un momento para que el sistema actualice PATH
