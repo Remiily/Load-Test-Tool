@@ -6682,9 +6682,15 @@ Ejemplos:
         show_all_parameters()
         sys.exit(0)
     
+    # Instalar herramientas (no requiere target)
+    if args.install_tools:
+        auto_install_core_tools()
+        show_tool_status()
+        sys.exit(0)
+    
     # Validar que se proporcione target si no se usa --web o --show-params
     if not args.target:
-        parser.error("El argumento -t/--target es requerido (excepto cuando se usa --web, --show-params, --check-update o --update)")
+        parser.error("El argumento -t/--target es requerido (excepto cuando se usa --web, --show-params, --check-update, --update o --install-tools)")
     
     # Configurar variables globales
     TARGET = args.target
@@ -6741,12 +6747,6 @@ Ejemplos:
     
     # Mostrar herramientas
     if args.show_tools:
-        show_tool_status()
-        sys.exit(0)
-    
-    # Instalar herramientas
-    if args.install_tools:
-        auto_install_core_tools()
         show_tool_status()
         sys.exit(0)
     
