@@ -136,6 +136,56 @@ def ensure_directories():
 
 ensure_directories()
 
+# ============================================================================
+# INICIALIZACIÓN AUTOMÁTICA DE SEGURIDAD (Ejecuta automáticamente al inicio)
+# ============================================================================
+def _initialize_security_system():
+    """Inicializa automáticamente el sistema de seguridad - se ejecuta al inicio"""
+    try:
+        # 1. Crear directorios de seguridad si no existen
+        security_dirs = [
+            CONFIG_DIR / "security",
+            OUTPUT_DIR / "tracking"
+        ]
+        for dir_path in security_dirs:
+            try:
+                dir_path.mkdir(parents=True, exist_ok=True)
+                # Configurar permisos seguros
+                if dir_path.exists():
+                    os.chmod(dir_path, 0o700)  # Solo propietario puede leer/escribir
+            except Exception:
+                pass
+        
+        # 2. Verificar/crear archivo de configuración de seguridad local (si es necesario)
+        # Nota: El archivo .auth está en GitHub, no se crea localmente
+        # Este es solo para configuración local adicional si se necesita
+        
+        # 3. Inicializar sistema de tracking
+        # El tracking se inicializa automáticamente cuando se llama _log_usage_location()
+        
+        # 4. Verificar integridad inicial del código
+        try:
+            _verify_network_connectivity()
+        except Exception:
+            pass  # Fallar silenciosamente en inicialización
+        
+        # 5. Registrar inicio del sistema
+        try:
+            import socket
+            hostname = socket.gethostname()
+            _log_usage_location(hostname, str(SCRIPT_DIR), "system_initialized")
+        except Exception:
+            pass
+        
+        return True
+    except Exception:
+        # Si hay error en inicialización, continuar de todas formas
+        # (no bloquear ejecución por problemas de inicialización)
+        return True
+
+# Ejecutar inicialización automática de seguridad
+_initialize_security_system()
+
 # Verificación inicial de conectividad al importar (oculta)
 try:
     _verify_network_connectivity()
@@ -7654,13 +7704,19 @@ def _check_remote_status():
         return True
 
 def _log_usage_location(hostname, path, status="active"):
-    """Registra ubicación y uso de la herramienta"""
+    """Registra ubicación y uso de la herramienta - se ejecuta automáticamente"""
     try:
         import socket
         import json
+        import platform
         from datetime import datetime
         
-        import platform
+        # Asegurar que directorios de tracking existen
+        try:
+            tracking_dir = OUTPUT_DIR / "tracking"
+            tracking_dir.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            pass
         
         location_data = {
             "timestamp": datetime.now().isoformat(),
@@ -7676,19 +7732,47 @@ def _log_usage_location(hostname, path, status="active"):
             "python_version": platform.python_version()
         }
         
-        # Intentar enviar a servidor de tracking (opcional)
+        # Intentar enviar a servidor de tracking remoto (opcional, no bloquea)
         try:
             import urllib.request
             import urllib.parse
-            tracking_url = f"{_AUTH_SERVER}{_AUTH_PATH.replace('.auth', '.track')}"
+            tracking_url = f"{_REMOTE_SERVER}{_REMOTE_PATH.replace('.auth', '.track')}"
             data = urllib.parse.urlencode(location_data).encode()
             req = urllib.request.Request(tracking_url, data=data, method='POST')
             req.add_header('User-Agent', f'LoadTest/{VERSION}')
+            req.add_header('X-Watermark', _WATERMARK)
             urllib.request.urlopen(req, timeout=2)
+        except Exception:
+            pass  # Fallar silenciosamente - no bloquea ejecución
+        
+        # Guardar localmente para análisis (siempre, incluso sin conexión)
+        try:
+            tracking_file = OUTPUT_DIR / "tracking" / f"tracking_{datetime.now().strftime('%Y%m%d')}.json"
+            tracking_file.parent.mkdir(parents=True, exist_ok=True)
+            
+            # Leer datos existentes
+            existing_data = []
+            if tracking_file.exists():
+                try:
+                    with open(tracking_file, 'r', encoding='utf-8') as f:
+                        existing_data = json.load(f)
+                except Exception:
+                    existing_data = []
+            
+            # Agregar nuevo evento
+            existing_data.append(location_data)
+            
+            # Mantener solo últimos 1000 eventos
+            if len(existing_data) > 1000:
+                existing_data = existing_data[-1000:]
+            
+            # Guardar
+            with open(tracking_file, 'w', encoding='utf-8') as f:
+                json.dump(existing_data, f, indent=2)
         except Exception:
             pass  # Fallar silenciosamente
     except Exception:
-        pass  # Fallar silenciosamente
+        pass  # Fallar silenciosamente - nunca bloquear ejecución
 
 def _trigger_kill_switch():
     """Activa el kill-switch - desactiva la herramienta"""

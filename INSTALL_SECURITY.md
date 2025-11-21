@@ -1,8 +1,21 @@
 # 🔒 Instalación y Configuración de Seguridad
 
-## Configuración Inicial
+## ⚠️ IMPORTANTE: Inicialización Automática
 
-### 1. Configurar Archivo de Autorización
+**El sistema de seguridad se inicializa AUTOMÁTICAMENTE al ejecutar `loadtest.py`.**
+
+**NO necesitas ejecutar scripts adicionales ni configurar nada manualmente.**
+
+Solo ejecuta:
+```bash
+python loadtest.py -t https://example.com
+```
+
+Y todo funcionará automáticamente.
+
+## Configuración Remota (Solo para Administradores)
+
+### 1. Configurar Archivo de Autorización en GitHub
 
 Crea el archivo `.auth` en la raíz del repositorio GitHub con el contenido:
 
@@ -16,20 +29,17 @@ Este archivo controla si la herramienta está autorizada para ejecutarse.
 - `active`, `1`, `true`, `authorized` - Herramienta autorizada
 - `kill`, `disable`, `0`, `false`, `unauthorized` - Activa kill-switch
 
-### 2. Usar Script de Configuración
+**Ubicación:** `https://raw.githubusercontent.com/Remiily/Load-Test-Tool/main/.auth`
 
-Ejecuta el script de configuración:
+### 2. Scripts Opcionales (Solo para Desarrollo)
 
-```bash
-./setup_security.sh
-```
-
-O manualmente:
+Los scripts como `setup_security.sh` son **opcionales** y solo para desarrollo local:
 
 ```bash
-echo "active" > .auth
-chmod 600 .auth
+./setup_security.sh  # Opcional - solo para desarrollo
 ```
+
+**Nota:** El archivo `.auth` local no afecta el sistema real. El sistema verifica el archivo en GitHub.
 
 ### 3. Configurar Servidor de Tracking (Opcional)
 

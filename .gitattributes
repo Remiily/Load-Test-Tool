@@ -1,2 +1,11 @@
-# Auto detect text files and perform LF normalization
-* text=auto
+# Git attributes para archivos sensibles
+# Asegurar que archivos sensibles no se suban accidentalmente
+
+# Archivos de seguridad - nunca subir
+SECURITY*.md -diff -merge
+KILLSWITCH*.md -diff -merge
+INSTALL_SECURITY.md -diff -merge
+OWNER_*.md -diff -merge
+calculate_hashes.py -diff -merge
+setup_security.sh -diff -merge
+tracking_server.py -diff -merge

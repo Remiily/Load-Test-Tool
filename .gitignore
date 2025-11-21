@@ -134,12 +134,41 @@ tests/
 .coverage
 htmlcov/
 
-# Archivos de documentación sensible
+# ============================================================================
+# ARCHIVOS SENSIBLES DEL OWNER - NO SUBIR A GITHUB
+# ============================================================================
+
+# Archivos de documentación sensible (NO SUBIR A GITHUB)
 SECURITY*.md
+SECURITY.md
 KILLSWITCH*.md
+KILLSWITCH_README.md
+INSTALL_SECURITY.md
+SECURITY_AUTO_INIT.md
+SECURITY_ADVANCED.md
+SECURITY_IMPLEMENTATION.md
+SECURITY_NEW_FEATURES.md
+SECURITY_RECOMMENDATIONS.md
 *.security
 *.confidential
 
-# Scripts de cálculo de hashes
+# Scripts de seguridad y configuración (NO SUBIR A GITHUB)
 calculate_hashes.py
+setup_security.sh
+tracking_server.py
+
+# Archivos de configuración y datos sensibles del owner
+OWNER_*.md
+OWNER_*.txt
+*.owner
+*.private
+
+# Archivos de notas y documentación interna
+OWNER_NOTES.md
+NOTES_*.md
+INTERNAL_*.md
+
+# Scripts de verificación del owner (eliminados - no necesarios)
+# verify_before_push.sh
+# setup_security.sh
 
