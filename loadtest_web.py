@@ -206,16 +206,28 @@ def get_stats():
         if start_time:
             elapsed_time = (datetime.now() - start_time).total_seconds()
     
-    avg_rps = requests_sent / elapsed_time if elapsed_time > 0 else 0
+    # Calcular RPS - usar avg_rps del módulo si está disponible y es más reciente
+    avg_rps = requests_sent / elapsed_time if elapsed_time > 0.1 else 0  # Evitar división por tiempo muy pequeño
     peak_rps = attack_stats_actual.get("peak_rps", 0)
-    current_avg_rps = attack_stats_actual.get("avg_rps", avg_rps)
+    current_avg_rps = attack_stats_actual.get("avg_rps", 0)
+    
+    # Si avg_rps del módulo está disponible y es mayor que 0, usarlo (más preciso)
+    if current_avg_rps > 0:
+        avg_rps = current_avg_rps
+    elif elapsed_time > 0.1:
+        # Calcular RPS basado en requests y tiempo transcurrido
+        avg_rps = requests_sent / elapsed_time
     
     # Calcular tasas
     response_rate = (responses_received / requests_sent * 100) if requests_sent > 0 else 0
     error_rate = (errors_count / requests_sent * 100) if requests_sent > 0 else 0
     
-    # Análisis de códigos HTTP
-    http_codes = dict(attack_stats_actual.get("http_codes", {}))
+    # Análisis de códigos HTTP (convertir defaultdict a dict normal para JSON)
+    http_codes_raw = attack_stats_actual.get("http_codes", {})
+    if hasattr(http_codes_raw, 'keys'):
+        http_codes = {int(k): int(v) for k, v in http_codes_raw.items() if v > 0}
+    else:
+        http_codes = dict(http_codes_raw) if http_codes_raw else {}
     success_responses = sum(count for code, count in http_codes.items() if 200 <= code < 300)
     success_rate = (success_responses / requests_sent * 100) if requests_sent > 0 else 0
     
@@ -250,19 +262,24 @@ def get_stats():
     # Obtener duración configurada
     duration = get_loadtest_var('DURATION') or 60
     
-    return jsonify({
-        "requests_sent": requests_sent,
-        "responses_received": responses_received,
+    # Debug logging (solo en modo debug)
+    debug_mode = getattr(loadtest, 'DEBUG_MODE', False)
+    if debug_mode and requests_sent > 0:
+        print(f"DEBUG [get_stats]: requests_sent={requests_sent}, rps_current={avg_rps:.2f}, errors={errors_count}, monitoring_active={get_loadtest_var('monitoring_active')}")
+    
+    response_data = {
+        "requests_sent": int(requests_sent),
+        "responses_received": int(responses_received),
         "http_codes": http_codes,
-        "latencies": latencies,
+        "latencies": [float(l) for l in latencies] if latencies else [],
         "latency_stats": latency_stats,
-        "errors": errors_count,
+        "errors": int(errors_count),
         "error_rate": round(error_rate, 2),
         "monitoring_active": get_loadtest_var('monitoring_active') if get_loadtest_var('monitoring_active') is not None else (monitoring_active if 'monitoring_active' in globals() else False),
         "start_time": start_time.isoformat() if start_time and hasattr(start_time, 'isoformat') else (start_time if isinstance(start_time, str) else None),
-        "elapsed_time": elapsed_time,
-        "duration": duration,
-        "remaining_time": max(0, duration - elapsed_time) if duration > 0 else 0,
+        "elapsed_time": round(elapsed_time, 2),
+        "duration": int(duration),
+        "remaining_time": max(0, int(duration - elapsed_time)) if duration > 0 else 0,
         "vulnerabilities_count": len(vulns),
         "open_ports_count": len(ports),
         "discovered_endpoints_count": len(endpoints),
@@ -278,9 +295,11 @@ def get_stats():
         },
         "memory": memory_info,
         "attack_techniques": attack_stats_actual.get("attack_techniques", []),
-        "bytes_sent": attack_stats_actual.get("bytes_sent", 0),
-        "bytes_received": attack_stats_actual.get("bytes_received", 0)
-    })
+        "bytes_sent": int(attack_stats_actual.get("bytes_sent", 0)),
+        "bytes_received": int(attack_stats_actual.get("bytes_received", 0))
+    }
+    
+    return jsonify(response_data)
 
 @app.route('/api/tools', methods=['GET'])
 def get_tools():
@@ -656,7 +675,28 @@ def start_attack():
             loadtest.MEMORY_MONITORING = MEMORY_MONITORING
             
             # Resetear estadísticas de ataque ANTES de iniciar
+            # Asegurar que estamos usando el mismo objeto attack_stats
             attack_stats_ref = loadtest.attack_stats
+            if not attack_stats_ref:
+                # Si no existe, crear uno nuevo
+                attack_stats_ref = {
+                    "start_time": None,
+                    "end_time": None,
+                    "requests_sent": 0,
+                    "responses_received": 0,
+                    "http_codes": defaultdict(int),
+                    "latencies": [],
+                    "errors": [],
+                    "peak_rps": 0,
+                    "avg_rps": 0,
+                    "last_request_count": 0,
+                    "bytes_sent": 0,
+                    "bytes_received": 0,
+                    "attack_techniques": []
+                }
+                loadtest.attack_stats = attack_stats_ref
+            
+            # Resetear todas las estadísticas
             attack_stats_ref["start_time"] = datetime.now()
             attack_stats_ref["end_time"] = None
             attack_stats_ref["requests_sent"] = 0
@@ -671,8 +711,9 @@ def start_attack():
             attack_stats_ref["bytes_received"] = 0
             attack_stats_ref["attack_techniques"] = []
             
-            # Forzar actualización inmediata
-            loadtest.log_message("INFO", f"📊 [WEB] Estadísticas reseteadas - start_time: {attack_stats_ref['start_time']}", context="start_attack", force_console=True)
+            # Forzar actualización inmediata y verificar
+            loadtest.log_message("INFO", f"📊 [WEB] Estadísticas reseteadas - start_time: {attack_stats_ref['start_time']}, id: {id(attack_stats_ref)}", context="start_attack", force_console=True)
+            print(f"DEBUG [start_attack]: attack_stats id={id(attack_stats_ref)}, loadtest.attack_stats id={id(loadtest.attack_stats)}")
             
             loadtest.log_message("INFO", "🚀 [WEB] Iniciando ataque desde panel web", context="start_attack", force_console=True)
             
