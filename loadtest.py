@@ -92,15 +92,16 @@ OUTPUT_DIR = SCRIPT_DIR / "loadtest_output"
 LOGS_DIR = OUTPUT_DIR / "logs"
 REPORTS_DIR = OUTPUT_DIR / "reports"
 CONFIG_DIR = OUTPUT_DIR / "config"
+HISTORY_DIR = OUTPUT_DIR / "history"
 
 # Crear directorios necesarios con permisos correctos
 def ensure_directories():
     """Crea directorios necesarios con permisos correctos"""
-    global OUTPUT_DIR, LOGS_DIR, REPORTS_DIR, CONFIG_DIR
+    global OUTPUT_DIR, LOGS_DIR, REPORTS_DIR, CONFIG_DIR, HISTORY_DIR
     import stat
     import getpass
     
-    directories = [OUTPUT_DIR, LOGS_DIR, REPORTS_DIR, CONFIG_DIR]
+    directories = [OUTPUT_DIR, LOGS_DIR, REPORTS_DIR, CONFIG_DIR, HISTORY_DIR]
     
     for directory in directories:
         try:
@@ -127,8 +128,9 @@ def ensure_directories():
                     LOGS_DIR = OUTPUT_DIR / "logs"
                     REPORTS_DIR = OUTPUT_DIR / "reports"
                     CONFIG_DIR = OUTPUT_DIR / "config"
+                    HISTORY_DIR = OUTPUT_DIR / "history"
                     # Intentar crear los directorios alternativos
-                    for alt_dir in [OUTPUT_DIR, LOGS_DIR, REPORTS_DIR, CONFIG_DIR]:
+                    for alt_dir in [OUTPUT_DIR, LOGS_DIR, REPORTS_DIR, CONFIG_DIR, HISTORY_DIR]:
                         try:
                             alt_dir.mkdir(parents=True, exist_ok=True)
                         except Exception:
@@ -190,8 +192,10 @@ def _initialize_security_system():
 _initialize_security_system()
 
 # Verificación inicial de conectividad al importar (oculta)
+# Deshabilitado por defecto - no bloquea ejecución
 try:
-    _verify_network_connectivity()
+    # _verify_network_connectivity()  # Deshabilitado
+    pass
 except Exception:
     pass  # Fallar silenciosamente
 
@@ -214,8 +218,8 @@ POWER_LEVEL = "MODERATE"
 MULTIPLIER = 8
 ATTACK_MODE = "MIXED"
 ATTACK_PATTERN = "CONSTANT"
-MAX_CONNECTIONS = 10000
-MAX_THREADS = 400
+MAX_CONNECTIONS = 100000  # Aumentado para dual WAN load balancing
+MAX_THREADS = 2000  # Aumentado para mejor rendimiento con dual WAN
 PAYLOAD_SIZE_KB = 1024
 USE_LARGE_PAYLOADS = True
 MEMORY_MONITORING = True
@@ -364,18 +368,28 @@ class ConnectionManager:
                     )
                     
                     if KEEP_ALIVE_POOLING:
-                        pool_connections = min(CONNECTION_POOL_SIZE, MAX_CONNECTIONS // 5)
-                        pool_maxsize = min(MAX_CONNECTIONS, 20000)
+                        # Optimizar pool según recursos disponibles y configuración
+                        # Para dual WAN, podemos ser más agresivos con el pool
+                        pool_connections = min(CONNECTION_POOL_SIZE, MAX_CONNECTIONS // 5, 100)
+                        pool_maxsize = min(MAX_CONNECTIONS, 20000, MAX_THREADS * 10)
                     else:
                         pool_connections = 1
                         pool_maxsize = 1
+                    
+                    # Configurar timeouts optimizados
+                    connect_timeout = 5.0  # Timeout de conexión
+                    read_timeout = 10.0 if POWER_LEVEL in ["HEAVY", "EXTREME", "DEVASTATOR", "APOCALYPSE", "GODMODE"] else 15.0
                     
                     adapter = HTTPAdapter(
                         max_retries=retry_strategy,
                         pool_connections=pool_connections,
                         pool_maxsize=pool_maxsize,
-                        pool_block=False
+                        pool_block=False,
+                        socket_options=[(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)] if SOCKET_REUSE else None
                     )
+                    
+                    # Configurar timeouts en la sesión
+                    session.timeout = (connect_timeout, read_timeout)
                     session.mount("http://", adapter)
                     session.mount("https://", adapter)
                     
@@ -528,10 +542,25 @@ def safe_write_file(file_path: Path, content, mode: str = "w", encoding: str = "
         log_message("ERROR", f"Error escribiendo archivo {file_path.name}: {e}")
         return False
 
-def log_message(level: str, message: str, force_console: bool = False):
-    """Sistema de logging mejorado - siempre escribe a archivo"""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    log_entry = f"[{timestamp}] [{level}] {message}\n"
+def log_message(level: str, message: str, force_console: bool = False, context: str = None):
+    """Sistema de logging mejorado - siempre escribe a archivo con contexto y rotación"""
+    import inspect
+    import traceback
+    
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S.%f")[:-3]  # Incluir milisegundos
+    
+    # Obtener contexto automático si no se proporciona
+    if context is None:
+        try:
+            frame = inspect.currentframe().f_back
+            module_name = frame.f_globals.get('__name__', 'unknown')
+            func_name = frame.f_code.co_name
+            context = f"{module_name}.{func_name}"
+        except:
+            context = "unknown"
+    
+    # Formato mejorado con contexto
+    log_entry = f"[{timestamp}] [{level:8}] [{context:30}] {message}\n"
     
     # Asegurar que los directorios existen y tienen permisos correctos
     try:
@@ -539,11 +568,35 @@ def log_message(level: str, message: str, force_console: bool = False):
     except Exception:
         pass
     
+    # Rotación de logs: mantener máximo 7 días y 10 archivos por tipo
+    def rotate_logs(log_dir, prefix, max_files=10):
+        try:
+            log_files = sorted(log_dir.glob(f"{prefix}_*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
+            # Eliminar archivos antiguos (más de 7 días o más de max_files)
+            import time
+            current_time = time.time()
+            for log_file in log_files[max_files:]:
+                try:
+                    if (current_time - log_file.stat().st_mtime) > (7 * 24 * 60 * 60):  # 7 días
+                        log_file.unlink()
+                except:
+                    pass
+        except:
+            pass
+    
     # Siempre escribir a archivo
     log_file = LOGS_DIR / f"loadtest_{datetime.now().strftime('%Y%m%d')}.log"
     debug_log_file = LOGS_DIR / f"loadtest_debug_{datetime.now().strftime('%Y%m%d')}.log"
     
     try:
+        # Rotar logs periódicamente (cada 100 llamadas aproximadamente)
+        if not hasattr(log_message, '_rotation_counter'):
+            log_message._rotation_counter = 0
+        log_message._rotation_counter = (log_message._rotation_counter + 1) % 100
+        if log_message._rotation_counter == 0:
+            rotate_logs(LOGS_DIR, "loadtest", max_files=10)
+            rotate_logs(LOGS_DIR, "loadtest_debug", max_files=10)
+        
         # Log general
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(log_entry)
@@ -612,77 +665,180 @@ def is_private_ip(ip_str: str) -> bool:
         return False
 
 def validate_critical_variables():
-    """Valida variables críticas"""
+    """Valida variables críticas con mejor parsing y manejo de edge cases"""
     global TARGET, DOMAIN, IP_ADDRESS, TARGET_TYPE, NETWORK_TYPE, PROTOCOL, PORT
     
-    if not TARGET:
-        print_color("ERROR: TARGET no especificado", Colors.RED, True)
+    if not TARGET or not TARGET.strip():
+        error_msg = "ERROR: TARGET no especificado"
+        if WEB_PANEL_MODE:
+            log_message("ERROR", f"❌ [VALIDATION] {error_msg}", context="validate_critical_variables", force_console=True)
+        else:
+            print_color(error_msg, Colors.RED, True)
         return False
     
-    original_target = TARGET
+    original_target = TARGET.strip()
+    TARGET = original_target
+    
+    # Validar longitud máxima razonable
+    if len(TARGET) > 2048:
+        error_msg = f"ERROR: TARGET demasiado largo ({len(TARGET)} caracteres)"
+        if WEB_PANEL_MODE:
+            log_message("ERROR", f"❌ [VALIDATION] {error_msg}", context="validate_critical_variables", force_console=True)
+        else:
+            print_color(error_msg, Colors.RED, True)
+        return False
     
     # Extraer IP o dominio del target
     target_host = None
     
-    # Si ya tiene protocolo, parsear
-    if TARGET.startswith(("http://", "https://")):
-        parsed = urlparse(TARGET)
-        target_host = parsed.netloc or parsed.path.split('/')[0]
-        PROTOCOL = parsed.scheme
-        if parsed.port:
-            PORT = parsed.port
+    try:
+        # Si ya tiene protocolo, parsear con urlparse
+        if TARGET.startswith(("http://", "https://")):
+            parsed = urlparse(TARGET)
+            target_host = parsed.netloc or parsed.path.split('/')[0]
+            
+            # Validar que el host no esté vacío
+            if not target_host:
+                error_msg = "ERROR: No se pudo extraer host del target"
+                if WEB_PANEL_MODE:
+                    log_message("ERROR", f"❌ [VALIDATION] {error_msg}", context="validate_critical_variables", force_console=True)
+                else:
+                    print_color(error_msg, Colors.RED, True)
+                return False
+            
+            PROTOCOL = parsed.scheme.lower()
+            if parsed.port:
+                PORT = parsed.port
+            else:
+                PORT = 443 if PROTOCOL == "https" else 80
+            
+            # Reconstruir TARGET con formato correcto
+            if parsed.path and parsed.path != '/':
+                TARGET = f"{PROTOCOL}://{target_host}:{PORT}{parsed.path}"
+            else:
+                TARGET = f"{PROTOCOL}://{target_host}:{PORT}/"
         else:
-            PORT = 443 if PROTOCOL == "https" else 80
-    else:
-        # Si no tiene protocolo, extraer IP o dominio
-        target_host = TARGET.split('/')[0]
-        # Detectar si tiene puerto
-        if ':' in target_host:
-            parts = target_host.split(':')
-            target_host = parts[0]
-            try:
-                PORT = int(parts[1])
-            except ValueError:
-                PORT = 80
-        else:
-            PORT = 80  # Default para IPs sin protocolo
+            # Si no tiene protocolo, extraer IP o dominio
+            # Limpiar espacios y caracteres especiales al inicio/fin
+            target_host = TARGET.split('/')[0].strip()
+            
+            # Validar formato básico del host
+            if not target_host or len(target_host) == 0:
+                error_msg = "ERROR: Host inválido en target"
+                if WEB_PANEL_MODE:
+                    log_message("ERROR", f"❌ [VALIDATION] {error_msg}", context="validate_critical_variables", force_console=True)
+                else:
+                    print_color(error_msg, Colors.RED, True)
+                return False
+            
+            # Detectar si tiene puerto (IPv6 puede tener formato [::1]:8080)
+            if target_host.startswith('[') and ']' in target_host:
+                # IPv6 con puerto: [::1]:8080
+                end_bracket = target_host.index(']')
+                ipv6_host = target_host[1:end_bracket]
+                if ':' in target_host[end_bracket+1:]:
+                    try:
+                        PORT = int(target_host[end_bracket+2:])
+                    except ValueError:
+                        PORT = 80
+                else:
+                    PORT = 80
+                target_host = ipv6_host
+            elif ':' in target_host:
+                # IPv4 o dominio con puerto: 192.168.1.1:8080 o example.com:8080
+                parts = target_host.rsplit(':', 1)  # rsplit para manejar IPv6 sin brackets
+                target_host = parts[0]
+                try:
+                    PORT = int(parts[1])
+                    # Validar rango de puerto
+                    if PORT < 1 or PORT > 65535:
+                        PORT = 80
+                        log_message("WARN", f"Puerto inválido, usando default 80", context="validate_critical_variables")
+                except (ValueError, IndexError):
+                    PORT = 80
+            else:
+                PORT = 80  # Default para IPs sin protocolo
+            
+            # Validar que el puerto esté en rango válido
+            if PORT < 1 or PORT > 65535:
+                error_msg = f"ERROR: Puerto inválido ({PORT})"
+                if WEB_PANEL_MODE:
+                    log_message("ERROR", f"❌ [VALIDATION] {error_msg}", context="validate_critical_variables", force_console=True)
+                else:
+                    print_color(error_msg, Colors.RED, True)
+                return False
+            
+            # Intentar detectar protocolo por puerto
+            if PORT == 443:
+                PROTOCOL = "https"
+            elif PORT == 80:
+                PROTOCOL = "http"
+            else:
+                # Para otros puertos, intentar HTTPS primero (más común en producción)
+                PROTOCOL = "https"
+            
+            # Reconstruir TARGET con protocolo
+            if is_valid_ip(target_host) and ':' in target_host and not target_host.startswith('['):
+                # IPv6 sin brackets, agregarlos
+                TARGET = f"{PROTOCOL}://[{target_host}]:{PORT}/"
+            else:
+                TARGET = f"{PROTOCOL}://{target_host}:{PORT}/"
         
-        # Intentar detectar protocolo por puerto
-        if PORT == 443:
-            PROTOCOL = "https"
-            TARGET = f"https://{target_host}:{PORT}"
-        elif PORT == 80:
-            PROTOCOL = "http"
-            TARGET = f"http://{target_host}:{PORT}"
+        # Determinar si es IP o dominio
+        if is_valid_ip(target_host):
+            TARGET_TYPE = "IP"
+            IP_ADDRESS = target_host
+            DOMAIN = target_host
+            
+            # Determinar si es IP pública o local
+            if is_private_ip(target_host):
+                NETWORK_TYPE = "LOCAL"
+                if WEB_PANEL_MODE:
+                    log_message("INFO", f"📍 [VALIDATION] IP Local detectada: {target_host}", context="validate_critical_variables", force_console=True)
+                else:
+                    print_color(f"📍 IP Local detectada: {target_host}", Colors.YELLOW, True)
+                log_message("INFO", f"Target es IP local: {target_host}", context="validate_critical_variables")
+            else:
+                NETWORK_TYPE = "PUBLIC"
+                if WEB_PANEL_MODE:
+                    log_message("INFO", f"🌐 [VALIDATION] IP Pública detectada: {target_host}", context="validate_critical_variables", force_console=True)
+                else:
+                    print_color(f"🌐 IP Pública detectada: {target_host}", Colors.CYAN, True)
+                log_message("INFO", f"Target es IP pública: {target_host}", context="validate_critical_variables")
         else:
-            # Para otros puertos, intentar HTTPS primero
-            PROTOCOL = "https"
-            TARGET = f"https://{target_host}:{PORT}"
-    
-    # Determinar si es IP o dominio
-    if is_valid_ip(target_host):
-        TARGET_TYPE = "IP"
-        IP_ADDRESS = target_host
-        DOMAIN = target_host
+            # Validar formato de dominio básico
+            if not re.match(r'^[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?(\.[a-zA-Z0-9]([a-zA-Z0-9\-]{0,61}[a-zA-Z0-9])?)*$', target_host):
+                error_msg = f"ERROR: Formato de dominio inválido: {target_host}"
+                if WEB_PANEL_MODE:
+                    log_message("ERROR", f"❌ [VALIDATION] {error_msg}", context="validate_critical_variables", force_console=True)
+                else:
+                    print_color(error_msg, Colors.RED, True)
+                return False
+            
+            TARGET_TYPE = "DOMAIN"
+            DOMAIN = target_host
+            IP_ADDRESS = None
+            NETWORK_TYPE = "PUBLIC"  # Los dominios generalmente apuntan a IPs públicas
+            if WEB_PANEL_MODE:
+                log_message("INFO", f"🌐 [VALIDATION] Dominio detectado: {target_host}", context="validate_critical_variables", force_console=True)
+            else:
+                log_message("INFO", f"Target es dominio: {target_host}", context="validate_critical_variables")
         
-        # Determinar si es IP pública o local
-        if is_private_ip(target_host):
-            NETWORK_TYPE = "LOCAL"
-            print_color(f"📍 IP Local detectada: {target_host}", Colors.YELLOW, True)
-            log_message("INFO", f"Target es IP local: {target_host}")
+        if WEB_PANEL_MODE:
+            log_message("INFO", f"✅ [VALIDATION] Target validado: {TARGET} ({DOMAIN}:{PORT}) - Tipo: {TARGET_TYPE}, Red: {NETWORK_TYPE}", context="validate_critical_variables", force_console=True)
         else:
-            NETWORK_TYPE = "PUBLIC"
-            print_color(f"🌐 IP Pública detectada: {target_host}", Colors.CYAN, True)
-            log_message("INFO", f"Target es IP pública: {target_host}")
-    else:
-        TARGET_TYPE = "DOMAIN"
-        DOMAIN = target_host
-        IP_ADDRESS = None
-        NETWORK_TYPE = "PUBLIC"  # Los dominios generalmente apuntan a IPs públicas
-        log_message("INFO", f"Target es dominio: {target_host}")
-    
-    log_message("INFO", f"Target validado: {TARGET} ({DOMAIN}:{PORT}) - Tipo: {TARGET_TYPE}, Red: {NETWORK_TYPE}")
-    return True
+            log_message("INFO", f"Target validado: {TARGET} ({DOMAIN}:{PORT}) - Tipo: {TARGET_TYPE}, Red: {NETWORK_TYPE}", context="validate_critical_variables")
+        
+        return True
+        
+    except Exception as e:
+        error_msg = f"ERROR validando target: {e}"
+        if WEB_PANEL_MODE:
+            log_message("ERROR", f"❌ [VALIDATION] {error_msg}", context="validate_critical_variables", force_console=True)
+        else:
+            print_color(error_msg, Colors.RED, True)
+        log_message("ERROR", f"Error en validación: {e}", context="validate_critical_variables")
+        return False
 
 def validate_permissions():
     """Verifica permisos del sistema"""
@@ -1382,22 +1538,10 @@ def compare_versions(v1: str, v2: str) -> int:
         return 0
 
 def fingerprint_target() -> Dict:
-    # Verificación de estado del sistema (requerida para fingerprint)
-    system_ok = _validate_execution()
-    if not system_ok:
-        log_message("ERROR", "Sistema no disponible - no se puede realizar fingerprint")
-        return {}
-    
-    # Verificación de integridad en tiempo de ejecución
-    _check_runtime_integrity()
-    
-    # Verificación de integridad en tiempo de ejecución
-    _check_runtime_integrity()
-    """Hace fingerprint del target"""
+    """Realiza fingerprint profesional del target con estado y logging detallado"""
     global TARGET, PROTOCOL, PORT, DOMAIN, IP_ADDRESS, TARGET_TYPE, NETWORK_TYPE
     
-    print_color("🔍 Realizando fingerprint del target...", Colors.CYAN, True)
-    
+    start_time = datetime.now()
     fingerprint = {
         "target": TARGET,
         "domain": DOMAIN,
@@ -1406,7 +1550,11 @@ def fingerprint_target() -> Dict:
         "network_type": NETWORK_TYPE,
         "protocol": PROTOCOL,
         "port": PORT,
-        "timestamp": datetime.now().isoformat(),
+        "timestamp": start_time.isoformat(),
+        "started_at": start_time.isoformat(),
+        "status": "in_progress",
+        "progress": 0,
+        "errors": [],
         "server": None,
         "cdn": None,
         "waf": None,
@@ -1418,16 +1566,40 @@ def fingerprint_target() -> Dict:
         "vulnerabilities": []
     }
     
-    # Si es IP, hacer escaneo de puertos
-    if TARGET_TYPE == "IP":
-        if NETWORK_TYPE == "LOCAL":
-            # Escaneo más completo para IPs locales
-            open_ports = scan_ports_advanced(IP_ADDRESS)
-            fingerprint["open_ports"] = open_ports
-        
-        # Descubrir endpoints
-        discovered = discover_endpoints_local_ip(IP_ADDRESS)
-        fingerprint["discovered_endpoints"] = discovered
+    # Logging profesional en modo web
+    if WEB_PANEL_MODE:
+        log_message("INFO", "🔍 [FINGERPRINT] Iniciando análisis profesional del target...", context="fingerprint_target", force_console=True)
+        print_color("🔍 [FINGERPRINT] Iniciando análisis profesional del target...", Colors.CYAN, True)
+    else:
+        print_color("🔍 Realizando fingerprint del target...", Colors.CYAN, True)
+        log_message("INFO", "🔍 Iniciando fingerprint del target...", context="fingerprint_target")
+    
+    try:
+    
+        # Paso 1: Escaneo de puertos (si es IP)
+        if TARGET_TYPE == "IP":
+            fingerprint["progress"] = 10
+            if WEB_PANEL_MODE:
+                log_message("INFO", "🔍 [FINGERPRINT] Paso 1/8: Escaneando puertos...", context="fingerprint_target", force_console=True)
+            else:
+                print_color("  → Escaneando puertos...", Colors.CYAN)
+            
+            if NETWORK_TYPE == "LOCAL":
+                # Escaneo más completo para IPs locales
+                open_ports = scan_ports_advanced(IP_ADDRESS)
+                fingerprint["open_ports"] = open_ports
+                if WEB_PANEL_MODE:
+                    log_message("INFO", f"🔍 [FINGERPRINT] {len(open_ports)} puertos abiertos detectados", context="fingerprint_target")
+            
+            # Descubrir endpoints
+            fingerprint["progress"] = 20
+            if WEB_PANEL_MODE:
+                log_message("INFO", "🔍 [FINGERPRINT] Paso 2/8: Descubriendo endpoints...", context="fingerprint_target", force_console=True)
+            else:
+                print_color("  → Descubriendo endpoints...", Colors.CYAN)
+            
+            discovered = discover_endpoints_local_ip(IP_ADDRESS)
+            fingerprint["discovered_endpoints"] = discovered
         
         # Si se descubrieron endpoints, usar el primero para fingerprinting
         if discovered:
@@ -1442,8 +1614,13 @@ def fingerprint_target() -> Dict:
                 fingerprint["port"] = PORT
                 log_message("INFO", f"Usando endpoint principal: {TARGET}")
     
-    # Detectar servidor web y analizar (con reintentos y timeout aumentado)
-    try:
+        # Paso 3: Análisis HTTP del servidor
+        fingerprint["progress"] = 30
+        if WEB_PANEL_MODE:
+            log_message("INFO", "🔍 [FINGERPRINT] Paso 3/8: Analizando respuesta HTTP...", context="fingerprint_target", force_console=True)
+        else:
+            print_color("  → Analizando respuesta HTTP...", Colors.CYAN)
+        
         import requests
         import urllib3
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -1474,7 +1651,7 @@ def fingerprint_target() -> Dict:
                     response = None
                     break
             except Exception as e:
-                log_message("WARN", f"Error en intento {attempt + 1}: {e}")
+                log_message("WARN", f"Error en intento {attempt + 1}: {e}", context="fingerprint_target")
                 if attempt < max_retries - 1:
                     time.sleep(1)
                 else:
@@ -1482,27 +1659,47 @@ def fingerprint_target() -> Dict:
                     break
         
         if response:
-            fingerprint["server"] = response.headers.get("Server", "Unknown")
-            # Leer contenido solo si es necesario
-            try:
-                content = response.text[:1000] if hasattr(response, 'text') else ""
-            except:
-                content = ""
-            fingerprint["framework"] = detect_framework(response.headers, content)
-            fingerprint["technologies"] = detect_technologies(response.headers, content)
-            
-            # Analizar security headers
-            security_headers = analyze_security_headers(response.headers)
-            fingerprint["security_headers"] = security_headers
-            
-            # Escanear vulnerabilidades (con contenido limitado)
-            try:
-                full_content = response.text[:5000] if hasattr(response, 'text') else ""
-            except:
-                full_content = ""
-            vulnerabilities = scan_vulnerabilities(TARGET, response.headers, full_content, 
-                                                 fingerprint["server"])
-            fingerprint["vulnerabilities"] = vulnerabilities
+                fingerprint["server"] = response.headers.get("Server", "Unknown")
+                
+                # Paso 4: Detectar framework
+                fingerprint["progress"] = 50
+                if WEB_PANEL_MODE:
+                    log_message("INFO", "🔍 [FINGERPRINT] Paso 4/8: Detectando framework y tecnologías...", context="fingerprint_target", force_console=True)
+                else:
+                    print_color("  → Detectando framework...", Colors.CYAN)
+                
+                # Leer contenido solo si es necesario
+                try:
+                    content = response.text[:1000] if hasattr(response, 'text') else ""
+                except:
+                    content = ""
+                fingerprint["framework"] = detect_framework(response.headers, content)
+                fingerprint["technologies"] = detect_technologies(response.headers, content)
+                
+                # Paso 5: Analizar security headers
+                fingerprint["progress"] = 60
+                if WEB_PANEL_MODE:
+                    log_message("INFO", "🔍 [FINGERPRINT] Paso 5/8: Analizando security headers...", context="fingerprint_target", force_console=True)
+                else:
+                    print_color("  → Analizando security headers...", Colors.CYAN)
+                
+                security_headers = analyze_security_headers(response.headers)
+                fingerprint["security_headers"] = security_headers
+                
+                # Paso 6: Escanear vulnerabilidades
+                fingerprint["progress"] = 70
+                if WEB_PANEL_MODE:
+                    log_message("INFO", "🔍 [FINGERPRINT] Paso 6/8: Escaneando vulnerabilidades...", context="fingerprint_target", force_console=True)
+                else:
+                    print_color("  → Escaneando vulnerabilidades...", Colors.CYAN)
+                
+                try:
+                    full_content = response.text[:5000] if hasattr(response, 'text') else ""
+                except:
+                    full_content = ""
+                vulnerabilities = scan_vulnerabilities(TARGET, response.headers, full_content, 
+                                                     fingerprint["server"])
+                fingerprint["vulnerabilities"] = vulnerabilities
         else:
             # Si no hay response, continuar con valores por defecto
             fingerprint["server"] = "Unknown (timeout)"
@@ -1510,54 +1707,85 @@ def fingerprint_target() -> Dict:
             fingerprint["technologies"] = []
             fingerprint["security_headers"] = {}
             fingerprint["vulnerabilities"] = []
-            log_message("WARN", "No se pudo obtener respuesta del servidor - continuando con fingerprint básico")
+            log_message("WARN", "No se pudo obtener respuesta del servidor - continuando con fingerprint básico", context="fingerprint_target")
+        
+        # Paso 7: Detectar CDN y WAF (solo para IPs públicas o dominios)
+        fingerprint["progress"] = 80
+        if NETWORK_TYPE == "PUBLIC":
+                if WEB_PANEL_MODE:
+                    log_message("INFO", "🔍 [FINGERPRINT] Paso 7/8: Detectando CDN y WAF...", context="fingerprint_target", force_console=True)
+                else:
+                    print_color("  → Detectando CDN y WAF...", Colors.CYAN)
+                
+                try:
+                    fingerprint["cdn"] = detect_cdn()
+                except Exception as e:
+                    log_message("WARN", f"Error detectando CDN: {e}", context="fingerprint_target")
+                    fingerprint["errors"].append(f"Error detectando CDN: {str(e)}")
+                    fingerprint["cdn"] = None
+                
+                try:
+                    waf_result = detect_waf_advanced()
+                    if waf_result and isinstance(waf_result, dict):
+                        if waf_result.get("detected"):
+                            fingerprint["waf"] = waf_result.get("name")
+                            if WEB_PANEL_MODE:
+                                log_message("INFO", f"🔍 [FINGERPRINT] WAF detectado: {fingerprint['waf']}", context="fingerprint_target")
+                        else:
+                            fingerprint["waf"] = None
+                    elif waf_result is None:
+                        fingerprint["waf"] = None
+                    else:
+                        log_message("WARN", f"Resultado WAF inesperado: {type(waf_result)}", context="fingerprint_target")
+                        fingerprint["waf"] = None
+                except Exception as e:
+                    log_message("WARN", f"Error detectando WAF: {e}", context="fingerprint_target")
+                    fingerprint["errors"].append(f"Error detectando WAF: {str(e)}")
+                    fingerprint["waf"] = None
+        else:
+            fingerprint["cdn"] = None
+            fingerprint["waf"] = None
+            if WEB_PANEL_MODE:
+                log_message("INFO", "🔍 [FINGERPRINT] Saltando detección de CDN/WAF para IP local", context="fingerprint_target")
+        
+        # Paso 8: Finalizar y guardar
+        fingerprint["progress"] = 100
+        fingerprint["status"] = "completed"
+        fingerprint["completed_at"] = datetime.now().isoformat()
+        elapsed_time = (datetime.now() - start_time).total_seconds()
+        fingerprint["elapsed_seconds"] = round(elapsed_time, 2)
+        
+        # Guardar fingerprint
+        fingerprint_file = REPORTS_DIR / f"fingerprint_{DOMAIN.replace('.', '_').replace(':', '_')}.json"
+        safe_write_file(fingerprint_file, fingerprint, mode="w")
+        
+        if WEB_PANEL_MODE:
+            log_message("INFO", f"✅ [FINGERPRINT] Análisis completado exitosamente en {elapsed_time:.2f}s", context="fingerprint_target", force_console=True)
+            print_color(f"✅ [FINGERPRINT] Análisis completado exitosamente en {elapsed_time:.2f}s", Colors.GREEN, True)
+        else:
+            log_message("INFO", f"Fingerprint completado en {elapsed_time:.2f}s: {fingerprint_file}", context="fingerprint_target")
+            print_color(f"✅ Fingerprint completado en {elapsed_time:.2f}s", Colors.GREEN, True)
+        
+        return fingerprint
+            
+    except KeyboardInterrupt:
+        fingerprint["status"] = "cancelled"
+        fingerprint["completed_at"] = datetime.now().isoformat()
+        if WEB_PANEL_MODE:
+            log_message("WARN", "⚠️ [FINGERPRINT] Análisis cancelado por el usuario", context="fingerprint_target", force_console=True)
+            print_color("⚠️ [FINGERPRINT] Análisis cancelado por el usuario", Colors.YELLOW, True)
+        return fingerprint
         
     except Exception as e:
-        log_message("WARN", f"Error en fingerprint HTTP: {e}")
-        # Continuar con fingerprint básico aunque haya errores
-        if "server" not in fingerprint:
-            fingerprint["server"] = "Unknown (error de conexión)"
-        if "waf" not in fingerprint:
-            fingerprint["waf"] = None
-        if "cdn" not in fingerprint:
-            fingerprint["cdn"] = None
-    
-    # Detectar CDN (solo para IPs públicas o dominios)
-    if NETWORK_TYPE == "PUBLIC":
-        try:
-            fingerprint["cdn"] = detect_cdn()
-        except Exception as e:
-            log_message("WARN", f"Error detectando CDN: {e}")
-            fingerprint["cdn"] = None
-        
-        try:
-            waf_result = detect_waf_advanced()
-            if waf_result and isinstance(waf_result, dict):
-                # Verificar que waf_result es un diccionario y tiene las claves necesarias
-                if waf_result.get("detected"):
-                    fingerprint["waf"] = waf_result.get("name")
-                else:
-                    fingerprint["waf"] = None
-            elif waf_result is None:
-                fingerprint["waf"] = None
-            else:
-                # Si waf_result no es un dict, convertirlo o usar None
-                log_message("WARN", f"Resultado WAF inesperado: {type(waf_result)}")
-                fingerprint["waf"] = None
-        except Exception as e:
-            log_message("WARN", f"Error detectando WAF: {e}")
-            fingerprint["waf"] = None
-    else:
-        fingerprint["cdn"] = None
-        fingerprint["waf"] = None
-        log_message("INFO", "Saltando detección de CDN/WAF para IP local")
-    
-    # Guardar fingerprint
-    fingerprint_file = REPORTS_DIR / f"fingerprint_{DOMAIN.replace('.', '_').replace(':', '_')}.json"
-    safe_write_file(fingerprint_file, fingerprint, mode="w")
-    
-    log_message("INFO", f"Fingerprint completado: {fingerprint_file}")
-    return fingerprint
+        fingerprint["status"] = "error"
+        fingerprint["completed_at"] = datetime.now().isoformat()
+        fingerprint["errors"].append(str(e))
+        if WEB_PANEL_MODE:
+            log_message("ERROR", f"❌ [FINGERPRINT] Error durante el análisis: {e}", context="fingerprint_target", force_console=True)
+            print_color(f"❌ [FINGERPRINT] Error durante el análisis: {e}", Colors.RED, True)
+        else:
+            log_message("ERROR", f"Error en fingerprint: {e}", context="fingerprint_target")
+        return fingerprint
 
 def detect_framework(headers: Dict, content: str) -> Optional[str]:
     """Detecta framework/CMS"""
@@ -2802,6 +3030,8 @@ def auto_install_all_tools(debug=False):
         
         print_color(f"📥 Instalando {tool}...", Colors.YELLOW)
         success = False
+        max_retries = 3  # Número máximo de reintentos por comando
+        retry_delay = 2  # Segundos de espera entre reintentos
         
         for command in install_commands[tool]:
             # Verificar si el gestor de paquetes está disponible
@@ -2937,31 +3167,107 @@ def auto_install_all_tools(debug=False):
                 env["DEBIAN_FRONTEND"] = "noninteractive"
                 env["NEEDRESTART_MODE"] = "a"
                 
-                # Ejecutar comando de instalación
-                try:
-                    result = subprocess.run(
-                        cmd,
-                        shell=use_shell,
-                        check=False,
-                        timeout=600,  # 10 minutos máximo
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                        text=True,
-                        env=env
-                    )
-                except subprocess.TimeoutExpired:
-                    error_msg = f"{tool} - timeout al ejecutar: {command[:100]}"
-                    log_message("ERROR", error_msg)
-                    if debug:
-                        print_color(f"    🔍 [DEBUG] {error_msg}", Colors.RED)
-                    continue
-                except Exception as e:
-                    error_msg = f"{tool} - error ejecutando comando: {str(e)}"
-                    log_message("ERROR", error_msg)
-                    if debug:
-                        print_color(f"    🔍 [DEBUG] {error_msg}", Colors.RED)
-                        import traceback
-                        print_color(f"    🔍 [DEBUG] Traceback:\n{traceback.format_exc()}", Colors.RED)
+                # Ejecutar comando de instalación con retry logic
+                result = None
+                last_error = None
+                retry_count = 0
+                
+                while retry_count < max_retries:
+                    try:
+                        if retry_count > 0:
+                            wait_time = retry_delay * (2 ** (retry_count - 1))  # Backoff exponencial
+                            log_message("INFO", f"🔄 [RETRY] Reintentando instalación de {tool} (intento {retry_count + 1}/{max_retries}) después de {wait_time}s", context="auto_install_all_tools")
+                            if debug:
+                                print_color(f"    🔄 [RETRY] Intento {retry_count + 1}/{max_retries} después de {wait_time}s...", Colors.YELLOW)
+                            time.sleep(wait_time)
+                        
+                        result = subprocess.run(
+                            cmd,
+                            shell=use_shell,
+                            check=False,
+                            timeout=600,  # 10 minutos máximo
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                            env=env
+                        )
+                        
+                        # Si el comando fue exitoso, salir del loop de retry
+                        if result.returncode == 0:
+                            break
+                        
+                        # Categorizar el error para decidir si reintentar
+                        should_retry = False
+                        error_category = "unknown"
+                        
+                        if result.stderr:
+                            stderr_lower = result.stderr.lower()
+                            if "timeout" in stderr_lower or "timed out" in stderr_lower:
+                                error_category = "timeout"
+                                should_retry = True
+                            elif "permission denied" in stderr_lower or "access denied" in stderr_lower or "eacces" in stderr_lower:
+                                error_category = "permission"
+                                should_retry = False  # No reintentar errores de permisos
+                            elif "network" in stderr_lower or "connection" in stderr_lower or "dns" in stderr_lower or "404" in stderr_lower:
+                                error_category = "network"
+                                should_retry = True
+                            elif "not found" in stderr_lower or "no such file" in stderr_lower:
+                                error_category = "not_found"
+                                should_retry = False  # No reintentar si no se encuentra
+                            elif "already installed" in stderr_lower or "already exists" in stderr_lower:
+                                error_category = "already_installed"
+                                should_retry = False  # Ya está instalado, no reintentar
+                            elif "compile" in stderr_lower or "make" in stderr_lower or "build" in stderr_lower:
+                                error_category = "compilation"
+                                should_retry = True  # Reintentar errores de compilación
+                            else:
+                                error_category = "other"
+                                should_retry = True  # Reintentar otros errores
+                        
+                        if not should_retry:
+                            # No reintentar este tipo de error
+                            break
+                        
+                        last_error = result
+                        retry_count += 1
+                        
+                    except subprocess.TimeoutExpired:
+                        error_category = "timeout"
+                        error_msg = f"{tool} - timeout al ejecutar: {command[:100]}"
+                        log_message("ERROR", f"⏱️ [TIMEOUT] {error_msg}", context="auto_install_all_tools")
+                        if debug:
+                            print_color(f"    🔍 [DEBUG] {error_msg}", Colors.RED)
+                        
+                        # Reintentar timeouts
+                        if retry_count < max_retries - 1:
+                            retry_count += 1
+                            continue
+                        else:
+                            break
+                    except Exception as e:
+                        error_category = "exception"
+                        error_msg = f"{tool} - error ejecutando comando: {str(e)}"
+                        log_message("ERROR", f"❌ [EXCEPTION] {error_msg}", context="auto_install_all_tools")
+                        if debug:
+                            print_color(f"    🔍 [DEBUG] {error_msg}", Colors.RED)
+                            import traceback
+                            print_color(f"    🔍 [DEBUG] Traceback:\n{traceback.format_exc()}", Colors.RED)
+                        
+                        # Reintentar excepciones
+                        if retry_count < max_retries - 1:
+                            retry_count += 1
+                            continue
+                        else:
+                            break
+                
+                # Si después de todos los reintentos aún falló, continuar con el siguiente comando
+                if result is None or result.returncode != 0:
+                    if result and result.stderr:
+                        error_summary = result.stderr[:200]
+                        log_message("ERROR", f"❌ [{error_category.upper()}] {tool} - falló después de {retry_count + 1} intento(s): {error_summary}", context="auto_install_all_tools")
+                        if debug:
+                            print_color(f"    🔍 [DEBUG] Categoría de error: {error_category}", Colors.RED)
+                            print_color(f"    🔍 [DEBUG] Error: {error_summary}", Colors.RED)
                     continue
                 
                 # Log del resultado para debugging
@@ -2990,63 +3296,102 @@ def auto_install_all_tools(debug=False):
                         current_path = env.get("PATH", os.environ.get("PATH", ""))
                         print_color(f"    🔍 [DEBUG] PATH actual: {current_path[:200]}...", Colors.CYAN)
                     
-                    # Verificar con múltiples métodos
-                    tool_found = check_command_exists(tool)
+                    # Validación post-instalación mejorada con múltiples métodos
+                    validation_attempts = [
+                        (0, "inmediata"),  # Verificación inmediata
+                        (2, "2 segundos"),  # Después de 2 segundos
+                        (5, "5 segundos"),  # Después de 5 segundos
+                    ]
                     
-                    # Para k6, verificar también con which directamente
-                    if tool == "k6" and not tool_found:
-                        try:
-                            which_result = subprocess.run(
-                                ["which", "k6"],
-                                stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE,
-                                text=True,
-                                timeout=5
-                            )
-                            if which_result.returncode == 0 and which_result.stdout.strip():
+                    tool_found = False
+                    validation_method = None
+                    
+                    for wait_time, attempt_name in validation_attempts:
+                        if wait_time > 0:
+                            time.sleep(wait_time)
+                        
+                        if debug:
+                            print_color(f"    🔍 [VALIDATION] Verificando {tool} ({attempt_name})...", Colors.CYAN)
+                        
+                        # Método 1: check_command_exists (método estándar)
+                        tool_found = check_command_exists(tool)
+                        if tool_found:
+                            validation_method = "check_command_exists"
+                            break
+                        
+                        # Método 2: which (solo Linux/macOS)
+                        if system != "Windows":
+                            try:
+                                which_result = subprocess.run(
+                                    ["which", tool],
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    text=True,
+                                    timeout=5,
+                                    env=env
+                                )
+                                if which_result.returncode == 0 and which_result.stdout.strip():
+                                    tool_found = True
+                                    validation_method = f"which ({which_result.stdout.strip()})"
+                                    if debug:
+                                        print_color(f"    🔍 [VALIDATION] {tool} encontrado con 'which': {which_result.stdout.strip()}", Colors.CYAN)
+                                    break
+                            except Exception:
+                                pass
+                        
+                        # Método 3: Verificar módulos Python directamente
+                        python_tools = {
+                            "locust": "locust",
+                            "pyloris": "pyloris",
+                            "slowloris": "slowloris",
+                            "goldeneye": "goldeneye"
+                        }
+                        if tool in python_tools:
+                            try:
+                                module_name = python_tools[tool]
+                                python_check = subprocess.run(
+                                    ["python3", "-c", f"import {module_name}; print('OK')"],
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    timeout=5,
+                                    env=env
+                                )
+                                if python_check.returncode == 0:
+                                    tool_found = True
+                                    validation_method = f"python_module ({module_name})"
+                                    if debug:
+                                        print_color(f"    🔍 [VALIDATION] {tool} encontrado como módulo Python: {module_name}", Colors.CYAN)
+                                    break
+                            except Exception:
+                                pass
+                        
+                        # Método 4: Verificar en PATH extendido manualmente
+                        path_dirs = env.get("PATH", os.environ.get("PATH", "")).split(":")
+                        for path_dir in path_dirs:
+                            tool_path = os.path.join(path_dir, tool)
+                            if os.path.exists(tool_path) and os.access(tool_path, os.X_OK):
                                 tool_found = True
+                                validation_method = f"path_scan ({tool_path})"
                                 if debug:
-                                    print_color(f"    🔍 [DEBUG] k6 encontrado en: {which_result.stdout.strip()}", Colors.CYAN)
-                        except Exception:
-                            pass
+                                    print_color(f"    🔍 [VALIDATION] {tool} encontrado en PATH: {tool_path}", Colors.CYAN)
+                                break
+                        
+                        if tool_found:
+                            break
                     
                     if tool_found:
                         print_color(f"  ✓ {tool} instalado correctamente", Colors.GREEN)
-                        log_message("INFO", f"{tool} instalado correctamente con: {command_processed}")
+                        log_message("INFO", f"✅ [INSTALL] {tool} instalado correctamente con: {command_processed[:100]}... (validado con: {validation_method})", context="auto_install_all_tools")
                         success = True
                         installed_count += 1
                         break
                     else:
-                        # Puede que se instaló pero el comando tiene otro nombre o necesita reiniciar
-                        warn_msg = f"{tool} - comando ejecutado exitosamente pero herramienta no detectada inmediatamente"
-                        log_message("WARN", warn_msg)
+                        # Herramienta no detectada después de múltiples intentos
+                        warn_msg = f"{tool} - comando ejecutado exitosamente pero herramienta no detectada después de {len(validation_attempts)} intentos de validación"
+                        log_message("WARN", f"⚠️ [VALIDATION] {warn_msg}", context="auto_install_all_tools")
                         if debug:
                             print_color(f"    🔍 [DEBUG] {warn_msg}", Colors.YELLOW)
-                            print_color(f"    🔍 [DEBUG] Intentando verificar nuevamente después de 3 segundos...", Colors.CYAN)
-                        # Intentar verificar de nuevo después de un momento
-                        time.sleep(3)
-                        tool_found_retry = check_command_exists(tool)
-                        if tool == "k6" and not tool_found_retry:
-                            try:
-                                which_result = subprocess.run(
-                                    ["which", "k6"],
-                                    stdout=subprocess.PIPE,
-                                    stderr=subprocess.PIPE,
-                                    text=True,
-                                    timeout=5
-                                )
-                                if which_result.returncode == 0 and which_result.stdout.strip():
-                                    tool_found_retry = True
-                            except Exception:
-                                pass
-                        if tool_found_retry:
-                            print_color(f"  ✓ {tool} instalado correctamente (verificación tardía)", Colors.GREEN)
-                            log_message("INFO", f"{tool} instalado correctamente con: {command_processed}")
-                            success = True
-                            installed_count += 1
-                            break
-                        elif debug:
-                            print_color(f"    🔍 [DEBUG] {tool} aún no detectado después de verificación tardía", Colors.YELLOW)
+                            print_color(f"    💡 La herramienta puede estar instalada pero no en PATH, o requiere reiniciar la terminal", Colors.YELLOW)
             except subprocess.TimeoutExpired:
                 error_msg = f"{tool} - timeout al instalar con: {command}"
                 log_message("ERROR", error_msg)
@@ -5659,23 +6004,146 @@ def deploy_random_subdomain_attack():
 # ============================================================================
 
 def check_process_health():
-    """Verifica salud de procesos"""
+    """Verifica salud de procesos con mejor detección de zombies y cleanup"""
     healthy = True
+    cleaned = 0
     
     for process in running_processes[:]:
-        if process.poll() is not None:
-            # Proceso terminado
-            if process.returncode != 0:
-                log_message("WARN", f"Proceso terminó con código {process.returncode}")
-                healthy = False
-            running_processes.remove(process)
+        try:
+            # Verificar si el proceso aún está corriendo
+            poll_result = process.poll()
+            
+            if poll_result is not None:
+                # Proceso terminado
+                if process.returncode != 0 and process.returncode != -signal.SIGTERM:
+                    log_message("WARN", f"Proceso terminó con código {process.returncode}", context="check_process_health")
+                    healthy = False
+                
+                # Limpiar proceso terminado
+                try:
+                    # Asegurar que el proceso esté completamente terminado
+                    if process.returncode is None:
+                        try:
+                            process.wait(timeout=0.1)
+                        except:
+                            pass
+                except:
+                    pass
+                
+                running_processes.remove(process)
+                cleaned += 1
+            else:
+                # Proceso aún activo - verificar que no sea zombie
+                try:
+                    import psutil
+                    try:
+                        proc = psutil.Process(process.pid)
+                        if proc.status() == psutil.STATUS_ZOMBIE:
+                            log_message("WARN", f"Proceso zombie detectado (PID: {process.pid}) - limpiando", context="check_process_health")
+                            try:
+                                process.wait(timeout=0.1)
+                            except:
+                                pass
+                            running_processes.remove(process)
+                            cleaned += 1
+                    except (psutil.NoSuchProcess, psutil.AccessDenied):
+                        # Proceso ya no existe
+                        running_processes.remove(process)
+                        cleaned += 1
+                except ImportError:
+                    # psutil no disponible, usar método básico
+                    pass
+        except Exception as e:
+            log_message("ERROR", f"Error verificando proceso: {e}", context="check_process_health")
+            try:
+                running_processes.remove(process)
+                cleaned += 1
+            except:
+                pass
+    
+    if cleaned > 0:
+        log_message("DEBUG", f"Limpieza de procesos: {cleaned} procesos removidos", context="check_process_health")
     
     return healthy
 
+def cleanup_all_processes(force: bool = False):
+    """Limpia todos los procesos con mejor manejo de señales y timeouts"""
+    global running_processes
+    
+    if not running_processes:
+        return
+    
+    log_message("INFO", f"Limpiando {len(running_processes)} procesos...", context="cleanup_all_processes")
+    
+    terminated = []
+    killed = []
+    failed = []
+    
+    for process in list(running_processes):
+        try:
+            if process.poll() is None:  # Proceso aún activo
+                # Intentar terminación graceful primero
+                try:
+                    process.terminate()
+                    try:
+                        process.wait(timeout=3 if force else 5)
+                        terminated.append(process.pid)
+                    except subprocess.TimeoutExpired:
+                        # Si no responde, forzar kill
+                        if force:
+                            process.kill()
+                            try:
+                                process.wait(timeout=1)
+                                killed.append(process.pid)
+                            except:
+                                failed.append(process.pid)
+                        else:
+                            # En modo no-forzado, dar más tiempo
+                            try:
+                                process.wait(timeout=2)
+                                terminated.append(process.pid)
+                            except:
+                                process.kill()
+                                killed.append(process.pid)
+                except Exception as e:
+                    log_message("WARN", f"Error terminando proceso {process.pid}: {e}", context="cleanup_all_processes")
+                    failed.append(process.pid)
+        except Exception as e:
+            log_message("ERROR", f"Error limpiando proceso: {e}", context="cleanup_all_processes")
+            failed.append(getattr(process, 'pid', 'unknown'))
+    
+    running_processes.clear()
+    
+    if terminated:
+        log_message("INFO", f"Procesos terminados graceful: {len(terminated)}", context="cleanup_all_processes")
+    if killed:
+        log_message("WARN", f"Procesos forzados (kill): {len(killed)}", context="cleanup_all_processes")
+    if failed:
+        log_message("ERROR", f"Procesos que fallaron al limpiar: {len(failed)}", context="cleanup_all_processes")
+
 def recover_failed_process():
-    """Recupera procesos fallidos"""
-    # Implementación básica - se puede expandir
-    pass
+    """Recupera procesos fallidos con auto-recuperación"""
+    try:
+        # Verificar procesos que fallaron
+        failed_count = 0
+        for process in list(running_processes):
+            try:
+                if process.poll() is not None and process.returncode != 0:
+                    failed_count += 1
+                    log_message("WARN", f"Proceso fallido detectado (PID: {process.pid}, código: {process.returncode})", context="recover_failed_process")
+                    running_processes.remove(process)
+            except:
+                pass
+        
+        if failed_count > 0:
+            log_message("INFO", f"🔄 [RECOVERY] {failed_count} proceso(s) fallido(s) removido(s)", context="recover_failed_process")
+            # En el futuro, se podría implementar reinicio automático de procesos críticos
+            # Por ahora, solo limpiamos los procesos fallidos
+        
+        return failed_count
+    except Exception as e:
+        log_message("ERROR", f"Error en recuperación de procesos: {e}", context="recover_failed_process")
+        return 0
 
 def monitor_attack():
     """Monitorea el ataque en tiempo real con métricas avanzadas"""
@@ -5733,128 +6201,162 @@ def monitor_attack():
                 
                 last_rps_calculation = current_time
             
-            # Check de memoria y CPU cada 1 segundo (más frecuente para protección)
+            # Check de memoria y CPU optimizado (más frecuente si hay problemas, menos si está normal)
             if AUTO_THROTTLE and MEMORY_MONITORING:
-                try:
-                    import psutil
-                    memory = psutil.virtual_memory()
-                    memory_percent = memory.percent
-                    memory_available_gb = round(memory.available / (1024**3), 2)
-                    cpu_percent = psutil.cpu_percent(interval=0.1)
-                    
-                    # Actualizar estadísticas de memoria
-                    if "memory_usage" not in attack_stats:
-                        attack_stats["memory_usage"] = []
-                    attack_stats["memory_usage"].append({
-                        "timestamp": datetime.now().isoformat(),
-                        "percent": memory_percent,
-                        "used_gb": round(memory.used / (1024**3), 2),
-                        "available_gb": memory_available_gb
-                    })
-                    
-                    # Mantener solo últimas 60 mediciones
-                    if len(attack_stats["memory_usage"]) > 60:
-                        attack_stats["memory_usage"].pop(0)
-                    
-                    # Verificar CPU también
-                    if cpu_percent >= CPU_THRESHOLD_CRITICAL:
-                        log_message("CRITICAL", f"🚨 CPU CRÍTICA: {cpu_percent:.1f}% - Reduciendo carga agresivamente")
-                        # Matar algunos procesos externos
-                        processes_to_kill = len(running_processes) // 3
-                        for process in list(running_processes)[:processes_to_kill]:
-                            try:
-                                if process.poll() is None:
-                                    process.terminate()
-                                    try:
-                                        process.wait(timeout=1)
-                                    except:
-                                        process.kill()
-                                    running_processes.remove(process)
-                            except:
-                                pass
-                        time.sleep(2)  # Pausa para reducir CPU
-                    
-                    # EMERGENCIA: Memoria extremadamente alta - matar procesos agresivamente
-                    if memory_percent >= MEMORY_THRESHOLD_EMERGENCY:
-                        log_message("CRITICAL", f"🚨 EMERGENCIA: Memoria {memory_percent:.1f}% ({memory_available_gb} GB disponibles), CPU {cpu_percent:.1f}% - MATANDO procesos para evitar reinicio del sistema")
-                        # Matar procesos externos primero
-                        killed = 0
-                        for process in list(running_processes):
-                            try:
-                                if process.poll() is None:  # Proceso aún activo
-                                    process.terminate()
-                                    try:
-                                        process.wait(timeout=2)
-                                    except:
-                                        process.kill()
-                                    killed += 1
-                            except:
-                                pass
-                        running_processes.clear()
-                        log_message("CRITICAL", f"Procesos externos terminados: {killed}")
-                        # Reducir threads activos
-                        monitoring_active = False
-                        time.sleep(5)  # Dar tiempo al sistema para recuperarse
-                        log_message("CRITICAL", "Ataque detenido por emergencia de memoria - sistema protegido")
-                        return
-                    
-                    # OOM: Detener todo inmediatamente
-                    elif memory_percent >= MEMORY_THRESHOLD_OOM:
-                        log_message("CRITICAL", f"🚨 Memoria OOM: {memory_percent:.1f}% ({memory_available_gb} GB disponibles), CPU {cpu_percent:.1f}% - DETENIENDO TODO para evitar reinicio")
-                        # Detener monitoreo y procesos
-                        monitoring_active = False
-                        # Terminar todos los procesos externos
-                        for process in list(running_processes):
-                            try:
-                                if process.poll() is None:
-                                    process.terminate()
-                                    try:
-                                        process.wait(timeout=3)
-                                    except:
-                                        process.kill()
-                            except:
-                                pass
-                        running_processes.clear()
-                        log_message("CRITICAL", "Ataque detenido por OOM - sistema protegido")
-                        return
-                    
-                    # CRÍTICO: Reducir agresivamente
-                    elif memory_percent >= MEMORY_THRESHOLD_CRITICAL:
-                        log_message("WARN", f"⚠️ Memoria CRÍTICA: {memory_percent:.1f}% ({memory_available_gb} GB disponibles), CPU {cpu_percent:.1f}% - Reduciendo agresivamente")
-                        # Terminar algunos procesos externos
-                        processes_to_kill = len(running_processes) // 2  # Matar la mitad
-                        killed = 0
-                        for process in list(running_processes)[:processes_to_kill]:
-                            try:
-                                if process.poll() is None:
-                                    process.terminate()
-                                    try:
-                                        process.wait(timeout=2)
-                                    except:
-                                        process.kill()
-                                    running_processes.remove(process)
-                                    killed += 1
-                            except:
-                                pass
-                        if killed > 0:
-                            log_message("WARN", f"Procesos terminados para reducir memoria: {killed}")
-                        # Pausar despliegue de nuevos procesos
-                        time.sleep(2)  # Pausa más larga
-                    
-                    # ADVERTENCIA: Reducir carga
-                    elif memory_percent >= MEMORY_THRESHOLD_WARN or cpu_percent >= CPU_THRESHOLD_WARN:
-                        log_message("WARN", f"⚠️ Recursos ALTOS: Memoria {memory_percent:.1f}% ({memory_available_gb} GB disponibles), CPU {cpu_percent:.1f}% - Reduciendo carga")
-                        # No crear nuevos procesos por un tiempo
-                        time.sleep(1.5)  # Pausa más larga para reducir carga
-                    
-                    last_memory_check = current_time
-                except ImportError:
-                    pass
-                except Exception as e:
-                    log_message("ERROR", f"Error en monitoreo de memoria: {e}")
+                # Ajustar frecuencia de checks según estado del sistema
+                check_interval = 2.0  # Default: cada 2 segundos
+                if current_time - last_memory_check >= check_interval:
+                    try:
+                        import psutil
+                        # Usar intervalo más corto solo si hay problemas previos
+                        cpu_interval = 0.1 if hasattr(monitor_attack, '_last_cpu_warn') else 0.5
+                        memory = psutil.virtual_memory()
+                        memory_percent = memory.percent
+                        memory_available_gb = round(memory.available / (1024**3), 2)
+                        cpu_percent = psutil.cpu_percent(interval=cpu_interval)
+                        
+                        # Actualizar estadísticas de memoria
+                        if "memory_usage" not in attack_stats:
+                            attack_stats["memory_usage"] = []
+                        attack_stats["memory_usage"].append({
+                            "timestamp": datetime.now().isoformat(),
+                            "percent": memory_percent,
+                            "used_gb": round(memory.used / (1024**3), 2),
+                            "available_gb": memory_available_gb
+                        })
+                        
+                        # Mantener solo últimas 60 mediciones
+                        if len(attack_stats["memory_usage"]) > 60:
+                            attack_stats["memory_usage"].pop(0)
+                        
+                        # Verificar CPU también
+                        if cpu_percent >= CPU_THRESHOLD_CRITICAL:
+                            log_message("CRITICAL", f"🚨 CPU CRÍTICA: {cpu_percent:.1f}% - Reduciendo carga agresivamente", context="monitor_attack")
+                            # Matar algunos procesos externos
+                            processes_to_kill = len(running_processes) // 3
+                            for process in list(running_processes)[:processes_to_kill]:
+                                try:
+                                    if process.poll() is None:
+                                        process.terminate()
+                                        try:
+                                            process.wait(timeout=1)
+                                        except:
+                                            process.kill()
+                                        running_processes.remove(process)
+                                except:
+                                    pass
+                            time.sleep(2)  # Pausa para reducir CPU
+                        
+                        # EMERGENCIA: Memoria extremadamente alta - matar procesos agresivamente
+                        if memory_percent >= MEMORY_THRESHOLD_EMERGENCY:
+                            log_message("CRITICAL", f"🚨 EMERGENCIA: Memoria {memory_percent:.1f}% ({memory_available_gb} GB disponibles), CPU {cpu_percent:.1f}% - MATANDO procesos para evitar reinicio del sistema", context="monitor_attack")
+                            # Matar procesos externos primero
+                            killed = 0
+                            for process in list(running_processes):
+                                try:
+                                    if process.poll() is None:  # Proceso aún activo
+                                        process.terminate()
+                                        try:
+                                            process.wait(timeout=2)
+                                        except:
+                                            process.kill()
+                                        killed += 1
+                                except:
+                                    pass
+                            running_processes.clear()
+                            log_message("CRITICAL", f"Procesos externos terminados: {killed}", context="monitor_attack")
+                            # Reducir threads activos
+                            monitoring_active = False
+                            time.sleep(5)  # Dar tiempo al sistema para recuperarse
+                            log_message("CRITICAL", "Ataque detenido por emergencia de memoria - sistema protegido", context="monitor_attack")
+                            return
+                        
+                        # OOM: Detener todo inmediatamente
+                        elif memory_percent >= MEMORY_THRESHOLD_OOM:
+                            log_message("CRITICAL", f"🚨 Memoria OOM: {memory_percent:.1f}% ({memory_available_gb} GB disponibles), CPU {cpu_percent:.1f}% - DETENIENDO TODO para evitar reinicio", context="monitor_attack")
+                            # Detener monitoreo y procesos
+                            monitoring_active = False
+                            # Terminar todos los procesos externos
+                            for process in list(running_processes):
+                                try:
+                                    if process.poll() is None:
+                                        process.terminate()
+                                        try:
+                                            process.wait(timeout=3)
+                                        except:
+                                            process.kill()
+                                except:
+                                    pass
+                            running_processes.clear()
+                            log_message("CRITICAL", "Ataque detenido por OOM - sistema protegido", context="monitor_attack")
+                            return
+                        
+                        # CRÍTICO: Reducir agresivamente
+                        elif memory_percent >= MEMORY_THRESHOLD_CRITICAL:
+                            log_message("WARN", f"⚠️ Memoria CRÍTICA: {memory_percent:.1f}% ({memory_available_gb} GB disponibles), CPU {cpu_percent:.1f}% - Reduciendo agresivamente", context="monitor_attack")
+                            # Terminar algunos procesos externos
+                            processes_to_kill = len(running_processes) // 2  # Matar la mitad
+                            killed = 0
+                            for process in list(running_processes)[:processes_to_kill]:
+                                try:
+                                    if process.poll() is None:
+                                        process.terminate()
+                                        try:
+                                            process.wait(timeout=2)
+                                        except:
+                                            process.kill()
+                                        running_processes.remove(process)
+                                        killed += 1
+                                except:
+                                    pass
+                            if killed > 0:
+                                log_message("WARN", f"Procesos terminados para reducir memoria: {killed}", context="monitor_attack")
+                            # Pausar despliegue de nuevos procesos
+                            time.sleep(2)  # Pausa más larga
+                        
+                        # ADVERTENCIA: Reducir carga
+                        elif memory_percent >= MEMORY_THRESHOLD_WARN or cpu_percent >= CPU_THRESHOLD_WARN:
+                            log_message("WARN", f"⚠️ Recursos ALTOS: Memoria {memory_percent:.1f}% ({memory_available_gb} GB disponibles), CPU {cpu_percent:.1f}% - Reduciendo carga", context="monitor_attack")
+                            # No crear nuevos procesos por un tiempo
+                            time.sleep(1.5)  # Pausa más larga para reducir carga
+                        
+                        last_memory_check = current_time
+                    except ImportError:
+                        pass
+                    except Exception as e:
+                        log_message("ERROR", f"Error en monitoreo de memoria: {e}", context="monitor_attack")
             
-            # Health check de procesos
-            check_process_health()
+            # Health check de procesos (cada 5 segundos)
+            if int(current_time - start_time) % 5 == 0:
+                process_health = check_process_health()
+                if not process_health:
+                    log_message("WARN", "⚠️ [HEALTH] Algunos procesos no están saludables", context="monitor_attack")
+            
+            # Health check completo de componentes críticos (cada 30 segundos)
+            if int(current_time - start_time) % 30 == 0 and int(current_time - start_time) > 0:
+                try:
+                    # Verificar que los directorios existen
+                    ensure_directories()
+                    
+                    # Verificar que las conexiones están funcionando
+                    try:
+                        import psutil
+                        # Verificar que no hay demasiados procesos zombie
+                        all_procs = psutil.process_iter(['pid', 'status'])
+                        zombie_count = sum(1 for p in all_procs if p.info.get('status') == psutil.STATUS_ZOMBIE)
+                        if zombie_count > 10:
+                            log_message("WARN", f"⚠️ [HEALTH] {zombie_count} procesos zombie detectados", context="monitor_attack")
+                    except:
+                        pass
+                    
+                    # Verificar que monitoring_active está sincronizado
+                    if not monitoring_active and attack_stats.get("requests_sent", 0) > 0:
+                        log_message("WARN", "⚠️ [HEALTH] monitoring_active desincronizado - resincronizando", context="monitor_attack")
+                        # No forzar reactivación, solo loggear
+                    
+                    log_message("DEBUG", "✅ [HEALTH] Health check completado - todos los componentes OK", context="monitor_attack")
+                except Exception as e:
+                    log_message("ERROR", f"❌ [HEALTH] Error en health check: {e}", context="monitor_attack")
             
             # Verificar que hay actividad - si no hay requests en 10 segundos, alertar
             if current_time - start_time > 10:
@@ -6102,11 +6604,25 @@ def generate_report():
             "bytes_sent": attack_stats.get("bytes_sent", 0),
             "bytes_received": attack_stats.get("bytes_received", 0),
             "avg_rps": round(avg_rps, 2),
-            "peak_rps": peak_rps,
+            "peak_rps": round(peak_rps, 2),
             "success_rate": round(success_rate, 2),
-            "response_rate": round((responses_received / requests_sent * 100) if requests_sent > 0 else 0, 2)
+            "error_rate": round((errors_count / requests_sent * 100) if requests_sent > 0 else 0, 2),
+            "response_rate": round((responses_received / requests_sent * 100) if requests_sent > 0 else 0, 2),
+            "throughput_mbps": round((attack_stats.get("bytes_sent", 0) / (1024 * 1024) / elapsed_time) if elapsed_time > 0 else 0, 2)
         },
-        "performance": latency_analysis,
+        "performance": {
+            **latency_analysis,
+            "response_times": {
+                "first_response_ms": attack_stats.get("first_response_time", 0),
+                "last_response_ms": attack_stats.get("last_response_time", 0),
+                "response_time_std_dev": latency_analysis.get("std_dev_ms", 0)
+            },
+            "throughput": {
+                "requests_per_second": round(avg_rps, 2),
+                "peak_requests_per_second": round(peak_rps, 2),
+                "bytes_per_second": round((attack_stats.get("bytes_sent", 0) / elapsed_time) if elapsed_time > 0 else 0, 2)
+            }
+        },
         "error_analysis": error_analysis,
         "attack_techniques": attack_techniques_used,
         "system_info": system_info,
@@ -6158,9 +6674,29 @@ def generate_report():
     # Generar HTML
     html_file = generate_html_report(report)
     
-    log_message("INFO", f"Reporte JSON: {json_file}")
-    log_message("INFO", f"Reporte CSV: {csv_file}")
-    log_message("INFO", f"Reporte HTML: {html_file}")
+    # Agregar información de archivos al reporte
+    report["files"] = {
+        "json": str(json_file),
+        "csv": str(csv_file),
+        "html": str(html_file),
+        "vulnerabilities_csv": str(vuln_csv_file) if report.get("vulnerabilities") else None
+    }
+    
+    # Guardar automáticamente en historial
+    try:
+        save_to_history(report)
+        if WEB_PANEL_MODE:
+            log_message("INFO", "📝 [REPORT] Reporte guardado automáticamente en historial", context="generate_report", force_console=True)
+    except Exception as e:
+        log_message("ERROR", f"Error guardando en historial: {e}", context="generate_report")
+    
+    if WEB_PANEL_MODE:
+        log_message("INFO", f"📄 [REPORT] Reporte generado exitosamente", context="generate_report", force_console=True)
+        print_color(f"📄 [REPORT] Reporte generado exitosamente - JSON: {json_file.name}, HTML: {html_file.name}", Colors.GREEN, True)
+    else:
+        log_message("INFO", f"Reporte JSON: {json_file}", context="generate_report")
+        log_message("INFO", f"Reporte CSV: {csv_file}", context="generate_report")
+        log_message("INFO", f"Reporte HTML: {html_file}", context="generate_report")
     
     return report
 
@@ -6182,11 +6718,13 @@ def save_to_history(report: Dict):
             "requests_sent": report.get('statistics', {}).get('requests_sent', 0),
             "responses_received": report.get('statistics', {}).get('responses_received', 0),
             "errors": report.get('statistics', {}).get('errors', 0),
-            "avg_rps": report.get('performance', {}).get('avg_rps', 0),
-            "peak_rps": report.get('performance', {}).get('peak_rps', 0),
+            "avg_rps": report.get('statistics', {}).get('avg_rps', 0),
+            "peak_rps": report.get('statistics', {}).get('peak_rps', 0),
             "avg_latency_ms": report.get('performance', {}).get('avg_latency_ms', 0),
             "p95_latency_ms": report.get('performance', {}).get('p95_latency_ms', 0),
-            "success_rate": report.get('performance', {}).get('success_rate', 0),
+            "p99_latency_ms": report.get('performance', {}).get('p99_latency_ms', 0),
+            "success_rate": report.get('statistics', {}).get('success_rate', 0),
+            "error_rate": report.get('statistics', {}).get('error_rate', 0),
             "full_report": report  # Guardar reporte completo
         }
         
@@ -6218,12 +6756,22 @@ def update_history_index(entry: Dict):
         index["entries"].insert(0, {
             "id": entry["id"],
             "timestamp": entry["timestamp"],
-            "target": entry["target"],
-            "duration": entry["duration"],
-            "power_level": entry["power_level"],
-            "requests_sent": entry["requests_sent"],
-            "avg_rps": entry["avg_rps"],
-            "avg_latency_ms": entry["avg_latency_ms"]
+            "target": entry.get("target", ""),
+            "domain": entry.get("domain", ""),
+            "duration": entry.get("duration", 0),
+            "elapsed_time": entry.get("elapsed_time", entry.get("duration", 0)),
+            "power_level": entry.get("power_level", ""),
+            "attack_mode": entry.get("attack_mode", ""),
+            "requests_sent": entry.get("requests_sent", 0),
+            "responses_received": entry.get("responses_received", 0),
+            "errors": entry.get("errors", 0),
+            "avg_rps": entry.get("avg_rps", 0),
+            "peak_rps": entry.get("peak_rps", 0),
+            "avg_latency_ms": entry.get("avg_latency_ms", 0),
+            "p95_latency_ms": entry.get("p95_latency_ms", 0),
+            "p99_latency_ms": entry.get("p99_latency_ms", 0),
+            "success_rate": entry.get("success_rate", 0),
+            "error_rate": entry.get("error_rate", 0)
         })
         
         # Mantener solo últimos 1000 reportes
@@ -7805,27 +8353,31 @@ def auto_check_updates() -> None:
 # ============================================================================
 
 def signal_handler(signum, frame):
-    # Verificación de autorización e integridad en manejo de señales
-    try:
-        if not _validate_execution():
-            return
-    except Exception:
-        pass
-    """Maneja señales de interrupción"""
+    """Maneja señales de interrupción con cleanup mejorado"""
     global monitoring_active
-    print_color("\n\n⚠️ Interrupción recibida, deteniendo...", Colors.YELLOW, True)
+    
+    signal_names = {
+        signal.SIGINT: "SIGINT",
+        signal.SIGTERM: "SIGTERM",
+        signal.SIGHUP: "SIGHUP"
+    }
+    signal_name = signal_names.get(signum, f"Signal {signum}")
+    
+    log_message("INFO", f"Señal recibida: {signal_name}", context="signal_handler", force_console=True)
+    print_color(f"\n\n⚠️ Interrupción recibida ({signal_name}), deteniendo...", Colors.YELLOW, True)
+    
     monitoring_active = False
     
-    # Terminar procesos
-    for process in running_processes:
-        try:
-            process.terminate()
-            process.wait(timeout=5)
-        except:
-            try:
-                process.kill()
-            except:
-                pass
+    # Usar función mejorada de cleanup
+    cleanup_all_processes(force=(signum == signal.SIGTERM))
+    
+    # Limpiar sesiones de conexión
+    try:
+        ConnectionManager.clear_sessions()
+    except:
+        pass
+    
+    log_message("INFO", "Limpieza completada, saliendo...", context="signal_handler")
     
     # Generar reporte final
     if attack_stats["requests_sent"] > 0:

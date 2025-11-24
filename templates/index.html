@@ -1270,19 +1270,39 @@
 
         <!-- Reports Tab -->
         <div id="reports" class="tab-content">
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">
-                        <i class="fas fa-file-alt"></i>
-                        Reportes Disponibles
+            <div class="grid grid-2">
+                <!-- Historial de Ataques -->
+                <div class="card" style="grid-column: 1 / -1;">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-history"></i>
+                            Historial de Ataques
+                        </div>
+                        <button class="btn btn-secondary" onclick="loadHistory()">
+                            <i class="fas fa-sync-alt"></i>
+                            Actualizar
+                        </button>
                     </div>
-                    <button class="btn btn-secondary" onclick="loadReports()">
-                        <i class="fas fa-sync-alt"></i>
-                        Actualizar
-                    </button>
+                    <div class="card-body">
+                        <div id="history-list" style="max-height: 600px; overflow-y: auto;"></div>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <div id="reports-list"></div>
+                
+                <!-- Reportes HTML Disponibles -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-file-alt"></i>
+                            Reportes HTML Disponibles
+                        </div>
+                        <button class="btn btn-secondary" onclick="loadReports()">
+                            <i class="fas fa-sync-alt"></i>
+                            Actualizar
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div id="reports-list"></div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1602,49 +1622,213 @@
                 return;
             }
             
+            const container = document.getElementById('fingerprint-results');
+            const content = document.getElementById('fingerprint-content');
+            
+            // Mostrar estado de progreso
+            content.innerHTML = `
+                <div style="text-align: center; padding: 3rem;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem; color: var(--primary);">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </div>
+                    <div style="font-size: 1.2rem; color: var(--primary); margin-bottom: 0.5rem; font-weight: 600;">
+                        Analizando Target...
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                        <div id="fingerprint-progress">Iniciando análisis...</div>
+                    </div>
+                </div>
+            `;
+            container.style.display = 'block';
+            
             try {
                 showAlert('Ejecutando fingerprint...', 'info');
+                
+                // Simular progreso mientras se ejecuta
+                const progressMessages = [
+                    'Validando target...',
+                    'Escaneando puertos...',
+                    'Descubriendo endpoints...',
+                    'Analizando respuesta HTTP...',
+                    'Detectando framework...',
+                    'Analizando security headers...',
+                    'Escaneando vulnerabilidades...',
+                    'Detectando CDN y WAF...',
+                    'Generando reporte...'
+                ];
+                
+                let progressIndex = 0;
+                const progressInterval = setInterval(() => {
+                    if (progressIndex < progressMessages.length) {
+                        const progressEl = document.getElementById('fingerprint-progress');
+                        if (progressEl) {
+                            progressEl.textContent = progressMessages[progressIndex];
+                        }
+                        progressIndex++;
+                    }
+                }, 800);
+                
                 const response = await fetch('/api/fingerprint', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ target })
                 });
                 
+                clearInterval(progressInterval);
+                
                 const result = await response.json();
                 
                 if (response.ok) {
-                    displayFingerprint(result.fingerprint, result.stress_recommendations);
-                    showAlert('Fingerprint completado', 'success');
+                    displayFingerprint(result.fingerprint, result.stress_recommendations, result.fingerprint_status);
+                    showAlert('Fingerprint completado exitosamente', 'success');
                 } else {
+                    content.innerHTML = `
+                        <div style="text-align: center; padding: 3rem; color: var(--danger);">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                            <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">Error en Fingerprint</div>
+                            <div style="color: var(--text-secondary);">${result.message || 'Error desconocido'}</div>
+                        </div>
+                    `;
                     showAlert(result.message || 'Error en fingerprint', 'error');
                 }
             } catch (error) {
+                content.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; color: var(--danger);">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                        <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">Error de Conexión</div>
+                        <div style="color: var(--text-secondary);">${error.message}</div>
+                    </div>
+                `;
                 showAlert('Error: ' + error.message, 'error');
             }
         }
         
         // Display Fingerprint Results
-        function displayFingerprint(fingerprint, recommendations) {
+        function displayFingerprint(fingerprint, recommendations, status) {
             const container = document.getElementById('fingerprint-results');
             const content = document.getElementById('fingerprint-content');
             
-            let html = '<div class="grid grid-2">';
+            const completedAt = fingerprint?.completed_at ? new Date(fingerprint.completed_at).toLocaleString('es-ES') : new Date().toLocaleString('es-ES');
+            const statusBadge = status === 'completed' 
+                ? '<span style="background: var(--success); color: #000; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600;"><i class="fas fa-check-circle"></i> Completado</span>'
+                : '<span style="background: var(--warning); color: #000; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600;"><i class="fas fa-clock"></i> En Progreso</span>';
+            
+            let html = `
+                <div style="margin-bottom: 1.5rem; display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: var(--bg-tertiary); border-radius: 12px; border: 1px solid var(--border);">
+                    <div>
+                        <div style="font-size: 1.1rem; font-weight: 600; color: var(--primary); margin-bottom: 0.25rem;">
+                            <i class="fas fa-fingerprint"></i> Análisis de Target
+                        </div>
+                        <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                            <i class="fas fa-calendar"></i> ${completedAt}
+                        </div>
+                    </div>
+                    ${statusBadge}
+                </div>
+            `;
+            
+            html += '<div class="grid grid-2" style="gap: 1.5rem;">';
             
             if (fingerprint) {
-                html += '<div><h3 style="margin-bottom: 1.5rem; color: var(--primary); font-size: 1.2rem;">Información del Target</h3>';
-                html += '<table class="table"><tr><th>Propiedad</th><th>Valor</th></tr>';
-                for (const [key, value] of Object.entries(fingerprint)) {
-                    html += `<tr><td>${key}</td><td>${value}</td></tr>`;
+                html += `
+                    <div class="card" style="background: var(--bg-card); border: 1px solid var(--border); padding: 1.5rem; border-radius: 12px;">
+                        <h3 style="margin-bottom: 1.5rem; color: var(--primary); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fas fa-info-circle"></i> Información del Target
+                        </h3>
+                        <div style="display: grid; gap: 1rem;">
+                `;
+                
+                const infoFields = [
+                    { key: 'target', label: 'Target', icon: 'fa-bullseye', color: 'var(--primary)' },
+                    { key: 'domain', label: 'Dominio', icon: 'fa-globe', color: 'var(--secondary)' },
+                    { key: 'ip_address', label: 'IP Address', icon: 'fa-network-wired', color: 'var(--info)' },
+                    { key: 'protocol', label: 'Protocolo', icon: 'fa-shield-alt', color: 'var(--primary)' },
+                    { key: 'port', label: 'Puerto', icon: 'fa-plug', color: 'var(--secondary)' },
+                    { key: 'target_type', label: 'Tipo', icon: 'fa-tag', color: 'var(--info)' },
+                    { key: 'network_type', label: 'Red', icon: 'fa-sitemap', color: 'var(--primary)' },
+                    { key: 'server', label: 'Servidor', icon: 'fa-server', color: 'var(--secondary)' },
+                    { key: 'framework', label: 'Framework', icon: 'fa-code', color: 'var(--info)' },
+                    { key: 'waf', label: 'WAF', icon: 'fa-shield-virus', color: fingerprint.waf ? 'var(--warning)' : 'var(--success)' },
+                    { key: 'cdn', label: 'CDN', icon: 'fa-cloud', color: fingerprint.cdn ? 'var(--info)' : 'var(--text-muted)' }
+                ];
+                
+                for (const field of infoFields) {
+                    const value = fingerprint[field.key];
+                    if (value !== undefined && value !== null && value !== '') {
+                        html += `
+                            <div style="display: flex; align-items: center; gap: 0.75rem; padding: 0.75rem; background: var(--bg-tertiary); border-radius: 8px; border-left: 3px solid ${field.color};">
+                                <i class="fas ${field.icon}" style="color: ${field.color}; font-size: 1.1rem; width: 24px;"></i>
+                                <div style="flex: 1;">
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">${field.label}</div>
+                                    <div style="font-size: 0.95rem; color: var(--text-primary); font-weight: 500;">${Array.isArray(value) ? value.join(', ') : value}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
                 }
-                html += '</table></div>';
+                
+                if (fingerprint.technologies && fingerprint.technologies.length > 0) {
+                    html += `
+                        <div style="margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--border);">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Tecnologías Detectadas</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    `;
+                    fingerprint.technologies.forEach(tech => {
+                        html += `<span style="background: var(--bg-tertiary); color: var(--primary); padding: 0.25rem 0.75rem; border-radius: 6px; font-size: 0.8rem; border: 1px solid var(--border);">${tech}</span>`;
+                    });
+                    html += `</div></div>`;
+                }
+                
+                html += '</div></div>';
             }
             
             if (recommendations) {
-                html += '<div><h3 style="margin-bottom: 1.5rem; color: var(--secondary); font-size: 1.2rem;">Recomendaciones</h3>';
-                html += '<div style="background: var(--bg-tertiary); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border);">';
-                html += `<p style="margin-bottom: 1rem;"><strong>Nivel de Potencia:</strong> <span style="color: var(--primary);">${recommendations.recommended_power_level || 'N/A'}</span></p>`;
-                html += `<p style="margin-bottom: 1rem;"><strong>Conexiones:</strong> <span style="color: var(--primary);">${recommendations.recommended_connections || 'N/A'}</span></p>`;
-                html += `<p><strong>Threads:</strong> <span style="color: var(--primary);">${recommendations.recommended_threads || 'N/A'}</span></p>`;
+                html += `
+                    <div class="card" style="background: var(--bg-card); border: 1px solid var(--border); padding: 1.5rem; border-radius: 12px;">
+                        <h3 style="margin-bottom: 1.5rem; color: var(--secondary); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fas fa-lightbulb"></i> Recomendaciones de Configuración
+                        </h3>
+                        <div style="display: grid; gap: 1rem;">
+                            <div style="padding: 1rem; background: linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(0, 217, 255, 0.1) 100%); border-radius: 8px; border: 1px solid var(--border-glow);">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Nivel de Potencia Recomendado</div>
+                                <div style="font-size: 1.3rem; color: var(--primary); font-weight: 700;">${recommendations.recommended_power_level || 'N/A'}</div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
+                                <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; border: 1px solid var(--border);">
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Conexiones</div>
+                                    <div style="font-size: 1.1rem; color: var(--primary); font-weight: 600;">${recommendations.recommended_connections || 'N/A'}</div>
+                                </div>
+                                <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; border: 1px solid var(--border);">
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Threads</div>
+                                    <div style="font-size: 1.1rem; color: var(--secondary); font-weight: 600;">${recommendations.recommended_threads || 'N/A'}</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Vulnerabilidades si existen
+            if (fingerprint && fingerprint.vulnerabilities && fingerprint.vulnerabilities.length > 0) {
+                html += `
+                    <div class="card" style="grid-column: 1 / -1; background: var(--bg-card); border: 1px solid var(--danger); padding: 1.5rem; border-radius: 12px;">
+                        <h3 style="margin-bottom: 1rem; color: var(--danger); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fas fa-exclamation-triangle"></i> Vulnerabilidades Detectadas (${fingerprint.vulnerabilities.length})
+                        </h3>
+                        <div style="display: grid; gap: 0.75rem;">
+                `;
+                fingerprint.vulnerabilities.slice(0, 5).forEach(vuln => {
+                    const severityColor = vuln.severity === 'HIGH' ? 'var(--danger)' : vuln.severity === 'MEDIUM' ? 'var(--warning)' : 'var(--info)';
+                    html += `
+                        <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; border-left: 3px solid ${severityColor};">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                                <div style="font-weight: 600; color: var(--text-primary);">${vuln.title || 'Vulnerabilidad'}</div>
+                                <span style="background: ${severityColor}; color: #000; padding: 0.25rem 0.5rem; border-radius: 6px; font-size: 0.7rem; font-weight: 600;">${vuln.severity || 'UNKNOWN'}</span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">${vuln.description || 'Sin descripción'}</div>
+                        </div>
+                    `;
+                });
                 html += '</div></div>';
             }
             

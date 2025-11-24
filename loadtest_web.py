@@ -245,7 +245,7 @@ def get_stats():
         "latency_stats": latency_stats,
         "errors": errors_count,
         "error_rate": round(error_rate, 2),
-        "monitoring_active": get_loadtest_var('monitoring_active') if get_loadtest_var('monitoring_active') is not None else monitoring_active,
+        "monitoring_active": get_loadtest_var('monitoring_active') if get_loadtest_var('monitoring_active') is not None else (monitoring_active if 'monitoring_active' in globals() else False),
         "start_time": attack_stats.get("start_time").isoformat() if attack_stats.get("start_time") else None,
         "elapsed_time": elapsed_time,
         "duration": duration,
@@ -296,79 +296,69 @@ def get_reports():
 def get_history():
     """Obtiene el historial de ataques"""
     try:
-        limit = int(request.args.get('limit', 50))
+        limit = int(request.args.get('limit', 100))
         from loadtest import get_history as loadtest_get_history
         history = loadtest_get_history(limit=limit)
         
-        # Formatear para el frontend
-        formatted_history = []
-        for entry in history:
-            formatted_history.append({
-                "id": entry.get("id"),
-                "timestamp": entry.get("timestamp"),
-                "target": entry.get("target"),
-                "domain": entry.get("domain"),
-                "duration": entry.get("duration"),
-                "power_level": entry.get("power_level"),
-                "attack_mode": entry.get("attack_mode"),
-                "requests_sent": entry.get("requests_sent", 0),
-                "responses_received": entry.get("responses_received", 0),
-                "errors": entry.get("errors", 0),
-                "avg_rps": round(entry.get("avg_rps", 0), 2),
-                "peak_rps": round(entry.get("peak_rps", 0), 2),
-                "avg_latency_ms": round(entry.get("avg_latency_ms", 0), 2),
-                "p95_latency_ms": round(entry.get("p95_latency_ms", 0), 2),
-                "success_rate": round(entry.get("success_rate", 0), 2),
-                "has_full_report": "full_report" in entry
-            })
-        
-        return jsonify({
-            "status": "success",
-            "history": formatted_history,
-            "total": len(formatted_history)
-        })
-    except Exception as e:
-        return jsonify({
-            "status": "error",
-            "message": str(e)
-        }), 500
-
-@app.route('/api/history', methods=['GET'])
-def get_history():
-    """Obtiene el historial de ataques"""
-    try:
-        from loadtest import get_history as loadtest_get_history
-        history = loadtest_get_history(limit=100)
-        
         # Formatear historial para el frontend
         formatted_history = []
-        for report in history:
-            metadata = report.get('metadata', {})
-            stats = report.get('statistics', {})
-            performance = report.get('performance', {})
-            
-            formatted_history.append({
-                "id": metadata.get('timestamp', ''),
-                "timestamp": metadata.get('timestamp', ''),
-                "target": metadata.get('target', ''),
-                "domain": metadata.get('domain', ''),
-                "duration": metadata.get('duration', 0),
-                "elapsed_time": metadata.get('elapsed_time', 0),
-                "power_level": metadata.get('power_level', ''),
-                "attack_mode": metadata.get('attack_mode', ''),
-                "requests_sent": stats.get('requests_sent', 0),
-                "responses_received": stats.get('responses_received', 0),
-                "avg_rps": stats.get('avg_rps', 0),
-                "peak_rps": stats.get('peak_rps', 0),
-                "success_rate": stats.get('success_rate', 0),
-                "error_rate": stats.get('error_rate', 0),
-                "avg_latency_ms": performance.get('avg_latency_ms', 0),
-                "p95_latency_ms": performance.get('p95_latency_ms', 0),
-                "p99_latency_ms": performance.get('p99_latency_ms', 0),
-                "http_codes": stats.get('http_codes', {}),
-                "files": report.get('files', {}),
-                "full_report": report  # Reporte completo para detalles
-            })
+        for entry in history:
+            # El historial ahora viene con estructura simplificada
+            # Si tiene full_report, usar esos datos, sino usar los datos directos
+            if "full_report" in entry:
+                report = entry.get("full_report", {})
+                metadata = report.get('metadata', {})
+                stats = report.get('statistics', {})
+                performance = report.get('performance', {})
+                
+                formatted_history.append({
+                    "id": entry.get("id", metadata.get('timestamp', '')),
+                    "timestamp": entry.get("timestamp", metadata.get('timestamp', '')),
+                    "target": entry.get("target", metadata.get('target', '')),
+                    "domain": entry.get("domain", metadata.get('domain', '')),
+                    "duration": entry.get("duration", metadata.get('duration', 0)),
+                    "elapsed_time": metadata.get('elapsed_time', entry.get("duration", 0)),
+                    "power_level": entry.get("power_level", metadata.get('power_level', '')),
+                    "attack_mode": entry.get("attack_mode", metadata.get('attack_mode', '')),
+                    "requests_sent": entry.get("requests_sent", stats.get('requests_sent', 0)),
+                    "responses_received": entry.get("responses_received", stats.get('responses_received', 0)),
+                    "errors": entry.get("errors", stats.get('errors', 0)),
+                    "avg_rps": round(entry.get("avg_rps", stats.get('avg_rps', 0)), 2),
+                    "peak_rps": round(entry.get("peak_rps", stats.get('peak_rps', 0)), 2),
+                    "success_rate": round(entry.get("success_rate", stats.get('success_rate', 0)), 2),
+                    "error_rate": round(stats.get('error_rate', 0), 2),
+                    "avg_latency_ms": round(entry.get("avg_latency_ms", performance.get('avg_latency_ms', 0)), 2),
+                    "p95_latency_ms": round(entry.get("p95_latency_ms", performance.get('p95_latency_ms', 0)), 2),
+                    "p99_latency_ms": round(performance.get('p99_latency_ms', 0), 2),
+                    "http_codes": stats.get('http_codes', {}),
+                    "files": report.get('files', {}),
+                    "has_full_report": True
+                })
+            else:
+                # Formato simplificado del historial
+                formatted_history.append({
+                    "id": entry.get("id", ''),
+                    "timestamp": entry.get("timestamp", ''),
+                    "target": entry.get("target", ''),
+                    "domain": entry.get("domain", ''),
+                    "duration": entry.get("duration", 0),
+                    "elapsed_time": entry.get("duration", 0),
+                    "power_level": entry.get("power_level", ''),
+                    "attack_mode": entry.get("attack_mode", ''),
+                    "requests_sent": entry.get("requests_sent", 0),
+                    "responses_received": entry.get("responses_received", 0),
+                    "errors": entry.get("errors", 0),
+                    "avg_rps": round(entry.get("avg_rps", 0), 2),
+                    "peak_rps": round(entry.get("peak_rps", 0), 2),
+                    "success_rate": round(entry.get("success_rate", 0), 2),
+                    "error_rate": 0,
+                    "avg_latency_ms": round(entry.get("avg_latency_ms", 0), 2),
+                    "p95_latency_ms": round(entry.get("p95_latency_ms", 0), 2),
+                    "p99_latency_ms": 0,
+                    "http_codes": {},
+                    "files": {},
+                    "has_full_report": False
+                })
         
         return jsonify({
             "status": "success",
@@ -385,21 +375,26 @@ def get_history():
 def get_history_report(report_id):
     """Obtiene un reporte específico del historial"""
     try:
-        from loadtest import get_history as loadtest_get_history
-        history = loadtest_get_history(limit=1000)
+        from loadtest import HISTORY_DIR
+        import json
         
-        # Buscar reporte por timestamp
-        for report in history:
-            if report.get('metadata', {}).get('timestamp') == report_id:
-                return jsonify({
-                    "status": "success",
-                    "report": report
-                })
+        history_file = HISTORY_DIR / f"history_{report_id}.json"
+        if not history_file.exists():
+            return jsonify({
+                "status": "error",
+                "message": "Reporte no encontrado"
+            }), 404
+        
+        with open(history_file, 'r', encoding='utf-8') as f:
+            entry = json.load(f)
+        
+        # Retornar el reporte completo si existe
+        report = entry.get("full_report", entry)
         
         return jsonify({
-            "status": "error",
-            "message": "Reporte no encontrado"
-        }), 404
+            "status": "success",
+            "report": report
+        })
     except Exception as e:
         return jsonify({
             "status": "error",
@@ -507,6 +502,10 @@ def export_report_to_pdf(filename):
             ['Peak RPS', f"{stats.get('peak_rps', 0):.2f}"],
             ['Success Rate', f"{stats.get('success_rate', 0):.2f}%"],
             ['Error Rate', f"{stats.get('error_rate', 0):.2f}%"],
+            ['Response Rate', f"{stats.get('response_rate', 0):.2f}%"],
+            ['Throughput', f"{stats.get('throughput_mbps', 0):.2f} Mbps"],
+            ['Bytes Sent', format(stats.get('bytes_sent', 0), ',')],
+            ['Bytes Received', format(stats.get('bytes_received', 0), ',')],
         ]
         
         stats_table = Table(stats_data, colWidths=[3*inch, 3*inch])
@@ -523,18 +522,43 @@ def export_report_to_pdf(filename):
         story.append(stats_table)
         story.append(Spacer(1, 0.3*inch))
         
-        # Performance
+        # Performance Metrics - Mejorado con más información
         story.append(Paragraph("Performance Metrics", heading_style))
         performance = report.get('performance', {})
         perf_data = [
-            ['Metric', 'Value (ms)'],
-            ['Average Latency', f"{performance.get('avg_latency_ms', 0):.2f}"],
-            ['Min Latency', f"{performance.get('min_latency_ms', 0):.2f}"],
-            ['Max Latency', f"{performance.get('max_latency_ms', 0):.2f}"],
-            ['P50 Latency', f"{performance.get('p50_latency_ms', 0):.2f}"],
-            ['P95 Latency', f"{performance.get('p95_latency_ms', 0):.2f}"],
-            ['P99 Latency', f"{performance.get('p99_latency_ms', 0):.2f}"],
+            ['Metric', 'Value'],
+            ['Average Latency', f"{performance.get('avg_latency_ms', 0):.2f} ms"],
+            ['Min Latency', f"{performance.get('min_latency_ms', 0):.2f} ms"],
+            ['Max Latency', f"{performance.get('max_latency_ms', 0):.2f} ms"],
+            ['P50 Latency', f"{performance.get('p50_latency_ms', 0):.2f} ms"],
+            ['P75 Latency', f"{performance.get('p75_latency_ms', 0):.2f} ms"],
+            ['P90 Latency', f"{performance.get('p90_latency_ms', 0):.2f} ms"],
+            ['P95 Latency', f"{performance.get('p95_latency_ms', 0):.2f} ms"],
+            ['P99 Latency', f"{performance.get('p99_latency_ms', 0):.2f} ms"],
+            ['Std Deviation', f"{performance.get('std_dev_ms', 0):.2f} ms"],
         ]
+        
+        # Agregar información de tiempos de respuesta si está disponible
+        response_times = performance.get('response_times', {})
+        if response_times:
+            story.append(Spacer(1, 0.2*inch))
+            response_data = [
+                ['Response Time Metric', 'Value'],
+                ['First Response', f"{response_times.get('first_response_ms', 0):.2f} ms"],
+                ['Last Response', f"{response_times.get('last_response_ms', 0):.2f} ms"],
+            ]
+            response_table = Table(response_data, colWidths=[3*inch, 3*inch])
+            response_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#00d9ff')),
+                ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, 0), (-1, -1), 10),
+                ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                ('TOPPADDING', (0, 0), (-1, -1), 8),
+                ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#2a2a3e'))
+            ]))
+            story.append(response_table)
         
         perf_table = Table(perf_data, colWidths=[3*inch, 3*inch])
         perf_table.setStyle(TableStyle([
@@ -599,9 +623,35 @@ def start_attack():
         try:
             # Importar y ejecutar main del módulo loadtest
             import loadtest
-            # Activar modo web panel para evitar interacciones de consola
+            
+            # Sincronizar estado antes de iniciar
             loadtest.WEB_PANEL_MODE = True
             loadtest.DEBUG_MODE = True  # Activar debug para logging completo
+            loadtest.monitoring_active = True  # Asegurar que monitoring_active esté activo
+            
+            # Sincronizar variables globales
+            loadtest.TARGET = TARGET
+            loadtest.DURATION = DURATION
+            loadtest.POWER_LEVEL = POWER_LEVEL
+            loadtest.ATTACK_MODE = ATTACK_MODE
+            loadtest.MAX_CONNECTIONS = MAX_CONNECTIONS
+            loadtest.MAX_THREADS = MAX_THREADS
+            loadtest.WAF_BYPASS = WAF_BYPASS
+            loadtest.USE_LARGE_PAYLOADS = USE_LARGE_PAYLOADS
+            loadtest.STEALTH_MODE = STEALTH_MODE
+            loadtest.AUTO_THROTTLE = AUTO_THROTTLE
+            loadtest.MEMORY_MONITORING = MEMORY_MONITORING
+            
+            # Resetear estadísticas de ataque
+            loadtest.attack_stats["start_time"] = datetime.now()
+            loadtest.attack_stats["end_time"] = None
+            loadtest.attack_stats["requests_sent"] = 0
+            loadtest.attack_stats["responses_received"] = 0
+            loadtest.attack_stats["http_codes"] = defaultdict(int)
+            loadtest.attack_stats["latencies"] = []
+            loadtest.attack_stats["errors"] = []
+            
+            loadtest.log_message("INFO", "🚀 [WEB] Iniciando ataque desde panel web", context="start_attack", force_console=True)
             
             # Configurar sys.argv para simular línea de comandos
             original_argv = sys.argv
@@ -620,6 +670,15 @@ def start_attack():
             
             loadtest.main()
             sys.argv = original_argv
+            
+            # Generar reporte automáticamente al finalizar
+            try:
+                if loadtest.attack_stats.get("requests_sent", 0) > 0:
+                    loadtest.generate_report()
+                    loadtest.log_message("INFO", "📄 [WEB] Reporte generado automáticamente", context="start_attack", force_console=True)
+            except Exception as e:
+                loadtest.log_message("ERROR", f"Error generando reporte: {e}", context="start_attack")
+                
         except Exception as e:
             import traceback
             error_msg = f"Error ejecutando ataque: {e}\n{traceback.format_exc()}"
@@ -627,7 +686,7 @@ def start_attack():
             # Loggear el error
             try:
                 import loadtest
-                loadtest.log_message("ERROR", error_msg, force_console=True)
+                loadtest.log_message("ERROR", f"❌ [WEB] {error_msg}", context="start_attack", force_console=True)
             except:
                 pass
     
@@ -638,8 +697,10 @@ def start_attack():
 
 @app.route('/api/stop', methods=['POST'])
 def stop_attack():
-    """Detiene el ataque actual y limpia recursos"""
+    """Detiene el ataque actual y limpia recursos con mejor sincronización"""
     global monitoring_active
+    
+    # Sincronizar estado en ambos módulos
     monitoring_active = False
     loadtest.monitoring_active = False
     
@@ -647,25 +708,44 @@ def stop_attack():
     try:
         if hasattr(loadtest, 'ConnectionManager'):
             loadtest.ConnectionManager.clear_sessions()
-    except:
-        pass
+            log_message("INFO", "🔌 [STOP] Sesiones de conexión limpiadas", context="stop_attack")
+    except Exception as e:
+        log_message("ERROR", f"Error limpiando sesiones: {e}", context="stop_attack")
     
-    # Terminar procesos
+    # Usar función mejorada de cleanup
     try:
-        for process in loadtest.running_processes[:]:
-            try:
-                process.terminate()
-                process.wait(timeout=2)
-            except:
+        if hasattr(loadtest, 'cleanup_all_processes'):
+            loadtest.cleanup_all_processes(force=False)
+            log_message("INFO", "🧹 [STOP] Procesos limpiados usando cleanup mejorado", context="stop_attack")
+        else:
+            # Fallback a método básico
+            for process in loadtest.running_processes[:]:
                 try:
-                    process.kill()
+                    process.terminate()
+                    process.wait(timeout=2)
                 except:
-                    pass
-        loadtest.running_processes.clear()
+                    try:
+                        process.kill()
+                    except:
+                        pass
+            loadtest.running_processes.clear()
+            log_message("INFO", "🧹 [STOP] Procesos terminados", context="stop_attack")
+    except Exception as e:
+        log_message("ERROR", f"Error limpiando procesos: {e}", context="stop_attack")
+    
+    # Resetear estadísticas de ataque
+    try:
+        loadtest.attack_stats["start_time"] = None
+        loadtest.attack_stats["end_time"] = datetime.now()
+        log_message("INFO", "📊 [STOP] Estadísticas de ataque reseteadas", context="stop_attack")
     except:
         pass
     
-    return jsonify({"status": "success", "message": "Ataque detenido y recursos liberados"})
+    return jsonify({
+        "status": "success", 
+        "message": "Ataque detenido y recursos liberados",
+        "timestamp": datetime.now().isoformat()
+    })
 
 @app.route('/api/fingerprint', methods=['POST'])
 def run_fingerprint():
@@ -714,7 +794,10 @@ def run_fingerprint():
             }), 400
         
         # Si la validación fue exitosa, ejecutar fingerprint
+        # Asegurar que está en modo web panel
+        loadtest.WEB_PANEL_MODE = True
         print(f"DEBUG: Ejecutando fingerprint_target() para {loadtest.TARGET}")
+        
         fingerprint = fingerprint_target()
         
         # Generar recomendaciones automáticas de stress
@@ -723,7 +806,9 @@ def run_fingerprint():
         return jsonify({
             "status": "success", 
             "fingerprint": fingerprint,
-            "stress_recommendations": stress_recommendations
+            "stress_recommendations": stress_recommendations,
+            "fingerprint_status": fingerprint.get("status", "completed"),
+            "completed_at": fingerprint.get("completed_at", datetime.now().isoformat())
         })
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -880,10 +965,71 @@ def get_system_info():
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
-    """Health check endpoint"""
-    return jsonify({
-        "status": "healthy",
-        "version": VERSION,
+    """Health check endpoint mejorado con verificación de componentes críticos"""
+    try:
+        health_status = {
+            "status": "healthy",
+            "version": VERSION,
+            "timestamp": datetime.now().isoformat(),
+            "components": {}
+        }
+        
+        # Verificar componentes críticos
+        try:
+            # Verificar que loadtest está importado correctamente
+            health_status["components"]["loadtest_module"] = "ok" if hasattr(loadtest, 'VERSION') else "error"
+            
+            # Verificar directorios
+            history_dir = get_loadtest_var('HISTORY_DIR')
+            health_status["components"]["directories"] = {
+                "output": "ok" if OUTPUT_DIR and OUTPUT_DIR.exists() else "error",
+                "logs": "ok" if LOGS_DIR and LOGS_DIR.exists() else "error",
+                "reports": "ok" if REPORTS_DIR and REPORTS_DIR.exists() else "error",
+                "history": "ok" if history_dir and history_dir.exists() else "error"
+            }
+            
+            # Verificar estado de ataque
+            monitoring = get_loadtest_var('monitoring_active')
+            running_procs = get_loadtest_var('running_processes') or []
+            health_status["components"]["attack_status"] = {
+                "monitoring_active": monitoring if monitoring is not None else False,
+                "has_active_processes": len(running_procs) > 0,
+                "process_count": len(running_procs)
+            }
+            
+            # Verificar recursos del sistema
+            try:
+                import psutil
+                memory = psutil.virtual_memory()
+                cpu = psutil.cpu_percent(interval=0.1)
+                health_status["components"]["system"] = {
+                    "cpu_percent": cpu,
+                    "memory_percent": memory.percent,
+                    "memory_available_gb": round(memory.available / (1024**3), 2),
+                    "status": "ok" if memory.percent < 90 and cpu < 95 else "warning"
+                }
+            except:
+                health_status["components"]["system"] = {"status": "unavailable"}
+            
+            # Determinar estado general
+            all_ok = (
+                health_status["components"].get("loadtest_module") == "ok" and
+                all(v == "ok" for v in health_status["components"].get("directories", {}).values())
+            )
+            
+            if not all_ok:
+                health_status["status"] = "degraded"
+                
+        except Exception as e:
+            health_status["status"] = "error"
+            health_status["error"] = str(e)
+        
+        return jsonify(health_status)
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "version": VERSION,
         "timestamp": datetime.now().isoformat()
     })
 
