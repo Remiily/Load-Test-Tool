@@ -8295,8 +8295,10 @@ Ejemplos:
         log_message("INFO", "Iniciando stress test automáticamente (modo web panel)")
     
     # Verificación de autorización antes de iniciar ataque (oculta)
-    if not _validate_execution():
-        return
+    # No ejecutar validación en modo web panel - el panel web ya maneja la autorización
+    if not WEB_PANEL_MODE:
+        if not _validate_execution():
+            return
     
     # Inicializar stats y activar monitoreo
     attack_stats["start_time"] = datetime.now()
