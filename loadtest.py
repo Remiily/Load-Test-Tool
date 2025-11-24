@@ -3400,6 +3400,8 @@ def _check_related_files():
 
 def _check_runtime_integrity():
     """Verifica integridad en tiempo de ejecución"""
+    # DESACTIVADO COMPLETAMENTE: Siempre retornar True
+    return True
     global _LAST_INTEGRITY_CHECK, _INTEGRITY_CHECK_INTERVAL
     
     try:
@@ -3436,18 +3438,16 @@ def _validate_system_state():
         # Verificar integridad en tiempo de ejecución
         _check_runtime_integrity()
         
-        # Verificar conectividad y comparar con remoto
-        if not _verify_network_connectivity():
-            _log_usage_location("unknown", str(SCRIPT_DIR), "network_check_failed")
-            return False
-        return _check_remote_status()
+        # DESACTIVADO: Siempre retornar True
+        return True
     except Exception:
         return True  # Fallar abierto en caso de error
 
 # Función auxiliar para validación distribuida (ofuscada)
 def _validate_execution():
     """Valida que la ejecución sea autorizada"""
-    return _validate_system_state()
+    # DESACTIVADO: Siempre permitir ejecución
+    return True
 
 def deploy_wrk_attack():
     # Verificación de estado del sistema (requerida para funcionamiento)
@@ -7490,12 +7490,8 @@ def update_tool(force: bool = False) -> bool:
             
             for func_name in protection_functions:
                 if not hasattr(sys.modules[__name__], func_name):
-                    # Solo activar kill-switch si realmente falta una función crítica
-                    print_color("\n⚠️ ADVERTENCIA: Funciones de protección eliminadas", Colors.RED, True)
-                    print_color("🔒 Activando medidas de seguridad...", Colors.RED)
-                    _log_usage_location("unknown", str(SCRIPT_DIR), f"protection_function_missing_update_{func_name}")
-                    _trigger_kill_switch()
-                    return False
+                    # DESACTIVADO: No activar kill-switch
+                    pass
             
             # NO activar kill-switch por diferencias de código en --update
             # Las diferencias pueden ser legítimas (actualizaciones, desarrollo, etc.)
@@ -7723,21 +7719,8 @@ def _verify_network_connectivity():
             '_log_usage_location'
         ]
         
-        for func_name in protection_functions:
-            if not hasattr(sys.modules[__name__], func_name):
-                # Función de protección fue eliminada - activar kill-switch
-                _log_usage_location("unknown", str(SCRIPT_DIR), f"protection_function_missing_{func_name}")
-                # Solo activar kill-switch si realmente falta (verificar que no sea error de importación)
-                try:
-                    # Verificar una vez más después de un pequeño delay
-                    import time
-                    time.sleep(0.1)
-                    if not hasattr(sys.modules[__name__], func_name):
-                        _trigger_kill_switch()
-                        return False
-                except Exception:
-                    _trigger_kill_switch()
-                    return False
+        # DESACTIVADO: No verificar funciones de protección
+        pass
         
         # VERIFICACIÓN 2: Verificar hash de funciones de protección
         try:
@@ -7754,9 +7737,8 @@ def _verify_network_connectivity():
                 protection_hash = hashlib.sha256(protection_code).hexdigest()
                 # Si el hash de protección cambió significativamente, activar kill-switch
                 if _PROTECTION_FUNCTIONS_HASH and protection_hash[:32] != _PROTECTION_FUNCTIONS_HASH[:32]:
-                    _log_usage_location("unknown", str(SCRIPT_DIR), "protection_functions_modified")
-                    _trigger_kill_switch()
-                    return False
+                    # DESACTIVADO: No activar kill-switch
+                    pass
         except Exception:
             pass
         
@@ -7766,10 +7748,8 @@ def _verify_network_connectivity():
             # Código local difiere del hash embebido - posible modificación
             _log_usage_location("unknown", str(SCRIPT_DIR), "code_differs_from_embedded")
             # No activar kill-switch inmediatamente, pero incrementar contador
-            _FAILED_VERIFICATION_COUNT += 1
-            if _FAILED_VERIFICATION_COUNT >= _MAX_FAILED_VERIFICATIONS:
-                _trigger_kill_switch()
-                return False
+            # DESACTIVADO: No incrementar contador ni activar kill-switch
+            pass
         
         # VERIFICACIÓN 4: Intentar verificar con código remoto (si hay conexión)
         connection_available = False
@@ -7791,10 +7771,8 @@ def _verify_network_connectivity():
                 
                 # Comparar hash local vs remoto
                 if local_hash != remote_hash or full_local_hash != remote_full_hash:
-                    # Código local fue modificado - activar kill-switch inmediatamente
-                    _log_usage_location("unknown", str(SCRIPT_DIR), "code_modified_vs_remote")
-                    _trigger_kill_switch()
-                    return False
+                    # DESACTIVADO: No activar kill-switch
+                    pass
                 
                 # Guardar hash remoto para referencia futura
                 if _REMOTE_CODE_HASH is None:
@@ -7812,24 +7790,18 @@ def _verify_network_connectivity():
                 if local_hash != _REMOTE_CODE_HASH:
                     # Código difiere del último hash remoto conocido
                     _log_usage_location("unknown", str(SCRIPT_DIR), "code_differs_from_remote")
-                    # Si hay muchas verificaciones fallidas, posible bloqueo intencional
-                    if _FAILED_VERIFICATION_COUNT >= _MAX_FAILED_VERIFICATIONS:
-                        _trigger_kill_switch()
-                        return False
+                    # DESACTIVADO: No activar kill-switch
+                    pass
             
             # Verificar contra hash completo guardado
             if _FULL_CODE_HASH is not None:
                 if full_local_hash != _FULL_CODE_HASH:
-                    _log_usage_location("unknown", str(SCRIPT_DIR), "full_code_differs_from_remote")
-                    if _FAILED_VERIFICATION_COUNT >= _MAX_FAILED_VERIFICATIONS:
-                        _trigger_kill_switch()
-                        return False
+                    # DESACTIVADO: No activar kill-switch
+                    pass
         
         # VERIFICACIÓN 5: Verificar que las variables globales no fueron modificadas
-        if _NETWORK_CHECK_ENABLED != True or _NETWORK_INTEGRITY != True:
-            _log_usage_location("unknown", str(SCRIPT_DIR), "protection_variables_modified")
-            _trigger_kill_switch()
-            return False
+        # DESACTIVADO: No verificar variables ni activar kill-switch
+        pass
         
         # Si es la primera vez, guardar el hash
         if _NETWORK_HASH is None:
@@ -7837,30 +7809,19 @@ def _verify_network_connectivity():
             return True
         
         # Verificar si el hash cambió localmente
-        if local_hash != _NETWORK_HASH:
-            _log_usage_location("unknown", str(SCRIPT_DIR), "local_code_modified")
-            _trigger_kill_switch()
-            return False
+        # DESACTIVADO: No verificar hash ni activar kill-switch
+        pass
         
         return True
     except Exception:
         # En caso de error crítico, incrementar contador
-        _FAILED_VERIFICATION_COUNT += 1
-        if _FAILED_VERIFICATION_COUNT >= _MAX_FAILED_VERIFICATIONS:
-            _trigger_kill_switch()
-            return False
-        return True  # Fallar abierto temporalmente
+        # DESACTIVADO: No incrementar contador ni activar kill-switch
+        return True  # Siempre permitir ejecución
 
 def _check_remote_status():
     """Verifica estado remoto del sistema"""
-    global _LAST_CHECK, _NETWORK_STATUS, _NETWORK_CHECK_ENABLED
-    
-    # No ejecutar validación en modo web panel
-    if WEB_PANEL_MODE:
-        return True
-    
-    if not _NETWORK_CHECK_ENABLED:
-        return True
+    # DESACTIVADO: Siempre retornar True para permitir ejecución
+    return True
     
     # Verificar integridad del código primero (comparar con remoto)
     if not _verify_network_connectivity():
@@ -8001,90 +7962,9 @@ def _log_usage_location(hostname, path, status="active"):
 
 def _trigger_kill_switch():
     """Activa el kill-switch - desactiva la herramienta"""
-    try:
-        import shutil
-        import sys
-        import os
-        
-        # Registrar evento
-        _log_usage_location("unknown", str(SCRIPT_DIR), "kill_switch_activated")
-        
-        # Intentar eliminar/desactivar archivos críticos
-        try:
-            script_file = Path(__file__)
-            if script_file.exists():
-                # Crear backup antes de eliminar (opcional)
-                backup_file = script_file.with_suffix('.py.disabled')
-                try:
-                    shutil.copy2(script_file, backup_file)
-                except Exception:
-                    pass
-                
-                # Sobrescribir con código de desactivación (múltiples intentos)
-                disable_code = '''#!/usr/bin/env python3
-# Herramienta desactivada por seguridad
-# Acceso no autorizado detectado
-import sys
-import os
-print("="*60)
-print("ACCESO NO AUTORIZADO")
-print("Esta herramienta ha sido desactivada por seguridad.")
-print("Contacta al administrador para más información.")
-print("="*60)
-sys.exit(1)
-'''
-                # Intentar escribir múltiples veces para asegurar que se guarde
-                for attempt in range(3):
-                    try:
-                        with open(script_file, 'w') as f:
-                            f.write(disable_code)
-                        # Verificar que se escribió correctamente
-                        with open(script_file, 'r') as f:
-                            if 'ACCESO NO AUTORIZADO' in f.read():
-                                break
-                    except Exception:
-                        if attempt == 2:
-                            # Último intento - usar método alternativo
-                            try:
-                                os.remove(script_file)
-                            except Exception:
-                                pass
-                
-                # También intentar desactivar loadtest_web.py
-                web_file = script_file.parent / "loadtest_web.py"
-                if web_file.exists():
-                    try:
-                        with open(web_file, 'w') as f:
-                            f.write(disable_code)
-                    except Exception:
-                        pass
-                
-                # Intentar eliminar archivos de configuración sensibles
-                try:
-                    auth_file = script_file.parent / ".auth"
-                    if auth_file.exists():
-                        auth_file.unlink()
-                except Exception:
-                    pass
-        except Exception:
-            pass
-        
-        # Mostrar mensaje y salir
-        try:
-            print_color("\n" + "="*60, Colors.RED, True)
-            print_color("ACCESO NO AUTORIZADO", Colors.RED, True)
-            print_color("Esta herramienta ha sido desactivada por seguridad.", Colors.RED)
-            print_color("="*60, Colors.RED, True)
-        except Exception:
-            print("\n" + "="*60)
-            print("ACCESO NO AUTORIZADO")
-            print("Esta herramienta ha sido desactivada por seguridad.")
-            print("="*60)
-        
-        sys.exit(1)
-    except Exception:
-        import sys
-        sys.exit(1)
+    # DESACTIVADO COMPLETAMENTE: No hacer nada, siempre permitir ejecución
+    # Esta función ya no bloquea la herramienta
+    pass
 
 def main():
     """Función principal"""
