@@ -7839,10 +7839,6 @@ def main():
     global MAX_CONNECTIONS, MAX_THREADS, USE_LARGE_PAYLOADS, AUTO_THROTTLE, MEMORY_MONITORING
     global WAF_BYPASS, STEALTH_MODE
     
-    # Verificación de estado del sistema (integrada en flujo normal)
-    if not _validate_execution():
-        return
-    
     parser = argparse.ArgumentParser(
         description="LoadTest Enterprise - Enterprise Web Load Testing & Performance Analysis Suite",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -7916,9 +7912,14 @@ Ejemplos:
         show_tool_status()
         sys.exit(0)
     
+    # Mostrar herramientas (no requiere target ni validación)
+    if args.show_tools:
+        show_tool_status()
+        sys.exit(0)
+    
     # Validar que se proporcione target si no se usa --web o --show-params
     if not args.target:
-        parser.error("El argumento -t/--target es requerido (excepto cuando se usa --web, --show-params, --check-update, --update o --install-tools)")
+        parser.error("El argumento -t/--target es requerido (excepto cuando se usa --web, --show-params, --show-tools, --check-update, --update o --install-tools)")
     
     # Configurar variables globales
     TARGET = args.target
@@ -7976,11 +7977,6 @@ Ejemplos:
     
     if not validate_permissions():
         log_message("WARN", "Advertencia de permisos")
-    
-    # Mostrar herramientas
-    if args.show_tools:
-        show_tool_status()
-        sys.exit(0)
     
     # Verificar recursos
     resources_ok, resources = check_system_resources()
