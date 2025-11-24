@@ -2478,13 +2478,20 @@ def check_package_manager(manager: str) -> bool:
     except (subprocess.TimeoutExpired, FileNotFoundError, Exception):
         return False
 
-def auto_install_all_tools():
-    """Instala todas las herramientas automáticamente"""
+def auto_install_all_tools(debug=False):
+    """Instala todas las herramientas automáticamente
+    
+    Args:
+        debug: Si es True, muestra información detallada de errores y comandos ejecutados
+    """
     import platform
     system = platform.system()
     
     print_color("\n🔧 Instalando todas las herramientas automáticamente...", Colors.CYAN, True)
     print_color(f"📦 Sistema detectado: {system}", Colors.YELLOW, True)
+    if debug:
+        print_color("🐛 Modo DEBUG activado - se mostrará información detallada de la instalación", Colors.CYAN, True)
+        print()
     
     # Advertencia sobre permisos
     if system != "Windows" and os.geteuid() != 0:
@@ -2531,8 +2538,12 @@ def auto_install_all_tools():
     available_managers = [k for k, v in package_managers.items() if v]
     if available_managers:
         print_color(f"✓ Gestores disponibles: {', '.join(available_managers)}", Colors.GREEN)
+        if debug:
+            print_color(f"🔍 [DEBUG] Gestores verificados: {dict(package_managers)}", Colors.CYAN)
     else:
         print_color("⚠ No se detectaron gestores de paquetes", Colors.RED, True)
+        if debug:
+            print_color(f"🔍 [DEBUG] Gestores verificados: {dict(package_managers)}", Colors.CYAN)
         print_color("💡 Instala al menos uno: chocolatey (Windows), apt/yum (Linux), o brew (macOS)", Colors.YELLOW)
         return
     
@@ -2566,6 +2577,8 @@ def auto_install_all_tools():
         
         for dep_cmd in deps_commands:
             try:
+                if debug:
+                    print_color(f"  🔍 [DEBUG] Ejecutando: {dep_cmd}", Colors.CYAN)
                 result = subprocess.run(
                     dep_cmd,
                     shell=True,
@@ -2575,9 +2588,19 @@ def auto_install_all_tools():
                     stderr=subprocess.PIPE,
                     text=True
                 )
+                if debug:
+                    print_color(f"  🔍 [DEBUG] Return code: {result.returncode}", Colors.CYAN)
+                    if result.stdout:
+                        print_color(f"  🔍 [DEBUG] STDOUT: {result.stdout[:300]}", Colors.CYAN)
+                    if result.stderr:
+                        print_color(f"  🔍 [DEBUG] STDERR: {result.stderr[:300]}", Colors.YELLOW)
                 if result.returncode == 0:
                     basic_deps_installed = True
-            except Exception:
+            except Exception as e:
+                if debug:
+                    print_color(f"  🔍 [DEBUG] Excepción: {str(e)}", Colors.RED)
+                    import traceback
+                    print_color(f"  🔍 [DEBUG] Traceback: {traceback.format_exc()}", Colors.RED)
                 pass
         
         if basic_deps_installed:
@@ -2720,6 +2743,8 @@ def auto_install_all_tools():
                         break
             
             if not manager_available:
+                if debug:
+                    print_color(f"    🔍 [DEBUG] Gestor '{manager}' no disponible, saltando comando: {command[:80]}", Colors.YELLOW)
                 continue
             
             try:
@@ -2778,22 +2803,42 @@ def auto_install_all_tools():
                         env=env
                     )
                 except subprocess.TimeoutExpired:
-                    log_message("ERROR", f"{tool} - timeout al ejecutar: {command[:100]}")
+                    error_msg = f"{tool} - timeout al ejecutar: {command[:100]}"
+                    log_message("ERROR", error_msg)
+                    if debug:
+                        print_color(f"    🔍 [DEBUG] {error_msg}", Colors.RED)
                     continue
                 except Exception as e:
-                    log_message("ERROR", f"{tool} - error ejecutando comando: {str(e)}")
+                    error_msg = f"{tool} - error ejecutando comando: {str(e)}"
+                    log_message("ERROR", error_msg)
+                    if debug:
+                        print_color(f"    🔍 [DEBUG] {error_msg}", Colors.RED)
+                        import traceback
+                        print_color(f"    🔍 [DEBUG] Traceback:\n{traceback.format_exc()}", Colors.RED)
                     continue
                 
                 # Log del resultado para debugging
-                if result.returncode != 0 and result.stderr:
-                    error_msg = result.stderr[:200]  # Limitar longitud
-                    log_message("DEBUG", f"{tool} - comando falló: {command[:50]}... Error: {error_msg}")
+                if debug or result.returncode != 0:
+                    if debug:
+                        print_color(f"    🔍 [DEBUG] Comando: {command}", Colors.CYAN)
+                        print_color(f"    🔍 [DEBUG] Return code: {result.returncode}", Colors.CYAN)
+                        if result.stdout:
+                            stdout_preview = result.stdout[:500] if len(result.stdout) > 500 else result.stdout
+                            print_color(f"    🔍 [DEBUG] STDOUT:\n{stdout_preview}", Colors.CYAN)
+                        if result.stderr:
+                            stderr_preview = result.stderr[:500] if len(result.stderr) > 500 else result.stderr
+                            print_color(f"    🔍 [DEBUG] STDERR:\n{stderr_preview}", Colors.YELLOW)
+                    elif result.returncode != 0 and result.stderr:
+                        error_msg = result.stderr[:200]  # Limitar longitud
+                        log_message("DEBUG", f"{tool} - comando falló: {command[:50]}... Error: {error_msg}")
                 
                 if result.returncode == 0:
                     # Dar un momento para que el sistema actualice PATH
                     time.sleep(2)
                     
                     # Verificar si realmente se instaló
+                    if debug:
+                        print_color(f"    🔍 [DEBUG] Verificando si {tool} está disponible...", Colors.CYAN)
                     if check_command_exists(tool):
                         print_color(f"  ✓ {tool} instalado correctamente", Colors.GREEN)
                         log_message("INFO", f"{tool} instalado correctamente con: {command}")
@@ -2802,7 +2847,11 @@ def auto_install_all_tools():
                         break
                     else:
                         # Puede que se instaló pero el comando tiene otro nombre o necesita reiniciar
-                        log_message("WARN", f"{tool} - comando ejecutado exitosamente pero herramienta no detectada inmediatamente")
+                        warn_msg = f"{tool} - comando ejecutado exitosamente pero herramienta no detectada inmediatamente"
+                        log_message("WARN", warn_msg)
+                        if debug:
+                            print_color(f"    🔍 [DEBUG] {warn_msg}", Colors.YELLOW)
+                            print_color(f"    🔍 [DEBUG] Intentando verificar nuevamente después de 3 segundos...", Colors.CYAN)
                         # Intentar verificar de nuevo después de un momento
                         time.sleep(3)
                         if check_command_exists(tool):
@@ -2811,13 +2860,27 @@ def auto_install_all_tools():
                             success = True
                             installed_count += 1
                             break
+                        elif debug:
+                            print_color(f"    🔍 [DEBUG] {tool} aún no detectado después de verificación tardía", Colors.YELLOW)
             except subprocess.TimeoutExpired:
-                log_message("ERROR", f"{tool} - timeout al instalar con: {command}")
+                error_msg = f"{tool} - timeout al instalar con: {command}"
+                log_message("ERROR", error_msg)
+                if debug:
+                    print_color(f"    🔍 [DEBUG] {error_msg}", Colors.RED)
             except Exception as e:
-                log_message("ERROR", f"{tool} - error con {command}: {str(e)}")
+                error_msg = f"{tool} - error con {command}: {str(e)}"
+                log_message("ERROR", error_msg)
+                if debug:
+                    print_color(f"    🔍 [DEBUG] {error_msg}", Colors.RED)
+                    import traceback
+                    print_color(f"    🔍 [DEBUG] Traceback:\n{traceback.format_exc()}", Colors.RED)
         
         if not success:
             print_color(f"  ✗ {tool} - No se pudo instalar automáticamente", Colors.RED)
+            if debug:
+                print_color(f"    🔍 [DEBUG] Comandos intentados:", Colors.CYAN)
+                for idx, cmd in enumerate(install_commands[tool], 1):
+                    print_color(f"    🔍 [DEBUG]   {idx}. {cmd}", Colors.CYAN)
             print_color(f"    💡 Intenta instalarlo manualmente", Colors.YELLOW)
             failed_count += 1
     
@@ -2833,9 +2896,9 @@ def auto_install_all_tools():
         print_color("\n💡 Algunas herramientas pueden requerir instalación manual", Colors.YELLOW, True)
         print_color("   Revisa la documentación de cada herramienta para más información", Colors.YELLOW)
 
-def auto_install_core_tools():
+def auto_install_core_tools(debug=False):
     """Alias para auto_install_all_tools - mantiene compatibilidad"""
-    auto_install_all_tools()
+    auto_install_all_tools(debug=debug)
 
 # ============================================================================
 # DESPLIEGUE DE ATAQUES
@@ -7911,7 +7974,7 @@ Ejemplos:
     
     # Instalar herramientas (no requiere target)
     if args.install_tools:
-        auto_install_core_tools()
+        auto_install_core_tools(debug=args.debug)
         show_tool_status()
         sys.exit(0)
     
