@@ -798,10 +798,47 @@ def run_fingerprint():
         loadtest.WEB_PANEL_MODE = True
         print(f"DEBUG: Ejecutando fingerprint_target() para {loadtest.TARGET}")
         
-        fingerprint = fingerprint_target()
+        try:
+            fingerprint = fingerprint_target()
+        except Exception as fingerprint_error:
+            import traceback
+            error_trace = traceback.format_exc()
+            print(f"DEBUG: Error en fingerprint_target(): {fingerprint_error}")
+            print(f"DEBUG: Traceback: {error_trace}")
+            debug_mode = getattr(loadtest, 'DEBUG_MODE', False)
+            return jsonify({
+                "status": "error", 
+                "message": f"Error ejecutando fingerprint: {str(fingerprint_error)}",
+                "error_type": type(fingerprint_error).__name__,
+                "traceback": error_trace if debug_mode else None
+            }), 500
         
-        # Generar recomendaciones automáticas de stress
-        stress_recommendations = generate_stress_recommendations(fingerprint)
+        # Generar recomendaciones automáticas de stress (con manejo de errores)
+        stress_recommendations = {}
+        try:
+            stress_recommendations = generate_stress_recommendations(fingerprint)
+        except Exception as rec_error:
+            import traceback
+            print(f"DEBUG: Error generando recomendaciones: {rec_error}")
+            print(f"DEBUG: Traceback recomendaciones: {traceback.format_exc()}")
+            stress_recommendations = {"error": str(rec_error), "message": "No se pudieron generar recomendaciones"}
+        
+        # Asegurar que el fingerprint sea serializable a JSON
+        # Convertir cualquier objeto datetime o no serializable
+        try:
+            # Intentar serializar para verificar que es válido
+            json.dumps(fingerprint, default=str)
+        except Exception as json_error:
+            print(f"DEBUG: Error serializando fingerprint: {json_error}")
+            # Limpiar objetos no serializables convirtiendo todo a string donde sea necesario
+            fingerprint_clean = {}
+            for key, value in fingerprint.items():
+                try:
+                    json.dumps(value, default=str)
+                    fingerprint_clean[key] = value
+                except:
+                    fingerprint_clean[key] = str(value) if value is not None else None
+            fingerprint = fingerprint_clean
         
         return jsonify({
             "status": "success", 
@@ -811,7 +848,17 @@ def run_fingerprint():
             "completed_at": fingerprint.get("completed_at", datetime.now().isoformat())
         })
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"DEBUG: Error general en run_fingerprint(): {e}")
+        print(f"DEBUG: Traceback: {error_trace}")
+        debug_mode = getattr(loadtest, 'DEBUG_MODE', False)
+        return jsonify({
+            "status": "error", 
+            "message": str(e),
+            "error_type": type(e).__name__,
+            "traceback": error_trace if debug_mode else None
+        }), 500
 
 @app.route('/api/recommendations', methods=['POST'])
 def get_recommendations():
