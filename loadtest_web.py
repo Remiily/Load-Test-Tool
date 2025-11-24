@@ -672,7 +672,7 @@ def start_attack():
             attack_stats_ref["attack_techniques"] = []
             
             # Forzar actualización inmediata
-            log_message("INFO", f"📊 [WEB] Estadísticas reseteadas - start_time: {attack_stats_ref['start_time']}", context="start_attack", force_console=True)
+            loadtest.log_message("INFO", f"📊 [WEB] Estadísticas reseteadas - start_time: {attack_stats_ref['start_time']}", context="start_attack", force_console=True)
             
             loadtest.log_message("INFO", "🚀 [WEB] Iniciando ataque desde panel web", context="start_attack", force_console=True)
             
@@ -731,15 +731,15 @@ def stop_attack():
     try:
         if hasattr(loadtest, 'ConnectionManager'):
             loadtest.ConnectionManager.clear_sessions()
-            log_message("INFO", "🔌 [STOP] Sesiones de conexión limpiadas", context="stop_attack")
+            loadtest.log_message("INFO", "🔌 [STOP] Sesiones de conexión limpiadas", context="stop_attack")
     except Exception as e:
-        log_message("ERROR", f"Error limpiando sesiones: {e}", context="stop_attack")
+        loadtest.log_message("ERROR", f"Error limpiando sesiones: {e}", context="stop_attack")
     
     # Usar función mejorada de cleanup
     try:
         if hasattr(loadtest, 'cleanup_all_processes'):
             loadtest.cleanup_all_processes(force=False)
-            log_message("INFO", "🧹 [STOP] Procesos limpiados usando cleanup mejorado", context="stop_attack")
+            loadtest.log_message("INFO", "🧹 [STOP] Procesos limpiados usando cleanup mejorado", context="stop_attack")
         else:
             # Fallback a método básico
             for process in loadtest.running_processes[:]:
@@ -752,15 +752,15 @@ def stop_attack():
                     except:
                         pass
             loadtest.running_processes.clear()
-            log_message("INFO", "🧹 [STOP] Procesos terminados", context="stop_attack")
+            loadtest.log_message("INFO", "🧹 [STOP] Procesos terminados", context="stop_attack")
     except Exception as e:
-        log_message("ERROR", f"Error limpiando procesos: {e}", context="stop_attack")
+        loadtest.log_message("ERROR", f"Error limpiando procesos: {e}", context="stop_attack")
     
     # Resetear estadísticas de ataque
     try:
         loadtest.attack_stats["start_time"] = None
         loadtest.attack_stats["end_time"] = datetime.now()
-        log_message("INFO", "📊 [STOP] Estadísticas de ataque reseteadas", context="stop_attack")
+        loadtest.log_message("INFO", "📊 [STOP] Estadísticas de ataque reseteadas", context="stop_attack")
     except:
         pass
     
