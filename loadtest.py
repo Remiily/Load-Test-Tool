@@ -220,10 +220,12 @@ PAYLOAD_SIZE_KB = 1024
 USE_LARGE_PAYLOADS = True
 MEMORY_MONITORING = True
 AUTO_THROTTLE = True
-MEMORY_THRESHOLD_WARN = 60  # Reducido de 75 - advertencia temprana
-MEMORY_THRESHOLD_CRITICAL = 75  # Reducido de 85 - acción inmediata
-MEMORY_THRESHOLD_OOM = 85  # Reducido de 95 - detener todo para evitar reinicio
-MEMORY_THRESHOLD_EMERGENCY = 90  # NUEVO - emergencia, matar procesos agresivamente
+MEMORY_THRESHOLD_WARN = 55  # Advertencia temprana - más conservador
+MEMORY_THRESHOLD_CRITICAL = 70  # Acción inmediata - más conservador
+MEMORY_THRESHOLD_OOM = 80  # Detener todo para evitar reinicio - más conservador
+MEMORY_THRESHOLD_EMERGENCY = 85  # Emergencia, matar procesos agresivamente
+CPU_THRESHOLD_WARN = 80  # Advertencia de CPU alta
+CPU_THRESHOLD_CRITICAL = 90  # CPU crítica - reducir carga
 STEALTH_MODE = False
 WAF_BYPASS = False
 SOCKET_ATTACK = False  # Ataque socket-based de bajo nivel
@@ -3870,12 +3872,18 @@ def deploy_custom_http_attack():
             consecutive_errors = 0
             max_consecutive_errors = 50  # Si hay muchos errores seguidos, puede ser que el servicio esté saturado
             
+            log_message("DEBUG", f"🔄 [WORKER {worker_id}] Worker iniciado - monitoring_active: {monitoring_active}", force_console=False)
+            request_count_worker = 0
             while time.time() < end_time and monitoring_active:
+                request_count_worker += 1
                 try:
                     # Si hay muchos errores consecutivos, puede ser que el target esté saturado
                     # Esto es bueno para el stress test - continuar pero con delay mínimo
                     if consecutive_errors > max_consecutive_errors:
                         time.sleep(0.1)  # Pequeña pausa si hay muchos errores
+                    # Log cada 500 requests para debugging (reducido para no saturar logs)
+                    if request_count_worker % 500 == 0:
+                        log_message("DEBUG", f"🔄 [WORKER {worker_id}] {request_count_worker} requests, monitoring_active: {monitoring_active}")
                         consecutive_errors = 0
                     
                     # Seleccionar target (si hay variaciones)
@@ -4043,8 +4051,8 @@ def deploy_custom_http_attack():
     # Aplicar límite de seguridad basado en memoria
     num_workers = min(base_workers, max_safe_workers)
     
-    # Límite absoluto de seguridad (nunca más de 500 workers para evitar reinicios)
-    num_workers = min(num_workers, 500)
+    # Límite absoluto de seguridad (nunca más de 300 workers para evitar reinicios - reducido)
+    num_workers = min(num_workers, 300)
     
     # Asegurar mínimo de workers
     if num_workers < 5:
@@ -5671,9 +5679,10 @@ def recover_failed_process():
 
 def monitor_attack():
     """Monitorea el ataque en tiempo real con métricas avanzadas"""
-    global monitoring_active
+    global monitoring_active, attack_stats
     
     monitoring_active = True
+    log_message("INFO", "🔵 Monitoreo iniciado - monitoring_active = True")
     start_time = time.time()
     last_stats_time = start_time
     last_memory_check = start_time
@@ -5688,9 +5697,13 @@ def monitor_attack():
     
     print_color("\n📊 Monitoreo avanzado iniciado...", Colors.GREEN, True)
     print("-" * 80)
+    log_message("INFO", f"📊 [MONITOR] Monitoreo iniciado - Duración: {DURATION}s", force_console=True)
     
     try:
         while monitoring_active and (time.time() - start_time) < DURATION:
+            # Log cada 10 segundos para debugging
+            if int(time.time() - start_time) % 10 == 0 and int(time.time() - start_time) > 0:
+                log_message("DEBUG", f"📊 [MONITOR] Tiempo: {int(time.time() - start_time)}s, Requests: {attack_stats.get('requests_sent', 0)}, RPS: {attack_stats.get('avg_rps', 0):.2f}, monitoring_active: {monitoring_active}")
             current_time = time.time()
             elapsed = current_time - start_time
             
@@ -5720,13 +5733,14 @@ def monitor_attack():
                 
                 last_rps_calculation = current_time
             
-            # Check de memoria cada 1 segundo (más frecuente para protección)
+            # Check de memoria y CPU cada 1 segundo (más frecuente para protección)
             if AUTO_THROTTLE and MEMORY_MONITORING:
                 try:
                     import psutil
                     memory = psutil.virtual_memory()
                     memory_percent = memory.percent
                     memory_available_gb = round(memory.available / (1024**3), 2)
+                    cpu_percent = psutil.cpu_percent(interval=0.1)
                     
                     # Actualizar estadísticas de memoria
                     if "memory_usage" not in attack_stats:
@@ -5742,9 +5756,27 @@ def monitor_attack():
                     if len(attack_stats["memory_usage"]) > 60:
                         attack_stats["memory_usage"].pop(0)
                     
+                    # Verificar CPU también
+                    if cpu_percent >= CPU_THRESHOLD_CRITICAL:
+                        log_message("CRITICAL", f"🚨 CPU CRÍTICA: {cpu_percent:.1f}% - Reduciendo carga agresivamente")
+                        # Matar algunos procesos externos
+                        processes_to_kill = len(running_processes) // 3
+                        for process in list(running_processes)[:processes_to_kill]:
+                            try:
+                                if process.poll() is None:
+                                    process.terminate()
+                                    try:
+                                        process.wait(timeout=1)
+                                    except:
+                                        process.kill()
+                                    running_processes.remove(process)
+                            except:
+                                pass
+                        time.sleep(2)  # Pausa para reducir CPU
+                    
                     # EMERGENCIA: Memoria extremadamente alta - matar procesos agresivamente
                     if memory_percent >= MEMORY_THRESHOLD_EMERGENCY:
-                        log_message("CRITICAL", f"🚨 EMERGENCIA: Memoria {memory_percent:.1f}% ({memory_available_gb} GB disponibles) - MATANDO procesos para evitar reinicio del sistema")
+                        log_message("CRITICAL", f"🚨 EMERGENCIA: Memoria {memory_percent:.1f}% ({memory_available_gb} GB disponibles), CPU {cpu_percent:.1f}% - MATANDO procesos para evitar reinicio del sistema")
                         # Matar procesos externos primero
                         killed = 0
                         for process in list(running_processes):
@@ -5768,7 +5800,7 @@ def monitor_attack():
                     
                     # OOM: Detener todo inmediatamente
                     elif memory_percent >= MEMORY_THRESHOLD_OOM:
-                        log_message("CRITICAL", f"🚨 Memoria OOM: {memory_percent:.1f}% ({memory_available_gb} GB disponibles) - DETENIENDO TODO para evitar reinicio")
+                        log_message("CRITICAL", f"🚨 Memoria OOM: {memory_percent:.1f}% ({memory_available_gb} GB disponibles), CPU {cpu_percent:.1f}% - DETENIENDO TODO para evitar reinicio")
                         # Detener monitoreo y procesos
                         monitoring_active = False
                         # Terminar todos los procesos externos
@@ -5788,7 +5820,7 @@ def monitor_attack():
                     
                     # CRÍTICO: Reducir agresivamente
                     elif memory_percent >= MEMORY_THRESHOLD_CRITICAL:
-                        log_message("WARN", f"⚠️ Memoria CRÍTICA: {memory_percent:.1f}% ({memory_available_gb} GB disponibles) - Reduciendo agresivamente")
+                        log_message("WARN", f"⚠️ Memoria CRÍTICA: {memory_percent:.1f}% ({memory_available_gb} GB disponibles), CPU {cpu_percent:.1f}% - Reduciendo agresivamente")
                         # Terminar algunos procesos externos
                         processes_to_kill = len(running_processes) // 2  # Matar la mitad
                         killed = 0
@@ -5810,10 +5842,10 @@ def monitor_attack():
                         time.sleep(2)  # Pausa más larga
                     
                     # ADVERTENCIA: Reducir carga
-                    elif memory_percent >= MEMORY_THRESHOLD_WARN:
-                        log_message("WARN", f"⚠️ Memoria ALTA: {memory_percent:.1f}% ({memory_available_gb} GB disponibles) - Reduciendo carga")
+                    elif memory_percent >= MEMORY_THRESHOLD_WARN or cpu_percent >= CPU_THRESHOLD_WARN:
+                        log_message("WARN", f"⚠️ Recursos ALTOS: Memoria {memory_percent:.1f}% ({memory_available_gb} GB disponibles), CPU {cpu_percent:.1f}% - Reduciendo carga")
                         # No crear nuevos procesos por un tiempo
-                        time.sleep(1)  # Pausa para reducir carga
+                        time.sleep(1.5)  # Pausa más larga para reducir carga
                     
                     last_memory_check = current_time
                 except ImportError:
@@ -5845,10 +5877,18 @@ def monitor_attack():
     
     except KeyboardInterrupt:
         log_message("INFO", "Monitoreo interrumpido por usuario")
+    except Exception as e:
+        log_message("ERROR", f"Error en monitoreo: {e}", force_console=True)
+        import traceback
+        log_message("ERROR", f"Traceback: {traceback.format_exc()}", force_console=True)
     finally:
         monitoring_active = False
+        log_message("INFO", "🔴 Monitoreo finalizado - monitoring_active = False")
         # Limpiar conexiones al finalizar
-        ConnectionManager.clear_sessions()
+        try:
+            ConnectionManager.clear_sessions()
+        except Exception as e:
+            log_message("ERROR", f"Error limpiando conexiones: {e}")
         log_message("INFO", f"Monitoreo finalizado - Peak RPS: {attack_stats.get('peak_rps', 0):.2f}")
 
 def display_stats(elapsed: float):
@@ -6123,6 +6163,116 @@ def generate_report():
     log_message("INFO", f"Reporte HTML: {html_file}")
     
     return report
+
+def save_to_history(report: Dict):
+    """Guarda un reporte en el historial"""
+    try:
+        HISTORY_DIR.mkdir(parents=True, exist_ok=True)
+        
+        # Crear entrada de historial con ID único
+        report_id = datetime.now().strftime('%Y%m%d_%H%M%S')
+        history_entry = {
+            "id": report_id,
+            "timestamp": datetime.now().isoformat(),
+            "target": report.get('metadata', {}).get('target', ''),
+            "domain": report.get('metadata', {}).get('domain', ''),
+            "duration": report.get('metadata', {}).get('duration', 0),
+            "power_level": report.get('metadata', {}).get('power_level', ''),
+            "attack_mode": report.get('metadata', {}).get('attack_mode', ''),
+            "requests_sent": report.get('statistics', {}).get('requests_sent', 0),
+            "responses_received": report.get('statistics', {}).get('responses_received', 0),
+            "errors": report.get('statistics', {}).get('errors', 0),
+            "avg_rps": report.get('performance', {}).get('avg_rps', 0),
+            "peak_rps": report.get('performance', {}).get('peak_rps', 0),
+            "avg_latency_ms": report.get('performance', {}).get('avg_latency_ms', 0),
+            "p95_latency_ms": report.get('performance', {}).get('p95_latency_ms', 0),
+            "success_rate": report.get('performance', {}).get('success_rate', 0),
+            "full_report": report  # Guardar reporte completo
+        }
+        
+        # Guardar en archivo JSON
+        history_file = HISTORY_DIR / f"history_{report_id}.json"
+        with open(history_file, 'w', encoding='utf-8') as f:
+            json.dump(history_entry, f, indent=2, default=str)
+        
+        # Actualizar índice de historial
+        update_history_index(history_entry)
+        
+        log_message("INFO", f"📝 Reporte guardado en historial: {history_file}")
+    except Exception as e:
+        log_message("ERROR", f"Error guardando en historial: {e}", force_console=True)
+
+def update_history_index(entry: Dict):
+    """Actualiza el índice de historial"""
+    try:
+        index_file = HISTORY_DIR / "history_index.json"
+        
+        # Cargar índice existente
+        if index_file.exists():
+            with open(index_file, 'r', encoding='utf-8') as f:
+                index = json.load(f)
+        else:
+            index = {"entries": []}
+        
+        # Agregar nueva entrada al inicio
+        index["entries"].insert(0, {
+            "id": entry["id"],
+            "timestamp": entry["timestamp"],
+            "target": entry["target"],
+            "duration": entry["duration"],
+            "power_level": entry["power_level"],
+            "requests_sent": entry["requests_sent"],
+            "avg_rps": entry["avg_rps"],
+            "avg_latency_ms": entry["avg_latency_ms"]
+        })
+        
+        # Mantener solo últimos 1000 reportes
+        if len(index["entries"]) > 1000:
+            index["entries"] = index["entries"][:1000]
+            # Eliminar archivos antiguos
+            for old_entry in index["entries"][1000:]:
+                old_file = HISTORY_DIR / f"history_{old_entry['id']}.json"
+                if old_file.exists():
+                    try:
+                        old_file.unlink()
+                    except:
+                        pass
+        
+        # Guardar índice
+        with open(index_file, 'w', encoding='utf-8') as f:
+            json.dump(index, f, indent=2, default=str)
+    except Exception as e:
+        log_message("ERROR", f"Error actualizando índice de historial: {e}")
+
+def get_history(limit: int = 100) -> List[Dict]:
+    """Obtiene el historial de reportes"""
+    try:
+        index_file = HISTORY_DIR / "history_index.json"
+        
+        if not index_file.exists():
+            return []
+        
+        with open(index_file, 'r', encoding='utf-8') as f:
+            index = json.load(f)
+        
+        entries = index.get("entries", [])[:limit]
+        
+        # Cargar reportes completos
+        history = []
+        for entry in entries:
+            history_file = HISTORY_DIR / f"history_{entry['id']}.json"
+            if history_file.exists():
+                try:
+                    with open(history_file, 'r', encoding='utf-8') as f:
+                        full_entry = json.load(f)
+                        history.append(full_entry)
+                except Exception as e:
+                    log_message("ERROR", f"Error cargando reporte {entry['id']}: {e}")
+        
+        return history
+    except Exception as e:
+        log_message("ERROR", f"Error obteniendo historial: {e}")
+        return []
 
 def generate_html_report(report: Dict) -> Path:
     """Genera reporte HTML"""
@@ -8188,7 +8338,7 @@ Ejemplos:
     attack_stats["start_time"] = datetime.now()
     global monitoring_active
     monitoring_active = True
-    log_message("INFO", f"Iniciando stress test - Target: {TARGET}, Duración: {DURATION}s, Nivel: {POWER_LEVEL}")
+    log_message("INFO", f"🔵 Iniciando stress test - Target: {TARGET}, Duración: {DURATION}s, Nivel: {POWER_LEVEL} - monitoring_active = True")
     
     # Registrar inicio de ataque
     try:
@@ -8223,21 +8373,31 @@ Ejemplos:
         
         if memory_percent >= MEMORY_THRESHOLD_CRITICAL:
             log_message("WARN", f"⚠️ Memoria crítica ({memory_percent:.1f}%, {memory_available_gb} GB disponibles) - Reduciendo herramientas a mínimo")
-            MAX_TOOLS_DEPLOY = 3  # Solo 3 herramientas más ligeras
+            MAX_TOOLS_DEPLOY = 2  # Solo 2 herramientas más ligeras
         elif memory_percent >= MEMORY_THRESHOLD_WARN:
             log_message("WARN", f"⚠️ Memoria alta ({memory_percent:.1f}%, {memory_available_gb} GB disponibles) - Reduciendo número de herramientas")
-            MAX_TOOLS_DEPLOY = 5
+            MAX_TOOLS_DEPLOY = 4
         else:
-            MAX_TOOLS_DEPLOY = 8  # Límite máximo conservador
+            MAX_TOOLS_DEPLOY = 6  # Límite máximo reducido
         
-        if cpu_percent > 90:
-            log_message("WARN", f"⚠️ CPU muy alta ({cpu_percent:.1f}%) - Reduciendo carga")
-            MAX_TOOLS_DEPLOY = min(MAX_TOOLS_DEPLOY, 3)
+        if cpu_percent >= CPU_THRESHOLD_CRITICAL:
+            log_message("WARN", f"⚠️ CPU muy alta ({cpu_percent:.1f}%) - Reduciendo carga agresivamente")
+            MAX_TOOLS_DEPLOY = min(MAX_TOOLS_DEPLOY, 2)
+        elif cpu_percent >= CPU_THRESHOLD_WARN:
+            log_message("WARN", f"⚠️ CPU alta ({cpu_percent:.1f}%) - Reduciendo carga")
+            MAX_TOOLS_DEPLOY = min(MAX_TOOLS_DEPLOY, 4)
+        
+        if cpu_percent >= CPU_THRESHOLD_CRITICAL:
+            log_message("WARN", f"⚠️ CPU muy alta ({cpu_percent:.1f}%) - Reduciendo carga agresivamente")
+            MAX_TOOLS_DEPLOY = min(MAX_TOOLS_DEPLOY, 2)
+        elif cpu_percent >= CPU_THRESHOLD_WARN:
+            log_message("WARN", f"⚠️ CPU alta ({cpu_percent:.1f}%) - Reduciendo carga")
+            MAX_TOOLS_DEPLOY = min(MAX_TOOLS_DEPLOY, 4)
     except ImportError:
-        MAX_TOOLS_DEPLOY = 5  # Conservador si no hay psutil
+        MAX_TOOLS_DEPLOY = 4  # Conservador si no hay psutil
     except Exception as e:
         log_message("ERROR", f"Error verificando recursos: {e}")
-        MAX_TOOLS_DEPLOY = 3  # Muy conservador en caso de error
+        MAX_TOOLS_DEPLOY = 2  # Muy conservador en caso de error
     
     log_message("INFO", f"Límite de herramientas: {MAX_TOOLS_DEPLOY} (memoria: {memory_percent:.1f}%)")
     
@@ -8291,10 +8451,14 @@ Ejemplos:
                 log_message("ERROR", f"Error desplegando RUDY: {e}")
         
         # Ataque HTTP personalizado optimizado (SIEMPRE desplegar - es el principal)
+        log_message("INFO", f"📦 [DEPLOY] Desplegando ataque HTTP personalizado...", force_console=True)
         try:
             deploy_custom_http_attack()
+            log_message("INFO", f"✅ [DEPLOY] Ataque HTTP personalizado desplegado correctamente", force_console=True)
         except Exception as e:
-            log_message("ERROR", f"Error desplegando ataque HTTP personalizado: {e}")
+            log_message("ERROR", f"❌ [DEPLOY] Error desplegando ataque HTTP personalizado: {e}", force_console=True)
+            import traceback
+            log_message("ERROR", f"Traceback: {traceback.format_exc()}", force_console=True)
         
         # Ataques avanzados Python (solo si hay recursos y espacio)
         if memory_percent < MEMORY_THRESHOLD_WARN and tools_deployed < MAX_TOOLS_DEPLOY:
@@ -8378,8 +8542,10 @@ Ejemplos:
         deploy_custom_http_attack()  # Siempre desplegar
     
     # Iniciar monitoreo
+    log_message("INFO", f"🚀 [MAIN] Iniciando thread de monitoreo...", force_console=True)
     monitor_thread = threading.Thread(target=monitor_attack, daemon=True)
     monitor_thread.start()
+    log_message("INFO", f"✅ [MAIN] Thread de monitoreo iniciado - monitoring_active debería ser True", force_console=True)
     
     # Esperar a que termine
     try:
@@ -8388,7 +8554,9 @@ Ejemplos:
         signal_handler(None, None)
     
     # Detener procesos
+    log_message("INFO", "🔴 [MAIN] Deteniendo ataque - setting monitoring_active = False", force_console=True)
     monitoring_active = False
+    log_message("INFO", f"🔴 [MAIN] monitoring_active = {monitoring_active}, procesos activos: {len(running_processes)}", force_console=True)
     for process in running_processes:
         try:
             process.terminate()
@@ -8403,7 +8571,12 @@ Ejemplos:
     
     # Generar reporte
     print_color("\n📄 Generando reporte final...", Colors.CYAN, True)
+    # Generar y guardar reporte
     report = generate_report()
+    
+    # Guardar en historial
+    if report:
+        save_to_history(report)
     
     print_color("\n✅ Stress test completado!", Colors.GREEN, True)
     print_color(f"📊 Reportes guardados en: {REPORTS_DIR}", Colors.CYAN)

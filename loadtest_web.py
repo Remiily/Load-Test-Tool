@@ -245,7 +245,7 @@ def get_stats():
         "latency_stats": latency_stats,
         "errors": errors_count,
         "error_rate": round(error_rate, 2),
-        "monitoring_active": monitoring_active,
+        "monitoring_active": get_loadtest_var('monitoring_active') if get_loadtest_var('monitoring_active') is not None else monitoring_active,
         "start_time": attack_stats.get("start_time").isoformat() if attack_stats.get("start_time") else None,
         "elapsed_time": elapsed_time,
         "duration": duration,
@@ -291,6 +291,288 @@ def get_reports():
                 "modified": datetime.fromtimestamp(file.stat().st_mtime).isoformat()
             })
     return jsonify({"reports": sorted(reports, key=lambda x: x["modified"], reverse=True)})
+
+@app.route('/api/history', methods=['GET'])
+def get_history():
+    """Obtiene el historial de ataques"""
+    try:
+        limit = int(request.args.get('limit', 50))
+        from loadtest import get_history as loadtest_get_history
+        history = loadtest_get_history(limit=limit)
+        
+        # Formatear para el frontend
+        formatted_history = []
+        for entry in history:
+            formatted_history.append({
+                "id": entry.get("id"),
+                "timestamp": entry.get("timestamp"),
+                "target": entry.get("target"),
+                "domain": entry.get("domain"),
+                "duration": entry.get("duration"),
+                "power_level": entry.get("power_level"),
+                "attack_mode": entry.get("attack_mode"),
+                "requests_sent": entry.get("requests_sent", 0),
+                "responses_received": entry.get("responses_received", 0),
+                "errors": entry.get("errors", 0),
+                "avg_rps": round(entry.get("avg_rps", 0), 2),
+                "peak_rps": round(entry.get("peak_rps", 0), 2),
+                "avg_latency_ms": round(entry.get("avg_latency_ms", 0), 2),
+                "p95_latency_ms": round(entry.get("p95_latency_ms", 0), 2),
+                "success_rate": round(entry.get("success_rate", 0), 2),
+                "has_full_report": "full_report" in entry
+            })
+        
+        return jsonify({
+            "status": "success",
+            "history": formatted_history,
+            "total": len(formatted_history)
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+@app.route('/api/history', methods=['GET'])
+def get_history():
+    """Obtiene el historial de ataques"""
+    try:
+        from loadtest import get_history as loadtest_get_history
+        history = loadtest_get_history(limit=100)
+        
+        # Formatear historial para el frontend
+        formatted_history = []
+        for report in history:
+            metadata = report.get('metadata', {})
+            stats = report.get('statistics', {})
+            performance = report.get('performance', {})
+            
+            formatted_history.append({
+                "id": metadata.get('timestamp', ''),
+                "timestamp": metadata.get('timestamp', ''),
+                "target": metadata.get('target', ''),
+                "domain": metadata.get('domain', ''),
+                "duration": metadata.get('duration', 0),
+                "elapsed_time": metadata.get('elapsed_time', 0),
+                "power_level": metadata.get('power_level', ''),
+                "attack_mode": metadata.get('attack_mode', ''),
+                "requests_sent": stats.get('requests_sent', 0),
+                "responses_received": stats.get('responses_received', 0),
+                "avg_rps": stats.get('avg_rps', 0),
+                "peak_rps": stats.get('peak_rps', 0),
+                "success_rate": stats.get('success_rate', 0),
+                "error_rate": stats.get('error_rate', 0),
+                "avg_latency_ms": performance.get('avg_latency_ms', 0),
+                "p95_latency_ms": performance.get('p95_latency_ms', 0),
+                "p99_latency_ms": performance.get('p99_latency_ms', 0),
+                "http_codes": stats.get('http_codes', {}),
+                "files": report.get('files', {}),
+                "full_report": report  # Reporte completo para detalles
+            })
+        
+        return jsonify({
+            "status": "success",
+            "history": formatted_history,
+            "total": len(formatted_history)
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+@app.route('/api/history/<report_id>', methods=['GET'])
+def get_history_report(report_id):
+    """Obtiene un reporte específico del historial"""
+    try:
+        from loadtest import get_history as loadtest_get_history
+        history = loadtest_get_history(limit=1000)
+        
+        # Buscar reporte por timestamp
+        for report in history:
+            if report.get('metadata', {}).get('timestamp') == report_id:
+                return jsonify({
+                    "status": "success",
+                    "report": report
+                })
+        
+        return jsonify({
+            "status": "error",
+            "message": "Reporte no encontrado"
+        }), 404
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+@app.route('/api/reports/<path:filename>/pdf', methods=['GET'])
+def export_report_to_pdf(filename):
+    """Exporta un reporte a PDF"""
+    try:
+        from reportlab.lib.pagesizes import letter, A4
+        from reportlab.lib import colors
+        from reportlab.lib.units import inch
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+        from io import BytesIO
+        import json
+        
+        # Buscar el reporte JSON correspondiente
+        report_json_path = None
+        if REPORTS_DIR.exists():
+            # Intentar encontrar el JSON correspondiente al HTML
+            base_name = filename.replace('.html', '')
+            json_file = REPORTS_DIR / f"{base_name}.json"
+            if json_file.exists():
+                report_json_path = json_file
+        
+        if not report_json_path:
+            return jsonify({
+                "status": "error",
+                "message": "Reporte JSON no encontrado"
+            }), 404
+        
+        # Cargar reporte
+        with open(report_json_path, 'r', encoding='utf-8') as f:
+            report = json.load(f)
+        
+        # Crear PDF en memoria
+        buffer = BytesIO()
+        doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=0.5*inch, bottomMargin=0.5*inch)
+        
+        # Estilos
+        styles = getSampleStyleSheet()
+        title_style = ParagraphStyle(
+            'CustomTitle',
+            parent=styles['Heading1'],
+            fontSize=24,
+            textColor=colors.HexColor('#00ff88'),
+            spaceAfter=30,
+            alignment=TA_CENTER
+        )
+        
+        heading_style = ParagraphStyle(
+            'CustomHeading',
+            parent=styles['Heading2'],
+            fontSize=16,
+            textColor=colors.HexColor('#00d9ff'),
+            spaceAfter=12,
+            spaceBefore=12
+        )
+        
+        # Contenido del PDF
+        story = []
+        
+        # Título
+        story.append(Paragraph("LoadTest Enterprise", title_style))
+        story.append(Paragraph("Security Operations Center - Attack Report", styles['Title']))
+        story.append(Spacer(1, 0.3*inch))
+        
+        # Metadata
+        metadata = report.get('metadata', {})
+        metadata_data = [
+            ['Target', metadata.get('target', 'N/A')],
+            ['Domain', metadata.get('domain', 'N/A')],
+            ['IP Address', metadata.get('ip_address', 'N/A')],
+            ['Timestamp', metadata.get('timestamp', 'N/A')],
+            ['Duration', f"{metadata.get('duration', 0)}s"],
+            ['Power Level', metadata.get('power_level', 'N/A')],
+            ['Attack Mode', metadata.get('attack_mode', 'N/A')],
+        ]
+        
+        metadata_table = Table(metadata_data, colWidths=[2*inch, 4*inch])
+        metadata_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (0, -1), colors.HexColor('#1a1a2e')),
+            ('TEXTCOLOR', (0, 0), (-1, -1), colors.white),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
+            ('TOPPADDING', (0, 0), (-1, -1), 12),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#2a2a3e'))
+        ]))
+        story.append(metadata_table)
+        story.append(Spacer(1, 0.3*inch))
+        
+        # Estadísticas
+        story.append(Paragraph("Statistics", heading_style))
+        stats = report.get('statistics', {})
+        stats_data = [
+            ['Metric', 'Value'],
+            ['Requests Sent', format(stats.get('requests_sent', 0), ',')],
+            ['Responses Received', format(stats.get('responses_received', 0), ',')],
+            ['Average RPS', f"{stats.get('avg_rps', 0):.2f}"],
+            ['Peak RPS', f"{stats.get('peak_rps', 0):.2f}"],
+            ['Success Rate', f"{stats.get('success_rate', 0):.2f}%"],
+            ['Error Rate', f"{stats.get('error_rate', 0):.2f}%"],
+        ]
+        
+        stats_table = Table(stats_data, colWidths=[3*inch, 3*inch])
+        stats_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#00ff88')),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#2a2a3e'))
+        ]))
+        story.append(stats_table)
+        story.append(Spacer(1, 0.3*inch))
+        
+        # Performance
+        story.append(Paragraph("Performance Metrics", heading_style))
+        performance = report.get('performance', {})
+        perf_data = [
+            ['Metric', 'Value (ms)'],
+            ['Average Latency', f"{performance.get('avg_latency_ms', 0):.2f}"],
+            ['Min Latency', f"{performance.get('min_latency_ms', 0):.2f}"],
+            ['Max Latency', f"{performance.get('max_latency_ms', 0):.2f}"],
+            ['P50 Latency', f"{performance.get('p50_latency_ms', 0):.2f}"],
+            ['P95 Latency', f"{performance.get('p95_latency_ms', 0):.2f}"],
+            ['P99 Latency', f"{performance.get('p99_latency_ms', 0):.2f}"],
+        ]
+        
+        perf_table = Table(perf_data, colWidths=[3*inch, 3*inch])
+        perf_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1a1a2e')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#00d9ff')),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+            ('TOPPADDING', (0, 0), (-1, -1), 8),
+            ('GRID', (0, 0), (-1, -1), 1, colors.HexColor('#2a2a3e'))
+        ]))
+        story.append(perf_table)
+        
+        # Construir PDF
+        doc.build(story)
+        
+        # Preparar respuesta
+        buffer.seek(0)
+        pdf_filename = filename.replace('.html', '.pdf')
+        
+        return Response(
+            buffer.getvalue(),
+            mimetype='application/pdf',
+            headers={
+                'Content-Disposition': f'attachment; filename={pdf_filename}'
+            }
+        )
+    except ImportError:
+        return jsonify({
+            "status": "error",
+            "message": "reportlab no está instalado. Instala con: pip install reportlab"
+        }), 500
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
 
 @app.route('/api/reports/<path:filename>')
 def serve_report(filename):
@@ -609,15 +891,18 @@ def health_check():
 def get_attack_status():
     """Obtiene el estado del ataque actual"""
     try:
-        is_running = monitoring_active and (attack_stats.get("requests_sent", 0) > 0)
+        # Obtener monitoring_active del módulo loadtest directamente
+        monitoring_active_actual = get_loadtest_var('monitoring_active') or monitoring_active
+        requests_sent = attack_stats.get("requests_sent", 0)
+        is_running = monitoring_active_actual and (requests_sent > 0 or attack_stats.get("start_time") is not None)
         
         return jsonify({
             "status": "success",
             "attack": {
                 "is_running": is_running,
-                "monitoring_active": monitoring_active,
+                "monitoring_active": monitoring_active_actual,
                 "start_time": attack_stats.get("start_time").isoformat() if attack_stats.get("start_time") else None,
-                "requests_sent": attack_stats.get("requests_sent", 0),
+                "requests_sent": requests_sent,
                 "responses_received": attack_stats.get("responses_received", 0),
                 "errors_count": len(attack_stats.get("errors", []))
             }
