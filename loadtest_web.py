@@ -180,30 +180,42 @@ def set_config():
 @app.route('/api/stats', methods=['GET'])
 def get_stats():
     """Obtiene estadísticas avanzadas en tiempo real"""
+    # Obtener attack_stats directamente del módulo loadtest para asegurar sincronización
+    attack_stats_actual = get_loadtest_var('attack_stats') or attack_stats
+    
     vulns = get_loadtest_var('VULNERABILITIES') or []
     ports = get_loadtest_var('OPEN_PORTS') or []
     endpoints = get_loadtest_var('DISCOVERED_ENDPOINTS') or []
     
-    requests_sent = attack_stats.get("requests_sent", 0)
-    responses_received = attack_stats.get("responses_received", 0)
-    errors_count = len(attack_stats.get("errors", []))
-    latencies = attack_stats.get("latencies", [])[-100:]  # Últimas 100
+    requests_sent = attack_stats_actual.get("requests_sent", 0)
+    responses_received = attack_stats_actual.get("responses_received", 0)
+    errors_count = len(attack_stats_actual.get("errors", []))
+    latencies = attack_stats_actual.get("latencies", [])[-100:]  # Últimas 100
     
     # Calcular métricas avanzadas
     elapsed_time = 0
-    if attack_stats.get("start_time"):
-        elapsed_time = (datetime.now() - attack_stats["start_time"]).total_seconds()
+    start_time = attack_stats_actual.get("start_time")
+    if start_time:
+        # Manejar tanto datetime como string ISO
+        if isinstance(start_time, str):
+            from dateutil import parser as date_parser
+            try:
+                start_time = date_parser.parse(start_time)
+            except:
+                start_time = None
+        if start_time:
+            elapsed_time = (datetime.now() - start_time).total_seconds()
     
     avg_rps = requests_sent / elapsed_time if elapsed_time > 0 else 0
-    peak_rps = attack_stats.get("peak_rps", 0)
-    current_avg_rps = attack_stats.get("avg_rps", avg_rps)
+    peak_rps = attack_stats_actual.get("peak_rps", 0)
+    current_avg_rps = attack_stats_actual.get("avg_rps", avg_rps)
     
     # Calcular tasas
     response_rate = (responses_received / requests_sent * 100) if requests_sent > 0 else 0
     error_rate = (errors_count / requests_sent * 100) if requests_sent > 0 else 0
     
     # Análisis de códigos HTTP
-    http_codes = dict(attack_stats.get("http_codes", {}))
+    http_codes = dict(attack_stats_actual.get("http_codes", {}))
     success_responses = sum(count for code, count in http_codes.items() if 200 <= code < 300)
     success_rate = (success_responses / requests_sent * 100) if requests_sent > 0 else 0
     
@@ -247,7 +259,7 @@ def get_stats():
         "errors": errors_count,
         "error_rate": round(error_rate, 2),
         "monitoring_active": get_loadtest_var('monitoring_active') if get_loadtest_var('monitoring_active') is not None else (monitoring_active if 'monitoring_active' in globals() else False),
-        "start_time": attack_stats.get("start_time").isoformat() if attack_stats.get("start_time") else None,
+        "start_time": start_time.isoformat() if start_time and hasattr(start_time, 'isoformat') else (start_time if isinstance(start_time, str) else None),
         "elapsed_time": elapsed_time,
         "duration": duration,
         "remaining_time": max(0, duration - elapsed_time) if duration > 0 else 0,
@@ -265,9 +277,9 @@ def get_stats():
             "error_rate": round(error_rate, 2)
         },
         "memory": memory_info,
-        "attack_techniques": attack_stats.get("attack_techniques", []),
-        "bytes_sent": attack_stats.get("bytes_sent", 0),
-        "bytes_received": attack_stats.get("bytes_received", 0)
+        "attack_techniques": attack_stats_actual.get("attack_techniques", []),
+        "bytes_sent": attack_stats_actual.get("bytes_sent", 0),
+        "bytes_received": attack_stats_actual.get("bytes_received", 0)
     })
 
 @app.route('/api/tools', methods=['GET'])
@@ -643,14 +655,24 @@ def start_attack():
             loadtest.AUTO_THROTTLE = AUTO_THROTTLE
             loadtest.MEMORY_MONITORING = MEMORY_MONITORING
             
-            # Resetear estadísticas de ataque
-            loadtest.attack_stats["start_time"] = datetime.now()
-            loadtest.attack_stats["end_time"] = None
-            loadtest.attack_stats["requests_sent"] = 0
-            loadtest.attack_stats["responses_received"] = 0
-            loadtest.attack_stats["http_codes"] = defaultdict(int)
-            loadtest.attack_stats["latencies"] = []
-            loadtest.attack_stats["errors"] = []
+            # Resetear estadísticas de ataque ANTES de iniciar
+            attack_stats_ref = loadtest.attack_stats
+            attack_stats_ref["start_time"] = datetime.now()
+            attack_stats_ref["end_time"] = None
+            attack_stats_ref["requests_sent"] = 0
+            attack_stats_ref["responses_received"] = 0
+            attack_stats_ref["http_codes"] = defaultdict(int)
+            attack_stats_ref["latencies"] = []
+            attack_stats_ref["errors"] = []
+            attack_stats_ref["peak_rps"] = 0
+            attack_stats_ref["avg_rps"] = 0
+            attack_stats_ref["last_request_count"] = 0
+            attack_stats_ref["bytes_sent"] = 0
+            attack_stats_ref["bytes_received"] = 0
+            attack_stats_ref["attack_techniques"] = []
+            
+            # Forzar actualización inmediata
+            log_message("INFO", f"📊 [WEB] Estadísticas reseteadas - start_time: {attack_stats_ref['start_time']}", context="start_attack", force_console=True)
             
             loadtest.log_message("INFO", "🚀 [WEB] Iniciando ataque desde panel web", context="start_attack", force_console=True)
             
@@ -1085,20 +1107,29 @@ def health_check():
 def get_attack_status():
     """Obtiene el estado del ataque actual"""
     try:
-        # Obtener monitoring_active del módulo loadtest directamente
+        # Obtener monitoring_active y attack_stats del módulo loadtest directamente
         monitoring_active_actual = get_loadtest_var('monitoring_active') or monitoring_active
-        requests_sent = attack_stats.get("requests_sent", 0)
-        is_running = monitoring_active_actual and (requests_sent > 0 or attack_stats.get("start_time") is not None)
+        attack_stats_actual = get_loadtest_var('attack_stats') or attack_stats
+        requests_sent = attack_stats_actual.get("requests_sent", 0)
+        is_running = monitoring_active_actual and (requests_sent > 0 or attack_stats_actual.get("start_time") is not None)
+        
+        start_time_val = attack_stats_actual.get("start_time")
+        if start_time_val and hasattr(start_time_val, 'isoformat'):
+            start_time_str = start_time_val.isoformat()
+        elif isinstance(start_time_val, str):
+            start_time_str = start_time_val
+        else:
+            start_time_str = None
         
         return jsonify({
             "status": "success",
             "attack": {
                 "is_running": is_running,
                 "monitoring_active": monitoring_active_actual,
-                "start_time": attack_stats.get("start_time").isoformat() if attack_stats.get("start_time") else None,
+                "start_time": start_time_str,
                 "requests_sent": requests_sent,
-                "responses_received": attack_stats.get("responses_received", 0),
-                "errors_count": len(attack_stats.get("errors", []))
+                "responses_received": attack_stats_actual.get("responses_received", 0),
+                "errors_count": len(attack_stats_actual.get("errors", []))
             }
         })
     except Exception as e:
