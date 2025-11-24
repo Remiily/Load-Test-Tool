@@ -2318,6 +2318,7 @@ def get_install_commands() -> Dict[str, List[str]]:
             "drill": [
                 "apt-get install -y build-essential libldns-dev autoconf automake libtool && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/fcambus/drill.git /tmp/drill && cd /tmp/drill && (test -f autogen.sh && bash autogen.sh) || (test -f configure.ac && autoreconf -fiv) || true && (test -f configure && bash configure) || (test -f configure.ac && autoreconf -fiv && bash configure) && make && make install",
                 "apt-get install -y build-essential libldns-dev autoconf automake libtool && wget -O /tmp/drill.tar.gz https://codeload.github.com/fcambus/drill/tar.gz/refs/heads/master && cd /tmp && tar -xzf drill.tar.gz && cd drill-master && (test -f autogen.sh && bash autogen.sh) || (test -f configure.ac && autoreconf -fiv) || true && (test -f configure && bash configure) || (test -f configure.ac && autoreconf -fiv && bash configure) && make && make install",
+                "apt-get install -y build-essential libldns-dev autoconf automake libtool && wget -O /tmp/drill.tar.gz https://codeload.github.com/fcambus/drill/tar.gz/refs/heads/main && cd /tmp && tar -xzf drill.tar.gz && cd drill-main && (test -f autogen.sh && bash autogen.sh) || (test -f configure.ac && autoreconf -fiv) || true && (test -f configure && bash configure) || (test -f configure.ac && autoreconf -fiv && bash configure) && make && make install",
                 "apt-get install -y drill"
             ],
             "http2bench": [
@@ -2361,7 +2362,8 @@ def get_install_commands() -> Dict[str, List[str]]:
             ],
             "ddos-ripper": [
                 "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/palahadi/DDoS-Ripper.git /tmp/ddos-ripper && cd /tmp/ddos-ripper && chmod +x DRipper.py && cp DRipper.py /usr/local/bin/ddos-ripper && chmod +x /usr/local/bin/ddos-ripper",
-                "wget -O /tmp/ddos-ripper.tar.gz https://codeload.github.com/palahadi/DDoS-Ripper/tar.gz/refs/heads/master && cd /tmp && tar -xzf ddos-ripper.tar.gz && cd DDoS-Ripper-master && chmod +x DRipper.py && cp DRipper.py /usr/local/bin/ddos-ripper && chmod +x /usr/local/bin/ddos-ripper"
+                "wget -O /tmp/ddos-ripper.tar.gz https://codeload.github.com/palahadi/DDoS-Ripper/tar.gz/refs/heads/master && cd /tmp && tar -xzf ddos-ripper.tar.gz && cd DDoS-Ripper-master && chmod +x DRipper.py && cp DRipper.py /usr/local/bin/ddos-ripper && chmod +x /usr/local/bin/ddos-ripper",
+                "wget -O /tmp/ddos-ripper.tar.gz https://codeload.github.com/palahadi/DDoS-Ripper/tar.gz/refs/heads/main && cd /tmp && tar -xzf ddos-ripper.tar.gz && cd DDoS-Ripper-main && chmod +x DRipper.py && cp DRipper.py /usr/local/bin/ddos-ripper && chmod +x /usr/local/bin/ddos-ripper"
             ],
             "pyloris": [
                 "pip install --break-system-packages pyloris && echo '#!/usr/bin/env python3\nimport pyloris\npyloris.main()' > /usr/local/bin/pyloris && chmod +x /usr/local/bin/pyloris",
@@ -2379,16 +2381,19 @@ def get_install_commands() -> Dict[str, List[str]]:
                 "apt-get install -y build-essential && wget -O /tmp/hoic.tar.gz https://codeload.github.com/hoic/hoic/tar.gz/refs/heads/master 2>/dev/null && cd /tmp && tar -xzf hoic.tar.gz 2>/dev/null && cd hoic-master && (test -f hoic && chmod +x hoic && cp hoic /usr/local/bin/hoic) || (test -f hoic.c && gcc -o hoic hoic.c && cp hoic /usr/local/bin/hoic) && chmod +x /usr/local/bin/hoic"
             ],
             "loic": [
-                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/NewEraCracker/LOIC.git /tmp/loic 2>/dev/null && cd /tmp/loic && chmod +x loic.py 2>/dev/null && cp loic.py /usr/local/bin/loic && chmod +x /usr/local/bin/loic",
-                "wget -O /tmp/loic.tar.gz https://codeload.github.com/NewEraCracker/LOIC/tar.gz/refs/heads/master && cd /tmp && tar -xzf loic.tar.gz && cd LOIC-master && chmod +x loic.py 2>/dev/null && cp loic.py /usr/local/bin/loic && chmod +x /usr/local/bin/loic"
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/NewEraCracker/LOIC.git /tmp/loic 2>/dev/null && cd /tmp/loic && (test -f loic.py && chmod +x loic.py && cp loic.py /usr/local/bin/loic && chmod +x /usr/local/bin/loic) || (find . -name 'loic.py' -type f | head -1 | xargs -I {} sh -c 'chmod +x {} && cp {} /usr/local/bin/loic && chmod +x /usr/local/bin/loic')",
+                "wget -O /tmp/loic.tar.gz https://codeload.github.com/NewEraCracker/LOIC/tar.gz/refs/heads/master && cd /tmp && tar -xzf loic.tar.gz && (cd LOIC-master 2>/dev/null && (test -f loic.py && chmod +x loic.py && cp loic.py /usr/local/bin/loic && chmod +x /usr/local/bin/loic) || find . -name 'loic.py' -type f | head -1 | xargs -I {} sh -c 'chmod +x {} && cp {} /usr/local/bin/loic && chmod +x /usr/local/bin/loic')",
+                "wget -O /tmp/loic.tar.gz https://codeload.github.com/NewEraCracker/LOIC/tar.gz/refs/heads/main && cd /tmp && tar -xzf loic.tar.gz && (cd LOIC-main 2>/dev/null && (test -f loic.py && chmod +x loic.py && cp loic.py /usr/local/bin/loic && chmod +x /usr/local/bin/loic) || find . -name 'loic.py' -type f | head -1 | xargs -I {} sh -c 'chmod +x {} && cp {} /usr/local/bin/loic && chmod +x /usr/local/bin/loic')"
             ],
             "rudy": [
                 "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/sahilsehgal05/rudy.git /tmp/rudy 2>/dev/null && cd /tmp/rudy && chmod +x rudy.py && cp rudy.py /usr/local/bin/rudy && chmod +x /usr/local/bin/rudy",
-                "wget -O /tmp/rudy.tar.gz https://codeload.github.com/sahilsehgal05/rudy/tar.gz/refs/heads/master && cd /tmp && tar -xzf rudy.tar.gz && cd rudy-master && chmod +x rudy.py && cp rudy.py /usr/local/bin/rudy && chmod +x /usr/local/bin/rudy"
+                "wget -O /tmp/rudy.tar.gz https://codeload.github.com/sahilsehgal05/rudy/tar.gz/refs/heads/master && cd /tmp && tar -xzf rudy.tar.gz && cd rudy-master && chmod +x rudy.py && cp rudy.py /usr/local/bin/rudy && chmod +x /usr/local/bin/rudy",
+                "wget -O /tmp/rudy.tar.gz https://codeload.github.com/sahilsehgal05/rudy/tar.gz/refs/heads/main && cd /tmp && tar -xzf rudy.tar.gz && cd rudy-main && chmod +x rudy.py && cp rudy.py /usr/local/bin/rudy && chmod +x /usr/local/bin/rudy"
             ],
             "reaper": [
                 "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/zer0d4y/reaper.git /tmp/reaper 2>/dev/null && cd /tmp/reaper && chmod +x reaper.py && cp reaper.py /usr/local/bin/reaper && chmod +x /usr/local/bin/reaper",
-                "wget -O /tmp/reaper.tar.gz https://codeload.github.com/zer0d4y/reaper/tar.gz/refs/heads/master && cd /tmp && tar -xzf reaper.tar.gz && cd reaper-master && chmod +x reaper.py && cp reaper.py /usr/local/bin/reaper && chmod +x /usr/local/bin/reaper"
+                "wget -O /tmp/reaper.tar.gz https://codeload.github.com/zer0d4y/reaper/tar.gz/refs/heads/master && cd /tmp && tar -xzf reaper.tar.gz && cd reaper-master && chmod +x reaper.py && cp reaper.py /usr/local/bin/reaper && chmod +x /usr/local/bin/reaper",
+                "wget -O /tmp/reaper.tar.gz https://codeload.github.com/zer0d4y/reaper/tar.gz/refs/heads/main && cd /tmp && tar -xzf reaper.tar.gz && cd reaper-main && chmod +x reaper.py && cp reaper.py /usr/local/bin/reaper && chmod +x /usr/local/bin/reaper"
             ]
         }
     else:  # macOS
@@ -2832,6 +2837,60 @@ def auto_install_all_tools(debug=False):
                 
                 # Reemplazar /tmp con directorio temporal mejor
                 command_processed = command.replace("/tmp", temp_dir)
+                
+                # Limpiar directorios temporales antes de clonar o extraer
+                if "git clone" in command_processed or "tar -xzf" in command_processed:
+                    import re
+                    import shutil
+                    
+                    # Para git clone: extraer la ruta después del último espacio antes de &&
+                    if "git clone" in command_processed:
+                        # Buscar patrones como "git clone ... /path/to/dir"
+                        # El último argumento antes de && o el final es el directorio de destino
+                        match = re.search(r'git clone[^&]+?\s+(\S+)\s*(?:&&|$)', command_processed)
+                        if match:
+                            clone_dir = match.group(1)
+                            # Verificar que no sea una URL y que sea una ruta absoluta o relativa válida
+                            if not clone_dir.startswith('http') and not clone_dir.startswith('git@') and os.path.exists(clone_dir):
+                                try:
+                                    shutil.rmtree(clone_dir)
+                                    if debug:
+                                        print_color(f"    🔍 [DEBUG] Limpiado directorio existente: {clone_dir}", Colors.CYAN)
+                                except Exception as e:
+                                    if debug:
+                                        print_color(f"    🔍 [DEBUG] No se pudo limpiar {clone_dir}: {e}", Colors.YELLOW)
+                    
+                    # Para tar -xzf: limpiar directorio extraído y archivo tar.gz
+                    if "tar -xzf" in command_processed:
+                        # Buscar patrones como "cd X-master" o "cd X" después de tar
+                        match = re.search(r'tar -xzf[^&]+?cd\s+(\S+)', command_processed)
+                        if match:
+                            extract_dir_name = match.group(1)
+                            # Intentar con temp_dir primero
+                            extract_dir = os.path.join(temp_dir, extract_dir_name)
+                            if not os.path.exists(extract_dir):
+                                # Intentar con /tmp
+                                extract_dir = os.path.join("/tmp", extract_dir_name)
+                            if os.path.exists(extract_dir):
+                                try:
+                                    shutil.rmtree(extract_dir)
+                                    if debug:
+                                        print_color(f"    🔍 [DEBUG] Limpiado directorio extraído: {extract_dir}", Colors.CYAN)
+                                except Exception as e:
+                                    if debug:
+                                        print_color(f"    🔍 [DEBUG] No se pudo limpiar {extract_dir}: {e}", Colors.YELLOW)
+                        
+                        # También limpiar archivo tar.gz si existe
+                        tar_match = re.search(r'(?:wget|curl)[^&]+?-O\s+(\S+\.tar\.gz)', command_processed)
+                        if tar_match:
+                            tar_file = tar_match.group(1)
+                            if os.path.exists(tar_file):
+                                try:
+                                    os.remove(tar_file)
+                                    if debug:
+                                        print_color(f"    🔍 [DEBUG] Limpiado archivo tar.gz: {tar_file}", Colors.CYAN)
+                                except Exception:
+                                    pass
                 
                 # Agregar --break-system-packages a comandos pip si es necesario
                 if ("pip install" in command_processed or "pip3 install" in command_processed or "python3 -m pip install" in command_processed) and system == "Linux":
