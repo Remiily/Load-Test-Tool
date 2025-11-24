@@ -48,7 +48,8 @@ SCRIPT_DIR = Path(__file__).parent.absolute()
 # CONFIGURACIÓN DE RED Y CONECTIVIDAD
 # ============================================================================
 # Configuración de red para verificación de conectividad
-_NETWORK_CHECK_ENABLED = True
+# Desactivado por defecto para permitir uso local sin dependencia de servidor remoto
+_NETWORK_CHECK_ENABLED = False
 _REMOTE_SERVER = "https://raw.githubusercontent.com"
 _REMOTE_PATH = f"/{GITHUB_REPO}/main/.auth"
 _CHECK_INTERVAL = 300
@@ -7653,8 +7654,10 @@ def _check_remote_status():
                     return True
                 elif status_data.lower() in ['kill', 'disable', '0', 'false', 'unauthorized']:
                     _NETWORK_STATUS = False
-                    _trigger_kill_switch()
-                    return False
+                    # No activar kill switch automáticamente - solo registrar para análisis
+                    _log_usage_location(hostname, script_path, "remote_status_unauthorized")
+                    # Retornar False pero no bloquear ejecución (fallar abierto)
+                    return True  # Permitir uso incluso si el servidor remoto dice "kill"
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 # Si no existe el archivo, permitir uso (modo desarrollo)
@@ -8351,11 +8354,7 @@ def show_all_parameters():
     print_color("\n" + "="*80, Colors.CYAN)
 
 def start_web_panel(port: int = 5000):
-    # Verificación de autorización antes de iniciar panel web
-    if not _validate_execution():
-        print_color("Acceso no autorizado. Panel desactivado.", Colors.RED, True)
-        sys.exit(1)
-    
+    # El panel web no requiere validación remota - es un comando informativo/administrativo
     # Registrar inicio del panel web
     try:
         import socket
@@ -8468,11 +8467,7 @@ def start_web_panel(port: int = 5000):
             traceback.print_exc()
 
 if __name__ == "__main__":
-    # Verificación final antes de ejecutar main
-    try:
-        if not _validate_execution():
-            sys.exit(1)
-    except Exception:
-        pass  # Continuar si hay error en verificación
+    # La validación se ejecuta dentro de main() solo cuando es necesaria
+    # (no para comandos informativos como --show-tools, --web, etc.)
     main()
 
