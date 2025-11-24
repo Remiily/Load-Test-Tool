@@ -6,37 +6,47 @@
     <title>LoadTest Enterprise | Security Operations Center</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&family=Orbitron:wght@400;700;900&family=Poppins:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <style>
         :root {
             --primary: #00ff88;
+            --primary-glow: rgba(0, 255, 136, 0.4);
             --primary-dark: #00cc6a;
             --secondary: #00d9ff;
+            --secondary-glow: rgba(0, 217, 255, 0.4);
             --accent: #ff6b35;
             --warning: #ffb800;
             --danger: #ff3366;
+            --danger-glow: rgba(255, 51, 102, 0.4);
             --success: #00ff88;
             --info: #00d9ff;
+            --purple: #9d4edd;
             
-            --bg-primary: #0a0e27;
-            --bg-secondary: #0f1629;
-            --bg-tertiary: #151b2e;
-            --bg-card: #1a2136;
-            --bg-hover: #212842;
+            --bg-primary: #0a0a0f;
+            --bg-secondary: #0f0f1a;
+            --bg-tertiary: #151520;
+            --bg-card: #1a1a2e;
+            --bg-card-hover: #1f1f35;
+            --bg-glass: rgba(26, 26, 46, 0.7);
             
-            --text-primary: #e8eaed;
-            --text-secondary: #9aa0a6;
-            --text-muted: #5f6368;
+            --text-primary: #ffffff;
+            --text-secondary: #b4b4c8;
+            --text-muted: #6b6b7f;
             
-            --border: #2d3447;
-            --border-light: #3a4154;
+            --border: #2a2a3e;
+            --border-light: #3a3a4e;
+            --border-glow: rgba(0, 255, 136, 0.2);
             
-            --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
-            --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-            --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
-            --shadow-glow: 0 0 20px rgba(0, 255, 136, 0.3);
+            --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.3);
+            --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+            --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.5);
+            --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.6);
+            --shadow-xl: 0 16px 64px rgba(0, 0, 0, 0.7);
+            --shadow-glow: 0 0 30px var(--primary-glow);
+            --shadow-glow-secondary: 0 0 30px var(--secondary-glow);
         }
         
         * {
@@ -49,27 +59,61 @@
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
             background: var(--bg-primary);
             background-image: 
-                radial-gradient(circle at 20% 30%, rgba(0, 255, 136, 0.05) 0%, transparent 50%),
-                radial-gradient(circle at 80% 70%, rgba(0, 217, 255, 0.05) 0%, transparent 50%);
+                radial-gradient(circle at 15% 25%, rgba(0, 255, 136, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 85% 75%, rgba(0, 217, 255, 0.08) 0%, transparent 50%),
+                radial-gradient(circle at 50% 50%, rgba(157, 78, 221, 0.05) 0%, transparent 50%);
             color: var(--text-primary);
             min-height: 100vh;
             line-height: 1.6;
+            overflow-x: hidden;
+            position: relative;
+        }
+        
+        body::before {
+            content: '';
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: 
+                linear-gradient(90deg, transparent 0%, rgba(0, 255, 136, 0.02) 50%, transparent 100%),
+                repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0, 255, 136, 0.01) 2px, rgba(0, 255, 136, 0.01) 4px);
+            pointer-events: none;
+            z-index: 0;
+            animation: scan 20s linear infinite;
+        }
+        
+        @keyframes scan {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(100px); }
         }
         
         /* Header */
         .header {
-            background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+            background: linear-gradient(135deg, rgba(15, 15, 26, 0.95) 0%, rgba(21, 21, 32, 0.95) 100%);
+            backdrop-filter: blur(20px);
             border-bottom: 1px solid var(--border);
-            padding: 1.5rem 2rem;
+            padding: 1.25rem 2rem;
             position: sticky;
             top: 0;
-            z-index: 100;
-            backdrop-filter: blur(10px);
+            z-index: 1000;
             box-shadow: var(--shadow-md);
         }
         
+        .header::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, var(--primary), transparent);
+            opacity: 0.5;
+        }
+        
         .header-content {
-            max-width: 1800px;
+            max-width: 1920px;
             margin: 0 auto;
             display: flex;
             justify-content: space-between;
@@ -79,21 +123,39 @@
         .logo-section {
             display: flex;
             align-items: center;
-            gap: 1rem;
+            gap: 1.25rem;
         }
         
         .logo {
-            width: 48px;
-            height: 48px;
+            width: 56px;
+            height: 56px;
             background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            border-radius: 12px;
+            border-radius: 16px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.5rem;
+            font-size: 1.75rem;
             font-weight: 900;
             color: var(--bg-primary);
             box-shadow: var(--shadow-glow);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .logo::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: linear-gradient(45deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: shine 3s infinite;
+        }
+        
+        @keyframes shine {
+            0% { transform: translate(-50%, -50%) rotate(0deg); }
+            100% { transform: translate(-50%, -50%) rotate(360deg); }
         }
         
         .logo-text {
@@ -103,23 +165,28 @@
         
         .logo-text h1 {
             font-family: 'Orbitron', monospace;
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--text-primary);
-            letter-spacing: 0.5px;
+            font-size: 1.75rem;
+            font-weight: 900;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            letter-spacing: 1px;
+            margin-bottom: 0.25rem;
         }
         
         .logo-text .subtitle {
             font-size: 0.75rem;
             color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 1px;
-            font-weight: 500;
+            letter-spacing: 2px;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
         }
         
         .header-stats {
             display: flex;
-            gap: 2rem;
+            gap: 1.5rem;
             align-items: center;
         }
         
@@ -127,102 +194,157 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            padding: 0.5rem 1rem;
-            background: var(--bg-card);
-            border-radius: 8px;
+            padding: 0.75rem 1.25rem;
+            background: var(--bg-glass);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
             border: 1px solid var(--border);
-            min-width: 80px;
+            min-width: 90px;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .stat-badge::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(0, 255, 136, 0.1), transparent);
+            transition: left 0.5s;
+        }
+        
+        .stat-badge:hover::before {
+            left: 100%;
+        }
+        
+        .stat-badge:hover {
+            border-color: var(--primary);
+            box-shadow: 0 0 20px var(--primary-glow);
+            transform: translateY(-2px);
         }
         
         .stat-badge .value {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 1.25rem;
+            font-size: 1.5rem;
             font-weight: 700;
-            color: var(--primary);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            line-height: 1;
         }
         
         .stat-badge .label {
             font-size: 0.7rem;
             color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
+            font-weight: 600;
+            margin-top: 0.25rem;
         }
         
         /* Main Container */
         .container {
-            max-width: 1800px;
+            max-width: 1920px;
             margin: 0 auto;
             padding: 2rem;
+            position: relative;
+            z-index: 1;
         }
         
         /* Navigation Tabs */
         .nav-tabs {
             display: flex;
-            gap: 0.5rem;
+            gap: 0.75rem;
             margin-bottom: 2rem;
-            background: var(--bg-secondary);
-            padding: 0.5rem;
-            border-radius: 12px;
+            background: var(--bg-glass);
+            backdrop-filter: blur(10px);
+            padding: 0.75rem;
+            border-radius: 16px;
             border: 1px solid var(--border);
+            box-shadow: var(--shadow-md);
         }
         
         .nav-tab {
             flex: 1;
-            padding: 0.75rem 1.5rem;
+            padding: 1rem 1.5rem;
             background: transparent;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             color: var(--text-secondary);
             font-family: 'Inter', sans-serif;
-            font-size: 0.9rem;
-            font-weight: 500;
+            font-size: 0.95rem;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.5rem;
+        }
+        
+        .nav-tab::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 12px;
+            padding: 2px;
+            background: linear-gradient(135deg, var(--primary), var(--secondary));
+            -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            -webkit-mask-composite: xor;
+            mask-composite: exclude;
+            opacity: 0;
+            transition: opacity 0.3s;
         }
         
         .nav-tab:hover {
             color: var(--text-primary);
             background: var(--bg-tertiary);
+            transform: translateY(-2px);
         }
         
         .nav-tab.active {
-            background: var(--bg-card);
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.15) 0%, rgba(0, 217, 255, 0.15) 100%);
             color: var(--primary);
             box-shadow: var(--shadow-sm);
         }
         
-        .nav-tab.active::after {
-            content: '';
-            position: absolute;
-            bottom: -2px;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 40%;
-            height: 2px;
-            background: var(--primary);
-            border-radius: 2px;
+        .nav-tab.active::before {
+            opacity: 1;
+        }
+        
+        .nav-tab i {
+            font-size: 1.1rem;
         }
         
         /* Tab Content */
         .tab-content {
             display: none;
-            animation: fadeIn 0.3s ease;
+            animation: fadeInUp 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
         
         .tab-content.active {
             display: block;
         }
         
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
         
         /* Grid Layout */
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
             gap: 1.5rem;
             margin-bottom: 2rem;
         }
@@ -239,13 +361,18 @@
             grid-template-columns: repeat(4, 1fr);
         }
         
+        .grid-auto {
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        }
+        
         /* Cards */
         .card {
-            background: var(--bg-card);
+            background: var(--bg-glass);
+            backdrop-filter: blur(20px);
             border: 1px solid var(--border);
-            border-radius: 16px;
-            padding: 1.5rem;
-            transition: all 0.3s ease;
+            border-radius: 20px;
+            padding: 2rem;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
         }
@@ -259,13 +386,13 @@
             height: 3px;
             background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
             opacity: 0;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.4s;
         }
         
         .card:hover {
             border-color: var(--border-light);
-            box-shadow: var(--shadow-lg);
-            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg), var(--shadow-glow);
+            transform: translateY(-4px);
         }
         
         .card:hover::before {
@@ -276,28 +403,37 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            margin-bottom: 1rem;
-            padding-bottom: 1rem;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1.5rem;
             border-bottom: 1px solid var(--border);
         }
         
         .card-title {
-            font-size: 0.9rem;
-            font-weight: 600;
+            font-size: 0.95rem;
+            font-weight: 700;
             color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1.5px;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .card-title i {
+            color: var(--primary);
+            font-size: 1.1rem;
         }
         
         .card-icon {
-            width: 32px;
-            height: 32px;
-            background: var(--bg-tertiary);
-            border-radius: 8px;
+            width: 40px;
+            height: 40px;
+            background: linear-gradient(135deg, rgba(0, 255, 136, 0.2) 0%, rgba(0, 217, 255, 0.2) 100%);
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 1.2rem;
+            font-size: 1.3rem;
+            border: 1px solid var(--border);
         }
         
         .card-body {
@@ -307,31 +443,38 @@
         /* Metric Cards */
         .metric-card {
             text-align: center;
+            padding: 2.5rem 2rem;
         }
         
         .metric-value {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: var(--primary);
-            margin: 1rem 0;
+            font-size: 3rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin: 1.5rem 0;
             line-height: 1;
+            text-shadow: 0 0 30px var(--primary-glow);
         }
         
         .metric-label {
             font-size: 0.85rem;
             color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1.5px;
+            font-weight: 600;
         }
         
         .metric-change {
-            font-size: 0.75rem;
-            margin-top: 0.5rem;
+            font-size: 0.8rem;
+            margin-top: 1rem;
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 0.25rem;
+            gap: 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
         }
         
         .metric-change.positive {
@@ -345,64 +488,48 @@
         /* Charts */
         .chart-container {
             position: relative;
-            height: 300px;
-            margin-top: 1rem;
+            height: 320px;
+            margin-top: 1.5rem;
         }
         
         .chart-container.large {
-            height: 400px;
+            height: 450px;
         }
         
         /* Forms */
         .form-group {
-            margin-bottom: 1.5rem;
+            margin-bottom: 1.75rem;
         }
         
         .form-label {
             display: block;
             font-size: 0.85rem;
-            font-weight: 500;
+            font-weight: 600;
             color: var(--text-secondary);
-            margin-bottom: 0.5rem;
+            margin-bottom: 0.75rem;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
         }
         
-        .form-input {
-            width: 100%;
-            padding: 0.75rem 1rem;
-            background: var(--bg-tertiary);
-            border: 1px solid var(--border);
-            border-radius: 8px;
-            color: var(--text-primary);
-            font-family: 'Inter', sans-serif;
-            font-size: 0.95rem;
-            transition: all 0.3s ease;
-        }
-        
-        .form-input:focus {
-            outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.1);
-        }
-        
+        .form-input,
         .form-select {
             width: 100%;
-            padding: 0.75rem 1rem;
+            padding: 1rem 1.25rem;
             background: var(--bg-tertiary);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 12px;
             color: var(--text-primary);
             font-family: 'Inter', sans-serif;
             font-size: 0.95rem;
-            cursor: pointer;
             transition: all 0.3s ease;
         }
         
+        .form-input:focus,
         .form-select:focus {
             outline: none;
             border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(0, 255, 136, 0.1);
+            box-shadow: 0 0 0 4px var(--primary-glow);
+            background: var(--bg-card);
         }
         
         .form-checkbox {
@@ -410,53 +537,80 @@
             align-items: center;
             gap: 0.75rem;
             cursor: pointer;
+            padding: 0.75rem;
+            border-radius: 8px;
+            transition: background 0.3s;
+        }
+        
+        .form-checkbox:hover {
+            background: var(--bg-tertiary);
         }
         
         .form-checkbox input[type="checkbox"] {
-            width: 20px;
-            height: 20px;
+            width: 22px;
+            height: 22px;
             accent-color: var(--primary);
             cursor: pointer;
         }
         
         /* Buttons */
         .btn {
-            padding: 0.75rem 1.5rem;
+            padding: 1rem 2rem;
             border: none;
-            border-radius: 8px;
+            border-radius: 12px;
             font-family: 'Inter', sans-serif;
-            font-size: 0.9rem;
-            font-weight: 600;
+            font-size: 0.95rem;
+            font-weight: 700;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 0.5rem;
+            gap: 0.75rem;
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+        
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
         }
         
         .btn-primary {
             background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
             color: var(--bg-primary);
-            box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);
+            box-shadow: 0 4px 20px var(--primary-glow);
         }
         
         .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(0, 255, 136, 0.4);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px var(--primary-glow);
         }
         
         .btn-danger {
             background: linear-gradient(135deg, var(--danger) 0%, #cc1a3d 100%);
             color: white;
-            box-shadow: 0 4px 12px rgba(255, 51, 102, 0.3);
+            box-shadow: 0 4px 20px var(--danger-glow);
         }
         
         .btn-danger:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(255, 51, 102, 0.4);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 30px var(--danger-glow);
         }
         
         .btn-secondary {
@@ -466,49 +620,53 @@
         }
         
         .btn-secondary:hover {
-            background: var(--bg-hover);
+            background: var(--bg-card);
             border-color: var(--border-light);
+            transform: translateY(-2px);
         }
         
         .btn-group {
             display: flex;
             gap: 1rem;
-            margin-top: 1.5rem;
+            margin-top: 2rem;
+            flex-wrap: wrap;
         }
         
         /* Status Badge */
         .status-badge {
             display: inline-flex;
             align-items: center;
-            gap: 0.5rem;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            font-size: 0.85rem;
-            font-weight: 500;
+            gap: 0.75rem;
+            padding: 0.75rem 1.5rem;
+            border-radius: 25px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            backdrop-filter: blur(10px);
         }
         
         .status-badge.active {
-            background: rgba(0, 255, 136, 0.1);
+            background: rgba(0, 255, 136, 0.15);
             color: var(--success);
             border: 1px solid rgba(0, 255, 136, 0.3);
+            box-shadow: 0 0 20px var(--primary-glow);
         }
         
         .status-badge.inactive {
-            background: rgba(159, 160, 166, 0.1);
+            background: rgba(107, 107, 127, 0.15);
             color: var(--text-secondary);
-            border: 1px solid rgba(159, 160, 166, 0.3);
+            border: 1px solid rgba(107, 107, 127, 0.3);
         }
         
         .status-dot {
-            width: 8px;
-            height: 8px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
             animation: pulse 2s infinite;
         }
         
         .status-badge.active .status-dot {
             background: var(--success);
-            box-shadow: 0 0 10px var(--success);
+            box-shadow: 0 0 15px var(--success);
         }
         
         .status-badge.inactive .status-dot {
@@ -516,26 +674,51 @@
         }
         
         @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+            0%, 100% { 
+                opacity: 1; 
+                transform: scale(1);
+            }
+            50% { 
+                opacity: 0.6; 
+                transform: scale(1.2);
+            }
         }
         
         /* Progress Bar */
         .progress-bar {
             width: 100%;
-            height: 8px;
+            height: 10px;
             background: var(--bg-tertiary);
-            border-radius: 4px;
+            border-radius: 8px;
             overflow: hidden;
-            margin-top: 0.5rem;
+            margin-top: 1rem;
+            position: relative;
         }
         
         .progress-fill {
             height: 100%;
             background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
-            border-radius: 4px;
-            transition: width 0.3s ease;
-            box-shadow: 0 0 10px rgba(0, 255, 136, 0.5);
+            border-radius: 8px;
+            transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 0 20px var(--primary-glow);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .progress-fill::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+            animation: progress-shine 2s infinite;
+        }
+        
+        @keyframes progress-shine {
+            0% { left: -100%; }
+            100% { left: 100%; }
         }
         
         /* Table */
@@ -546,17 +729,17 @@
         
         .table th,
         .table td {
-            padding: 1rem;
+            padding: 1.25rem;
             text-align: left;
             border-bottom: 1px solid var(--border);
         }
         
         .table th {
             font-size: 0.85rem;
-            font-weight: 600;
+            font-weight: 700;
             color: var(--text-secondary);
             text-transform: uppercase;
-            letter-spacing: 0.5px;
+            letter-spacing: 1.5px;
         }
         
         .table td {
@@ -571,29 +754,42 @@
         
         /* Alerts */
         .alert {
-            padding: 1rem 1.5rem;
-            border-radius: 8px;
-            margin-bottom: 1rem;
+            padding: 1.25rem 1.75rem;
+            border-radius: 12px;
+            margin-bottom: 1.5rem;
             display: flex;
             align-items: center;
             gap: 1rem;
             border-left: 4px solid;
+            backdrop-filter: blur(10px);
+            animation: slideInRight 0.4s ease;
+        }
+        
+        @keyframes slideInRight {
+            from {
+                opacity: 0;
+                transform: translateX(100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
         }
         
         .alert-success {
-            background: rgba(0, 255, 136, 0.1);
+            background: rgba(0, 255, 136, 0.15);
             border-color: var(--success);
             color: var(--success);
         }
         
         .alert-error {
-            background: rgba(255, 51, 102, 0.1);
+            background: rgba(255, 51, 102, 0.15);
             border-color: var(--danger);
             color: var(--danger);
         }
         
         .alert-warning {
-            background: rgba(255, 184, 0, 0.1);
+            background: rgba(255, 184, 0, 0.15);
             border-color: var(--warning);
             color: var(--warning);
         }
@@ -601,15 +797,15 @@
         /* Tool Status Grid */
         .tools-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 1rem;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 1.25rem;
         }
         
         .tool-item {
-            padding: 1rem;
+            padding: 1.25rem;
             background: var(--bg-tertiary);
             border: 1px solid var(--border);
-            border-radius: 8px;
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -618,37 +814,45 @@
         
         .tool-item:hover {
             border-color: var(--border-light);
-            background: var(--bg-hover);
+            background: var(--bg-card);
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-md);
         }
         
         .tool-item.available {
-            border-left: 3px solid var(--success);
+            border-left: 4px solid var(--success);
         }
         
         .tool-item.unavailable {
-            border-left: 3px solid var(--text-muted);
+            border-left: 4px solid var(--text-muted);
             opacity: 0.6;
         }
         
         .tool-name {
             font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
+            font-size: 0.95rem;
             color: var(--text-primary);
+            font-weight: 600;
         }
         
         .tool-status {
-            font-size: 1.2rem;
+            font-size: 1.3rem;
+            color: var(--success);
+        }
+        
+        .tool-item.unavailable .tool-status {
+            color: var(--text-muted);
         }
         
         /* Loading Spinner */
         .spinner {
-            width: 40px;
-            height: 40px;
+            width: 50px;
+            height: 50px;
             border: 4px solid var(--border);
             border-top-color: var(--primary);
             border-radius: 50%;
             animation: spin 1s linear infinite;
-            margin: 2rem auto;
+            margin: 3rem auto;
         }
         
         @keyframes spin {
@@ -656,18 +860,23 @@
         }
         
         /* Responsive */
-        @media (max-width: 1200px) {
+        @media (max-width: 1400px) {
             .grid-4 { grid-template-columns: repeat(2, 1fr); }
+        }
+        
+        @media (max-width: 1024px) {
             .grid-3 { grid-template-columns: repeat(2, 1fr); }
+            .grid-2 { grid-template-columns: 1fr; }
         }
         
         @media (max-width: 768px) {
             .container { padding: 1rem; }
-            .header-content { flex-direction: column; gap: 1rem; }
-            .header-stats { flex-wrap: wrap; }
+            .header-content { flex-direction: column; gap: 1.5rem; }
+            .header-stats { flex-wrap: wrap; justify-content: center; }
             .grid { grid-template-columns: 1fr; }
             .nav-tabs { flex-wrap: wrap; }
-            .nav-tab { flex: 1 1 auto; }
+            .nav-tab { flex: 1 1 auto; min-width: 120px; }
+            .metric-value { font-size: 2rem; }
         }
     </style>
 </head>
@@ -707,12 +916,30 @@
     <div class="container">
         <!-- Navigation Tabs -->
         <nav class="nav-tabs">
-            <button class="nav-tab active" data-tab="dashboard">📊 Dashboard</button>
-            <button class="nav-tab" data-tab="configuration">⚙️ Configuración</button>
-            <button class="nav-tab" data-tab="monitoring">📈 Monitoreo</button>
-            <button class="nav-tab" data-tab="reports">📄 Reportes</button>
-            <button class="nav-tab" data-tab="tools">🛠️ Herramientas</button>
-            <button class="nav-tab" data-tab="system">💻 Sistema</button>
+            <button class="nav-tab active" data-tab="dashboard">
+                <i class="fas fa-chart-line"></i>
+                <span>Dashboard</span>
+            </button>
+            <button class="nav-tab" data-tab="configuration">
+                <i class="fas fa-cog"></i>
+                <span>Configuración</span>
+            </button>
+            <button class="nav-tab" data-tab="monitoring">
+                <i class="fas fa-eye"></i>
+                <span>Monitoreo</span>
+            </button>
+            <button class="nav-tab" data-tab="reports">
+                <i class="fas fa-file-alt"></i>
+                <span>Reportes</span>
+            </button>
+            <button class="nav-tab" data-tab="tools">
+                <i class="fas fa-tools"></i>
+                <span>Herramientas</span>
+            </button>
+            <button class="nav-tab" data-tab="system">
+                <i class="fas fa-server"></i>
+                <span>Sistema</span>
+            </button>
         </nav>
 
         <!-- Dashboard Tab -->
@@ -720,22 +947,36 @@
             <!-- Key Metrics -->
             <div class="grid grid-4">
                 <div class="card metric-card">
-                    <div class="card-title">Requests Totales</div>
+                    <div class="card-title">
+                        <i class="fas fa-paper-plane"></i>
+                        Requests Totales
+                    </div>
                     <div class="metric-value" id="metric-requests">0</div>
                     <div class="metric-label">Total Enviados</div>
                 </div>
                 <div class="card metric-card">
-                    <div class="card-title">Requests por Segundo</div>
+                    <div class="card-title">
+                        <i class="fas fa-tachometer-alt"></i>
+                        Requests por Segundo
+                    </div>
                     <div class="metric-value" id="metric-rps">0</div>
                     <div class="metric-label">RPS Actual</div>
                 </div>
                 <div class="card metric-card">
+                    <div class="card-title">
+                        <i class="fas fa-check-circle"></i>
+                        Tasa de Éxito
+                    </div>
                     <div class="metric-value" id="metric-success-rate">0%</div>
-                    <div class="metric-label">Tasa de Éxito</div>
+                    <div class="metric-label">Respuestas Exitosas</div>
                 </div>
                 <div class="card metric-card">
+                    <div class="card-title">
+                        <i class="fas fa-clock"></i>
+                        Latencia
+                    </div>
                     <div class="metric-value" id="metric-latency">0ms</div>
-                    <div class="metric-label">Latencia Promedio</div>
+                    <div class="metric-label">Tiempo Promedio</div>
                 </div>
             </div>
 
@@ -743,7 +984,10 @@
             <div class="grid grid-2">
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">Requests en Tiempo Real</div>
+                        <div class="card-title">
+                            <i class="fas fa-chart-line"></i>
+                            Requests en Tiempo Real
+                        </div>
                         <div class="card-icon">📊</div>
                     </div>
                     <div class="card-body">
@@ -754,7 +998,10 @@
                 </div>
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">Latencia (ms)</div>
+                        <div class="card-title">
+                            <i class="fas fa-stopwatch"></i>
+                            Latencia (ms)
+                        </div>
                         <div class="card-icon">⏱️</div>
                     </div>
                     <div class="card-body">
@@ -769,7 +1016,10 @@
             <div class="grid grid-2">
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">Códigos HTTP</div>
+                        <div class="card-title">
+                            <i class="fas fa-list-ol"></i>
+                            Códigos HTTP
+                        </div>
                         <div class="card-icon">🔢</div>
                     </div>
                     <div class="card-body">
@@ -780,7 +1030,10 @@
                 </div>
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">Throughput (MB/s)</div>
+                        <div class="card-title">
+                            <i class="fas fa-network-wired"></i>
+                            Throughput (MB/s)
+                        </div>
                         <div class="card-icon">📡</div>
                     </div>
                     <div class="card-body">
@@ -795,11 +1048,14 @@
             <div class="grid grid-3">
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">Uso de CPU</div>
+                        <div class="card-title">
+                            <i class="fas fa-microchip"></i>
+                            Uso de CPU
+                        </div>
                         <div class="card-icon">⚡</div>
                     </div>
                     <div class="card-body">
-                        <div class="metric-value" id="cpu-usage">0%</div>
+                        <div class="metric-value" id="cpu-usage" style="font-size: 2rem;">0%</div>
                         <div class="progress-bar">
                             <div class="progress-fill" id="cpu-progress" style="width: 0%"></div>
                         </div>
@@ -807,11 +1063,14 @@
                 </div>
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">Uso de Memoria</div>
+                        <div class="card-title">
+                            <i class="fas fa-memory"></i>
+                            Uso de Memoria
+                        </div>
                         <div class="card-icon">💾</div>
                     </div>
                     <div class="card-body">
-                        <div class="metric-value" id="memory-usage">0%</div>
+                        <div class="metric-value" id="memory-usage" style="font-size: 2rem;">0%</div>
                         <div class="progress-bar">
                             <div class="progress-fill" id="memory-progress" style="width: 0%"></div>
                         </div>
@@ -819,11 +1078,14 @@
                 </div>
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">Conexiones Activas</div>
+                        <div class="card-title">
+                            <i class="fas fa-link"></i>
+                            Conexiones Activas
+                        </div>
                         <div class="card-icon">🔗</div>
                     </div>
                     <div class="card-body">
-                        <div class="metric-value" id="active-connections">0</div>
+                        <div class="metric-value" id="active-connections" style="font-size: 2rem;">0</div>
                         <div class="metric-label">Conexiones Establecidas</div>
                     </div>
                 </div>
@@ -835,7 +1097,10 @@
             <div class="grid grid-2">
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">Configuración de Target</div>
+                        <div class="card-title">
+                            <i class="fas fa-bullseye"></i>
+                            Configuración de Target
+                        </div>
                     </div>
                     <div class="card-body">
                         <div class="form-group">
@@ -865,12 +1130,18 @@
                                 <option value="RAMP_UP">RAMP_UP</option>
                             </select>
                         </div>
-                        <button class="btn btn-secondary" onclick="runFingerprint()">🔍 Ejecutar Fingerprint</button>
+                        <button class="btn btn-secondary" onclick="runFingerprint()">
+                            <i class="fas fa-fingerprint"></i>
+                            Ejecutar Fingerprint
+                        </button>
                     </div>
                 </div>
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">Configuración Avanzada</div>
+                        <div class="card-title">
+                            <i class="fas fa-sliders-h"></i>
+                            Configuración Avanzada
+                        </div>
                     </div>
                     <div class="card-body">
                         <div class="form-group">
@@ -902,16 +1173,28 @@
                             <label for="config-memory-monitoring">Monitoreo de Memoria</label>
                         </div>
                         <div class="btn-group">
-                            <button class="btn btn-primary" onclick="saveConfig()">💾 Guardar Configuración</button>
-                            <button class="btn btn-primary" onclick="startAttack()">🚀 Iniciar Ataque</button>
-                            <button class="btn btn-danger" onclick="stopAttack()">⏹️ Detener</button>
+                            <button class="btn btn-primary" onclick="saveConfig()">
+                                <i class="fas fa-save"></i>
+                                Guardar
+                            </button>
+                            <button class="btn btn-primary" onclick="startAttack()">
+                                <i class="fas fa-play"></i>
+                                Iniciar
+                            </button>
+                            <button class="btn btn-danger" onclick="stopAttack()">
+                                <i class="fas fa-stop"></i>
+                                Detener
+                            </button>
                         </div>
                     </div>
                 </div>
             </div>
             <div class="card" id="fingerprint-results" style="display: none;">
                 <div class="card-header">
-                    <div class="card-title">Resultados de Fingerprint</div>
+                    <div class="card-title">
+                        <i class="fas fa-info-circle"></i>
+                        Resultados de Fingerprint
+                    </div>
                 </div>
                 <div class="card-body" id="fingerprint-content"></div>
             </div>
@@ -922,7 +1205,10 @@
             <div class="grid grid-2">
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">Estadísticas de Latencia</div>
+                        <div class="card-title">
+                            <i class="fas fa-chart-bar"></i>
+                            Estadísticas de Latencia
+                        </div>
                     </div>
                     <div class="card-body">
                         <table class="table">
@@ -959,17 +1245,23 @@
                 </div>
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">Distribución de Códigos HTTP</div>
+                        <div class="card-title">
+                            <i class="fas fa-code"></i>
+                            Distribución de Códigos HTTP
+                        </div>
                     </div>
                     <div class="card-body" id="http-codes-distribution"></div>
                 </div>
             </div>
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">Logs en Tiempo Real</div>
+                    <div class="card-title">
+                        <i class="fas fa-terminal"></i>
+                        Logs en Tiempo Real
+                    </div>
                 </div>
                 <div class="card-body">
-                    <div id="logs-container" style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; max-height: 400px; overflow-y: auto; background: var(--bg-tertiary); padding: 1rem; border-radius: 8px;">
+                    <div id="logs-container" style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; max-height: 450px; overflow-y: auto; background: var(--bg-tertiary); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border);">
                         <div style="color: var(--text-secondary); text-align: center;">Esperando logs...</div>
                     </div>
                 </div>
@@ -980,8 +1272,14 @@
         <div id="reports" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">Reportes Disponibles</div>
-                    <button class="btn btn-secondary" onclick="loadReports()">🔄 Actualizar</button>
+                    <div class="card-title">
+                        <i class="fas fa-file-alt"></i>
+                        Reportes Disponibles
+                    </div>
+                    <button class="btn btn-secondary" onclick="loadReports()">
+                        <i class="fas fa-sync-alt"></i>
+                        Actualizar
+                    </button>
                 </div>
                 <div class="card-body">
                     <div id="reports-list"></div>
@@ -993,8 +1291,14 @@
         <div id="tools" class="tab-content">
             <div class="card">
                 <div class="card-header">
-                    <div class="card-title">Estado de Herramientas</div>
-                    <button class="btn btn-secondary" onclick="loadTools()">🔄 Actualizar</button>
+                    <div class="card-title">
+                        <i class="fas fa-tools"></i>
+                        Estado de Herramientas
+                    </div>
+                    <button class="btn btn-secondary" onclick="loadTools()">
+                        <i class="fas fa-sync-alt"></i>
+                        Actualizar
+                    </button>
                 </div>
                 <div class="card-body">
                     <div class="tools-grid" id="tools-grid"></div>
@@ -1007,13 +1311,19 @@
             <div class="grid grid-2">
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">Información del Sistema</div>
+                        <div class="card-title">
+                            <i class="fas fa-server"></i>
+                            Información del Sistema
+                        </div>
                     </div>
                     <div class="card-body" id="system-info"></div>
                 </div>
                 <div class="card">
                     <div class="card-header">
-                        <div class="card-title">Uso de Recursos</div>
+                        <div class="card-title">
+                            <i class="fas fa-chart-pie"></i>
+                            Uso de Recursos
+                        </div>
                     </div>
                     <div class="card-body">
                         <div class="chart-container">
@@ -1064,17 +1374,20 @@
                 maintainAspectRatio: false,
                 plugins: {
                     legend: {
-                        labels: { color: '#9aa0a6' }
+                        labels: { 
+                            color: '#b4b4c8',
+                            font: { family: 'Inter', size: 12, weight: 600 }
+                        }
                     }
                 },
                 scales: {
                     x: { 
-                        ticks: { color: '#9aa0a6' },
-                        grid: { color: '#2d3447' }
+                        ticks: { color: '#b4b4c8', font: { family: 'JetBrains Mono', size: 11 } },
+                        grid: { color: '#2a2a3e' }
                     },
                     y: { 
-                        ticks: { color: '#9aa0a6' },
-                        grid: { color: '#2d3447' }
+                        ticks: { color: '#b4b4c8', font: { family: 'JetBrains Mono', size: 11 } },
+                        grid: { color: '#2a2a3e' }
                     }
                 }
             };
@@ -1092,7 +1405,10 @@
                             borderColor: '#00ff88',
                             backgroundColor: 'rgba(0, 255, 136, 0.1)',
                             tension: 0.4,
-                            fill: true
+                            fill: true,
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            pointHoverRadius: 4
                         }]
                     },
                     options: chartOptions
@@ -1112,7 +1428,10 @@
                             borderColor: '#00d9ff',
                             backgroundColor: 'rgba(0, 217, 255, 0.1)',
                             tension: 0.4,
-                            fill: true
+                            fill: true,
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            pointHoverRadius: 4
                         }]
                     },
                     options: chartOptions
@@ -1133,7 +1452,8 @@
                                 '#00d9ff',
                                 '#ffb800',
                                 '#ff3366'
-                            ]
+                            ],
+                            borderWidth: 0
                         }]
                     },
                     options: {
@@ -1142,7 +1462,11 @@
                         plugins: {
                             legend: {
                                 position: 'bottom',
-                                labels: { color: '#9aa0a6' }
+                                labels: { 
+                                    color: '#b4b4c8',
+                                    font: { family: 'Inter', size: 12, weight: 600 },
+                                    padding: 15
+                                }
                             }
                         }
                     }
@@ -1159,7 +1483,9 @@
                         datasets: [{
                             label: 'MB/s',
                             data: [],
-                            backgroundColor: '#ff6b35'
+                            backgroundColor: '#ff6b35',
+                            borderRadius: 8,
+                            borderSkipped: false
                         }]
                     },
                     options: chartOptions
@@ -1305,7 +1631,7 @@
             let html = '<div class="grid grid-2">';
             
             if (fingerprint) {
-                html += '<div><h3 style="margin-bottom: 1rem; color: var(--primary);">Información del Target</h3>';
+                html += '<div><h3 style="margin-bottom: 1.5rem; color: var(--primary); font-size: 1.2rem;">Información del Target</h3>';
                 html += '<table class="table"><tr><th>Propiedad</th><th>Valor</th></tr>';
                 for (const [key, value] of Object.entries(fingerprint)) {
                     html += `<tr><td>${key}</td><td>${value}</td></tr>`;
@@ -1314,11 +1640,11 @@
             }
             
             if (recommendations) {
-                html += '<div><h3 style="margin-bottom: 1rem; color: var(--secondary);">Recomendaciones</h3>';
-                html += '<div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 8px;">';
-                html += `<p><strong>Nivel de Potencia:</strong> ${recommendations.recommended_power_level || 'N/A'}</p>`;
-                html += `<p><strong>Conexiones:</strong> ${recommendations.recommended_connections || 'N/A'}</p>`;
-                html += `<p><strong>Threads:</strong> ${recommendations.recommended_threads || 'N/A'}</p>`;
+                html += '<div><h3 style="margin-bottom: 1.5rem; color: var(--secondary); font-size: 1.2rem;">Recomendaciones</h3>';
+                html += '<div style="background: var(--bg-tertiary); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border);">';
+                html += `<p style="margin-bottom: 1rem;"><strong>Nivel de Potencia:</strong> <span style="color: var(--primary);">${recommendations.recommended_power_level || 'N/A'}</span></p>`;
+                html += `<p style="margin-bottom: 1rem;"><strong>Conexiones:</strong> <span style="color: var(--primary);">${recommendations.recommended_connections || 'N/A'}</span></p>`;
+                html += `<p><strong>Threads:</strong> <span style="color: var(--primary);">${recommendations.recommended_threads || 'N/A'}</span></p>`;
                 html += '</div></div>';
             }
             
@@ -1427,7 +1753,7 @@
             
             const total = Object.values(codes).reduce((a, b) => a + b, 0);
             if (total === 0) {
-                container.innerHTML = '<div style="color: var(--text-secondary); text-align: center;">No hay datos</div>';
+                container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">No hay datos</div>';
                 return;
             }
             
@@ -1439,10 +1765,10 @@
                 const color = code >= 500 ? '#ff3366' : code >= 400 ? '#ffb800' : code >= 300 ? '#00d9ff' : '#00ff88';
                 
                 html += `
-                    <div style="margin-bottom: 1rem;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
-                            <span style="font-family: 'JetBrains Mono', monospace; color: ${color};">HTTP ${code}</span>
-                            <span style="color: var(--text-primary);">${formatNumber(count)} (${percentage}%)</span>
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem;">
+                            <span style="font-family: 'JetBrains Mono', monospace; color: ${color}; font-weight: 600;">HTTP ${code}</span>
+                            <span style="color: var(--text-primary); font-weight: 600;">${formatNumber(count)} (${percentage}%)</span>
                         </div>
                         <div class="progress-bar">
                             <div class="progress-fill" style="width: ${percentage}%; background: ${color};"></div>
@@ -1479,14 +1805,14 @@
                                 <td>${report.name}</td>
                                 <td>${formatBytes(report.size)}</td>
                                 <td>${date.toLocaleString()}</td>
-                                <td><a href="/api/reports/${report.path}" target="_blank" style="color: var(--primary);">Ver</a></td>
+                                <td><a href="/api/reports/${report.path}" target="_blank" style="color: var(--primary); text-decoration: none; font-weight: 600;">Ver <i class="fas fa-external-link-alt"></i></a></td>
                             </tr>
                         `;
                     });
                     html += '</table>';
                     container.innerHTML = html;
                 } else {
-                    container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">No hay reportes disponibles</div>';
+                    container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 3rem;">No hay reportes disponibles</div>';
                 }
             } catch (error) {
                 console.error('Error loading reports:', error);
@@ -1577,20 +1903,22 @@
         }
         
         function showAlert(message, type) {
-            // Simple alert implementation
             const alert = document.createElement('div');
             alert.className = `alert alert-${type === 'success' ? 'success' : type === 'error' ? 'error' : 'warning'}`;
-            alert.textContent = message;
+            alert.innerHTML = `<i class="fas fa-${type === 'success' ? 'check-circle' : type === 'error' ? 'exclamation-circle' : 'info-circle'}"></i> ${message}`;
             alert.style.position = 'fixed';
             alert.style.top = '100px';
             alert.style.right = '20px';
-            alert.style.zIndex = '1000';
-            alert.style.minWidth = '300px';
+            alert.style.zIndex = '10000';
+            alert.style.minWidth = '350px';
+            alert.style.boxShadow = 'var(--shadow-xl)';
             
             document.body.appendChild(alert);
             
             setTimeout(() => {
-                alert.remove();
+                alert.style.opacity = '0';
+                alert.style.transform = 'translateX(100px)';
+                setTimeout(() => alert.remove(), 300);
             }, 5000);
         }
     </script>

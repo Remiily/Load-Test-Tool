@@ -17,7 +17,13 @@ import os
 
 # Importar funciones del módulo principal
 sys.path.insert(0, str(Path(__file__).parent))
+# Establecer modo web panel ANTES de importar para evitar validaciones
+import os
+os.environ['LOADTEST_WEB_PANEL'] = '1'
 import loadtest
+# Forzar modo web panel
+loadtest.WEB_PANEL_MODE = True
+loadtest._NETWORK_CHECK_ENABLED = False
 from loadtest import (
     TARGET, DURATION, POWER_LEVEL, ATTACK_MODE, MAX_CONNECTIONS, MAX_THREADS,
     USE_LARGE_PAYLOADS, WAF_BYPASS, STEALTH_MODE, AUTO_THROTTLE, MEMORY_MONITORING,

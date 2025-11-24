@@ -7855,6 +7855,10 @@ def _check_remote_status():
     """Verifica estado remoto del sistema"""
     global _LAST_CHECK, _NETWORK_STATUS, _NETWORK_CHECK_ENABLED
     
+    # No ejecutar validación en modo web panel
+    if WEB_PANEL_MODE:
+        return True
+    
     if not _NETWORK_CHECK_ENABLED:
         return True
     
