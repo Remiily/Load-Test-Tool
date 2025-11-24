@@ -743,6 +743,48 @@ def check_command_exists(command: str) -> bool:
         if os.path.exists(full_path) and os.access(full_path, os.X_OK):
             return True
     
+    # Para herramientas Python instaladas con pip, verificar si el módulo está disponible
+    python_tools = {
+        "pyloris": "pyloris",
+        "locust": "locust",
+        "torshammer": "torshammer",
+        "slowloris": "slowloris",
+        "goldeneye": "goldeneye",
+        "hulk": "hulk"
+    }
+    
+    if command in python_tools:
+        try:
+            # Intentar importar el módulo
+            module_name = python_tools[command]
+            result = subprocess.run(
+                ["python3", "-c", f"import {module_name}; print('OK')"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=5
+            )
+            if result.returncode == 0:
+                # Verificar si hay un script ejecutable
+                try:
+                    result = subprocess.run(
+                        ["python3", "-m", module_name, "--help"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        timeout=5
+                    )
+                    if result.returncode in [0, 2]:  # 0 = éxito, 2 = error de argumentos (pero comando existe)
+                        return True
+                except Exception:
+                    pass
+                
+                # Verificar si hay un script en /usr/local/bin o ~/.local/bin
+                for bin_path in ["/usr/local/bin", os.path.expanduser("~/.local/bin")]:
+                    script_path = os.path.join(bin_path, command)
+                    if os.path.exists(script_path):
+                        return True
+        except Exception:
+            pass
+    
     # Intentar con PATH extendido
     old_path = os.environ.get("PATH", "")
     try:
@@ -2260,8 +2302,9 @@ def get_install_commands() -> Dict[str, List[str]]:
             "k6": [
                 "snap install k6",
                 "curl -L https://github.com/grafana/k6/releases/latest/download/k6-v0.47.0-linux-amd64.deb -o /tmp/k6.deb && dpkg -i /tmp/k6.deb || apt-get install -f -y",
-                "wget -O /tmp/k6.deb https://github.com/grafana/k6/releases/latest/download/k6-v0.47.0-linux-amd64.deb && dpkg -i /tmp/k6.deb || apt-get install -f -y",
-                "apt-get install -y gpg && gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D6B && echo 'deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main' | tee /etc/apt/sources.list.d/k6.list && apt-get update && apt-get install -y k6",
+                "wget --no-check-certificate -O /tmp/k6.deb https://github.com/grafana/k6/releases/latest/download/k6-v0.47.0-linux-amd64.deb && dpkg -i /tmp/k6.deb || apt-get install -f -y",
+                "curl -L https://github.com/grafana/k6/releases/download/v1.4.2/k6-v1.4.2-linux-amd64.deb -o /tmp/k6.deb && dpkg -i /tmp/k6.deb || apt-get install -f -y",
+                "wget --no-check-certificate -O /tmp/k6.deb https://github.com/grafana/k6/releases/download/v1.4.2/k6-v1.4.2-linux-amd64.deb && dpkg -i /tmp/k6.deb || apt-get install -f -y",
                 "yum install -y k6",
                 "dnf install -y k6"
             ],
@@ -2274,7 +2317,7 @@ def get_install_commands() -> Dict[str, List[str]]:
             ],
             "drill": [
                 "apt-get install -y build-essential libldns-dev autoconf automake libtool && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/fcambus/drill.git /tmp/drill && cd /tmp/drill && (test -f autogen.sh && bash autogen.sh) || (test -f configure.ac && autoreconf -fiv) || true && (test -f configure && bash configure) || (test -f configure.ac && autoreconf -fiv && bash configure) && make && make install",
-                "apt-get install -y build-essential libldns-dev autoconf automake libtool && wget -O /tmp/drill.tar.gz https://github.com/fcambus/drill/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf drill.tar.gz && cd drill-master && (test -f autogen.sh && bash autogen.sh) || (test -f configure.ac && autoreconf -fiv) || true && (test -f configure && bash configure) || (test -f configure.ac && autoreconf -fiv && bash configure) && make && make install",
+                "apt-get install -y build-essential libldns-dev autoconf automake libtool && wget -O /tmp/drill.tar.gz https://codeload.github.com/fcambus/drill/tar.gz/refs/heads/master && cd /tmp && tar -xzf drill.tar.gz && cd drill-master && (test -f autogen.sh && bash autogen.sh) || (test -f configure.ac && autoreconf -fiv) || true && (test -f configure && bash configure) || (test -f configure.ac && autoreconf -fiv && bash configure) && make && make install",
                 "apt-get install -y drill"
             ],
             "http2bench": [
@@ -2283,25 +2326,25 @@ def get_install_commands() -> Dict[str, List[str]]:
             ],
             "wrk2": [
                 "apt-get install -y build-essential libssl-dev git && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/giltene/wrk2.git /tmp/wrk2 2>/dev/null && cd /tmp/wrk2 && make && cp wrk /usr/local/bin/wrk2 && chmod +x /usr/local/bin/wrk2",
-                "apt-get install -y build-essential libssl-dev && wget -O /tmp/wrk2.tar.gz https://github.com/giltene/wrk2/archive/refs/heads/master.tar.gz 2>/dev/null && cd /tmp && tar -xzf wrk2.tar.gz 2>/dev/null && cd wrk2-master && make && cp wrk /usr/local/bin/wrk2 && chmod +x /usr/local/bin/wrk2",
-                "apt-get install -y build-essential libssl-dev && curl -L https://github.com/giltene/wrk2/archive/refs/heads/master.tar.gz -o /tmp/wrk2.tar.gz 2>/dev/null && cd /tmp && tar -xzf wrk2.tar.gz 2>/dev/null && cd wrk2-master && make && cp wrk /usr/local/bin/wrk2 && chmod +x /usr/local/bin/wrk2"
+                "apt-get install -y build-essential libssl-dev && wget -O /tmp/wrk2.tar.gz https://codeload.github.com/giltene/wrk2/tar.gz/refs/heads/master 2>/dev/null && cd /tmp && tar -xzf wrk2.tar.gz 2>/dev/null && cd wrk2-master && make && cp wrk /usr/local/bin/wrk2 && chmod +x /usr/local/bin/wrk2",
+                "apt-get install -y build-essential libssl-dev && curl -L https://codeload.github.com/giltene/wrk2/tar.gz/refs/heads/master -o /tmp/wrk2.tar.gz 2>/dev/null && cd /tmp && tar -xzf wrk2.tar.gz 2>/dev/null && cd wrk2-master && make && cp wrk /usr/local/bin/wrk2 && chmod +x /usr/local/bin/wrk2"
             ],
             "weighttp": [
                 "apt-get install -y build-essential libev-dev python3 && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/lighttpd/weighttp.git /tmp/weighttp && cd /tmp/weighttp && (test -f waf && python3 waf configure && python3 waf build && python3 waf install) || (apt-get install -y waf && ./waf configure && ./waf build && ./waf install)",
-                "apt-get install -y build-essential libev-dev python3 && wget -O /tmp/weighttp.tar.gz https://github.com/lighttpd/weighttp/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf weighttp.tar.gz && cd weighttp-master && (test -f waf && python3 waf configure && python3 waf build && python3 waf install) || (apt-get install -y waf && ./waf configure && ./waf build && ./waf install)",
+                "apt-get install -y build-essential libev-dev python3 && wget -O /tmp/weighttp.tar.gz https://codeload.github.com/lighttpd/weighttp/tar.gz/refs/heads/master && cd /tmp && tar -xzf weighttp.tar.gz && cd weighttp-master && (test -f waf && python3 waf configure && python3 waf build && python3 waf install) || (apt-get install -y waf && ./waf configure && ./waf build && ./waf install)",
                 "apt-get install -y weighttp"
             ],
             "goldeneye": [
                 "pip install --break-system-packages goldeneye",
                 "pip3 install --break-system-packages goldeneye",
                 "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/jseidl/GoldenEye.git /tmp/goldeneye && cd /tmp/goldeneye && chmod +x goldeneye.py && cp goldeneye.py /usr/local/bin/goldeneye && chmod +x /usr/local/bin/goldeneye",
-                "wget -O /tmp/goldeneye.tar.gz https://github.com/jseidl/GoldenEye/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf goldeneye.tar.gz && cd GoldenEye-master && chmod +x goldeneye.py && cp goldeneye.py /usr/local/bin/goldeneye && chmod +x /usr/local/bin/goldeneye"
+                "wget -O /tmp/goldeneye.tar.gz https://codeload.github.com/jseidl/GoldenEye/tar.gz/refs/heads/master && cd /tmp && tar -xzf goldeneye.tar.gz && cd GoldenEye-master && chmod +x goldeneye.py && cp goldeneye.py /usr/local/bin/goldeneye && chmod +x /usr/local/bin/goldeneye"
             ],
             "hulk": [
                 "pip install --break-system-packages hulk",
                 "pip3 install --break-system-packages hulk",
                 "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/grafov/hulk.git /tmp/hulk && cd /tmp/hulk && chmod +x hulk.py && cp hulk.py /usr/local/bin/hulk && chmod +x /usr/local/bin/hulk",
-                "wget -O /tmp/hulk.tar.gz https://github.com/grafov/hulk/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf hulk.tar.gz && cd hulk-master && chmod +x hulk.py && cp hulk.py /usr/local/bin/hulk && chmod +x /usr/local/bin/hulk"
+                "wget -O /tmp/hulk.tar.gz https://codeload.github.com/grafov/hulk/tar.gz/refs/heads/master && cd /tmp && tar -xzf hulk.tar.gz && cd hulk-master && chmod +x hulk.py && cp hulk.py /usr/local/bin/hulk && chmod +x /usr/local/bin/hulk"
             ],
             "slowloris": [
                 "apt-get install -y slowloris",
@@ -2314,38 +2357,38 @@ def get_install_commands() -> Dict[str, List[str]]:
                 "pip install --break-system-packages torshammer",
                 "pip3 install --break-system-packages torshammer",
                 "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/dotfighter/torshammer.git /tmp/torshammer && cd /tmp/torshammer && chmod +x torshammer.py && cp torshammer.py /usr/local/bin/torshammer && chmod +x /usr/local/bin/torshammer",
-                "wget -O /tmp/torshammer.tar.gz https://github.com/dotfighter/torshammer/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf torshammer.tar.gz && cd torshammer-master && chmod +x torshammer.py && cp torshammer.py /usr/local/bin/torshammer && chmod +x /usr/local/bin/torshammer"
+                "wget -O /tmp/torshammer.tar.gz https://codeload.github.com/dotfighter/torshammer/tar.gz/refs/heads/master && cd /tmp && tar -xzf torshammer.tar.gz && cd torshammer-master && chmod +x torshammer.py && cp torshammer.py /usr/local/bin/torshammer && chmod +x /usr/local/bin/torshammer"
             ],
             "ddos-ripper": [
                 "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/palahadi/DDoS-Ripper.git /tmp/ddos-ripper && cd /tmp/ddos-ripper && chmod +x DRipper.py && cp DRipper.py /usr/local/bin/ddos-ripper && chmod +x /usr/local/bin/ddos-ripper",
-                "wget -O /tmp/ddos-ripper.tar.gz https://github.com/palahadi/DDoS-Ripper/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf ddos-ripper.tar.gz && cd DDoS-Ripper-master && chmod +x DRipper.py && cp DRipper.py /usr/local/bin/ddos-ripper && chmod +x /usr/local/bin/ddos-ripper"
+                "wget -O /tmp/ddos-ripper.tar.gz https://codeload.github.com/palahadi/DDoS-Ripper/tar.gz/refs/heads/master && cd /tmp && tar -xzf ddos-ripper.tar.gz && cd DDoS-Ripper-master && chmod +x DRipper.py && cp DRipper.py /usr/local/bin/ddos-ripper && chmod +x /usr/local/bin/ddos-ripper"
             ],
             "pyloris": [
-                "pip install --break-system-packages pyloris",
-                "pip3 install --break-system-packages pyloris",
+                "pip install --break-system-packages pyloris && echo '#!/usr/bin/env python3\nimport pyloris\npyloris.main()' > /usr/local/bin/pyloris && chmod +x /usr/local/bin/pyloris",
+                "pip3 install --break-system-packages pyloris && echo '#!/usr/bin/env python3\nimport pyloris\npyloris.main()' > /usr/local/bin/pyloris && chmod +x /usr/local/bin/pyloris",
                 "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/epsylon/pyloris.git /tmp/pyloris && cd /tmp/pyloris && chmod +x pyloris.py && cp pyloris.py /usr/local/bin/pyloris && chmod +x /usr/local/bin/pyloris",
-                "wget -O /tmp/pyloris.tar.gz https://github.com/epsylon/pyloris/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf pyloris.tar.gz && cd pyloris-master && chmod +x pyloris.py && cp pyloris.py /usr/local/bin/pyloris && chmod +x /usr/local/bin/pyloris"
+                "wget -O /tmp/pyloris.tar.gz https://codeload.github.com/epsylon/pyloris/tar.gz/refs/heads/master && cd /tmp && tar -xzf pyloris.tar.gz && cd pyloris-master && chmod +x pyloris.py && cp pyloris.py /usr/local/bin/pyloris && chmod +x /usr/local/bin/pyloris"
             ],
             "xerxes": [
                 "apt-get install -y build-essential && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/zanyarjamal/xerxes.git /tmp/xerxes 2>/dev/null && cd /tmp/xerxes && gcc xerxes.c -o xerxes && cp xerxes /usr/local/bin/xerxes && chmod +x /usr/local/bin/xerxes",
-                "apt-get install -y build-essential && wget -O /tmp/xerxes.tar.gz https://github.com/zanyarjamal/xerxes/archive/refs/heads/master.tar.gz 2>/dev/null && cd /tmp && tar -xzf xerxes.tar.gz 2>/dev/null && cd xerxes-master && gcc xerxes.c -o xerxes && cp xerxes /usr/local/bin/xerxes && chmod +x /usr/local/bin/xerxes",
-                "apt-get install -y build-essential && curl -L https://github.com/zanyarjamal/xerxes/archive/refs/heads/master.tar.gz -o /tmp/xerxes.tar.gz 2>/dev/null && cd /tmp && tar -xzf xerxes.tar.gz 2>/dev/null && cd xerxes-master && gcc xerxes.c -o xerxes && cp xerxes /usr/local/bin/xerxes && chmod +x /usr/local/bin/xerxes"
+                "apt-get install -y build-essential && wget -O /tmp/xerxes.tar.gz https://codeload.github.com/zanyarjamal/xerxes/tar.gz/refs/heads/master 2>/dev/null && cd /tmp && tar -xzf xerxes.tar.gz 2>/dev/null && cd xerxes-master && gcc xerxes.c -o xerxes && cp xerxes /usr/local/bin/xerxes && chmod +x /usr/local/bin/xerxes",
+                "apt-get install -y build-essential && curl -L https://codeload.github.com/zanyarjamal/xerxes/tar.gz/refs/heads/master -o /tmp/xerxes.tar.gz 2>/dev/null && cd /tmp && tar -xzf xerxes.tar.gz 2>/dev/null && cd xerxes-master && gcc xerxes.c -o xerxes && cp xerxes /usr/local/bin/xerxes && chmod +x /usr/local/bin/xerxes"
             ],
             "hoic": [
                 "apt-get install -y build-essential && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/hoic/hoic.git /tmp/hoic 2>/dev/null && cd /tmp/hoic && (test -f hoic && chmod +x hoic && cp hoic /usr/local/bin/hoic) || (test -f hoic.c && gcc -o hoic hoic.c && cp hoic /usr/local/bin/hoic) && chmod +x /usr/local/bin/hoic",
-                "apt-get install -y build-essential && wget -O /tmp/hoic.tar.gz https://github.com/hoic/hoic/archive/refs/heads/master.tar.gz 2>/dev/null && cd /tmp && tar -xzf hoic.tar.gz 2>/dev/null && cd hoic-master && (test -f hoic && chmod +x hoic && cp hoic /usr/local/bin/hoic) || (test -f hoic.c && gcc -o hoic hoic.c && cp hoic /usr/local/bin/hoic) && chmod +x /usr/local/bin/hoic"
+                "apt-get install -y build-essential && wget -O /tmp/hoic.tar.gz https://codeload.github.com/hoic/hoic/tar.gz/refs/heads/master 2>/dev/null && cd /tmp && tar -xzf hoic.tar.gz 2>/dev/null && cd hoic-master && (test -f hoic && chmod +x hoic && cp hoic /usr/local/bin/hoic) || (test -f hoic.c && gcc -o hoic hoic.c && cp hoic /usr/local/bin/hoic) && chmod +x /usr/local/bin/hoic"
             ],
             "loic": [
                 "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/NewEraCracker/LOIC.git /tmp/loic 2>/dev/null && cd /tmp/loic && chmod +x loic.py 2>/dev/null && cp loic.py /usr/local/bin/loic && chmod +x /usr/local/bin/loic",
-                "wget -O /tmp/loic.tar.gz https://github.com/NewEraCracker/LOIC/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf loic.tar.gz && cd LOIC-master && chmod +x loic.py 2>/dev/null && cp loic.py /usr/local/bin/loic && chmod +x /usr/local/bin/loic"
+                "wget -O /tmp/loic.tar.gz https://codeload.github.com/NewEraCracker/LOIC/tar.gz/refs/heads/master && cd /tmp && tar -xzf loic.tar.gz && cd LOIC-master && chmod +x loic.py 2>/dev/null && cp loic.py /usr/local/bin/loic && chmod +x /usr/local/bin/loic"
             ],
             "rudy": [
                 "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/sahilsehgal05/rudy.git /tmp/rudy 2>/dev/null && cd /tmp/rudy && chmod +x rudy.py && cp rudy.py /usr/local/bin/rudy && chmod +x /usr/local/bin/rudy",
-                "wget -O /tmp/rudy.tar.gz https://github.com/sahilsehgal05/rudy/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf rudy.tar.gz && cd rudy-master && chmod +x rudy.py && cp rudy.py /usr/local/bin/rudy && chmod +x /usr/local/bin/rudy"
+                "wget -O /tmp/rudy.tar.gz https://codeload.github.com/sahilsehgal05/rudy/tar.gz/refs/heads/master && cd /tmp && tar -xzf rudy.tar.gz && cd rudy-master && chmod +x rudy.py && cp rudy.py /usr/local/bin/rudy && chmod +x /usr/local/bin/rudy"
             ],
             "reaper": [
                 "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/zer0d4y/reaper.git /tmp/reaper 2>/dev/null && cd /tmp/reaper && chmod +x reaper.py && cp reaper.py /usr/local/bin/reaper && chmod +x /usr/local/bin/reaper",
-                "wget -O /tmp/reaper.tar.gz https://github.com/zer0d4y/reaper/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf reaper.tar.gz && cd reaper-master && chmod +x reaper.py && cp reaper.py /usr/local/bin/reaper && chmod +x /usr/local/bin/reaper"
+                "wget -O /tmp/reaper.tar.gz https://codeload.github.com/zer0d4y/reaper/tar.gz/refs/heads/master && cd /tmp && tar -xzf reaper.tar.gz && cd reaper-master && chmod +x reaper.py && cp reaper.py /usr/local/bin/reaper && chmod +x /usr/local/bin/reaper"
             ]
         }
     else:  # macOS
