@@ -2252,16 +2252,16 @@ def get_install_commands() -> Dict[str, List[str]]:
                 "wget -O /usr/local/bin/websocat https://github.com/vi/websocat/releases/latest/download/websocat.x86_64-unknown-linux-musl && chmod +x /usr/local/bin/websocat"
             ],
             "locust": [
-                "pip install locust",
-                "pip3 install locust",
-                "python3 -m pip install locust",
-                "apt-get install -y python3-pip && pip3 install locust"
+                "apt-get install -y python3-locust",
+                "pip install --break-system-packages locust",
+                "pip3 install --break-system-packages locust",
+                "python3 -m pip install --break-system-packages locust"
             ],
             "k6": [
                 "snap install k6",
-                "curl -L https://github.com/grafana/k6/releases/latest/download/k6-v0.47.0-linux-amd64.deb -o /tmp/k6.deb 2>/dev/null && dpkg -i /tmp/k6.deb || apt-get install -f -y",
-                "wget -O /tmp/k6.deb https://github.com/grafana/k6/releases/latest/download/k6-v0.47.0-linux-amd64.deb 2>/dev/null && dpkg -i /tmp/k6.deb || apt-get install -f -y",
-                "apt-get install -y gpg && gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D6B 2>/dev/null && echo 'deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main' | tee /etc/apt/sources.list.d/k6.list && apt-get update && apt-get install -y k6",
+                "curl -L https://github.com/grafana/k6/releases/latest/download/k6-v0.47.0-linux-amd64.deb -o /tmp/k6.deb && dpkg -i /tmp/k6.deb || apt-get install -f -y",
+                "wget -O /tmp/k6.deb https://github.com/grafana/k6/releases/latest/download/k6-v0.47.0-linux-amd64.deb && dpkg -i /tmp/k6.deb || apt-get install -f -y",
+                "apt-get install -y gpg && gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D6B && echo 'deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main' | tee /etc/apt/sources.list.d/k6.list && apt-get update && apt-get install -y k6",
                 "yum install -y k6",
                 "dnf install -y k6"
             ],
@@ -2273,13 +2273,13 @@ def get_install_commands() -> Dict[str, List[str]]:
                 "apt-get install -y unzip default-jre && wget -O /tmp/gatling.zip https://repo1.maven.org/maven2/io/gatling/highcharts/gatling-charts-highcharts-bundle/latest/gatling-charts-highcharts-bundle-latest-bundle.zip && unzip -q /tmp/gatling.zip -d /opt && ln -sf /opt/gatling-charts-highcharts-bundle-*/bin/gatling.sh /usr/local/bin/gatling && chmod +x /usr/local/bin/gatling"
             ],
             "drill": [
-                "apt-get install -y build-essential libldns-dev autoconf automake libtool && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/fcambus/drill.git /tmp/drill 2>/dev/null && cd /tmp/drill && ./autogen.sh 2>/dev/null || autoreconf -fiv 2>/dev/null || true && ./configure && make && make install",
-                "apt-get install -y build-essential libldns-dev autoconf automake libtool && wget -O /tmp/drill.tar.gz https://github.com/fcambus/drill/archive/refs/heads/master.tar.gz 2>/dev/null && cd /tmp && tar -xzf drill.tar.gz 2>/dev/null && cd drill-master && ./autogen.sh 2>/dev/null || autoreconf -fiv 2>/dev/null || true && ./configure && make && make install",
+                "apt-get install -y build-essential libldns-dev autoconf automake libtool && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/fcambus/drill.git /tmp/drill && cd /tmp/drill && (test -f autogen.sh && bash autogen.sh) || (test -f configure.ac && autoreconf -fiv) || true && (test -f configure && bash configure) || (test -f configure.ac && autoreconf -fiv && bash configure) && make && make install",
+                "apt-get install -y build-essential libldns-dev autoconf automake libtool && wget -O /tmp/drill.tar.gz https://github.com/fcambus/drill/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf drill.tar.gz && cd drill-master && (test -f autogen.sh && bash autogen.sh) || (test -f configure.ac && autoreconf -fiv) || true && (test -f configure && bash configure) || (test -f configure.ac && autoreconf -fiv && bash configure) && make && make install",
                 "apt-get install -y drill"
             ],
             "http2bench": [
-                "go install github.com/fstab/h2c/http2bench@latest",
-                "GOPATH=/tmp/go go install github.com/fstab/h2c/http2bench@latest && cp /tmp/go/bin/http2bench /usr/local/bin/http2bench && chmod +x /usr/local/bin/http2bench"
+                "go install github.com/fstab/h2c@latest",
+                "GOPATH=/tmp/go go install github.com/fstab/h2c@latest && cp /tmp/go/bin/h2c /usr/local/bin/http2bench && chmod +x /usr/local/bin/http2bench"
             ],
             "wrk2": [
                 "apt-get install -y build-essential libssl-dev git && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/giltene/wrk2.git /tmp/wrk2 2>/dev/null && cd /tmp/wrk2 && make && cp wrk /usr/local/bin/wrk2 && chmod +x /usr/local/bin/wrk2",
@@ -2287,43 +2287,43 @@ def get_install_commands() -> Dict[str, List[str]]:
                 "apt-get install -y build-essential libssl-dev && curl -L https://github.com/giltene/wrk2/archive/refs/heads/master.tar.gz -o /tmp/wrk2.tar.gz 2>/dev/null && cd /tmp && tar -xzf wrk2.tar.gz 2>/dev/null && cd wrk2-master && make && cp wrk /usr/local/bin/wrk2 && chmod +x /usr/local/bin/wrk2"
             ],
             "weighttp": [
-                "apt-get install -y build-essential libev-dev waf python3 && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/lighttpd/weighttp.git /tmp/weighttp 2>/dev/null && cd /tmp/weighttp && ./waf configure && ./waf build && ./waf install",
-                "apt-get install -y build-essential libev-dev waf python3 && wget -O /tmp/weighttp.tar.gz https://github.com/lighttpd/weighttp/archive/refs/heads/master.tar.gz 2>/dev/null && cd /tmp && tar -xzf weighttp.tar.gz 2>/dev/null && cd weighttp-master && ./waf configure && ./waf build && ./waf install",
+                "apt-get install -y build-essential libev-dev python3 && GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/lighttpd/weighttp.git /tmp/weighttp && cd /tmp/weighttp && (test -f waf && python3 waf configure && python3 waf build && python3 waf install) || (apt-get install -y waf && ./waf configure && ./waf build && ./waf install)",
+                "apt-get install -y build-essential libev-dev python3 && wget -O /tmp/weighttp.tar.gz https://github.com/lighttpd/weighttp/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf weighttp.tar.gz && cd weighttp-master && (test -f waf && python3 waf configure && python3 waf build && python3 waf install) || (apt-get install -y waf && ./waf configure && ./waf build && ./waf install)",
                 "apt-get install -y weighttp"
             ],
             "goldeneye": [
-                "pip install goldeneye",
-                "pip3 install goldeneye",
-                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/jseidl/GoldenEye.git /tmp/goldeneye 2>/dev/null && cd /tmp/goldeneye && chmod +x goldeneye.py && cp goldeneye.py /usr/local/bin/goldeneye && chmod +x /usr/local/bin/goldeneye",
+                "pip install --break-system-packages goldeneye",
+                "pip3 install --break-system-packages goldeneye",
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/jseidl/GoldenEye.git /tmp/goldeneye && cd /tmp/goldeneye && chmod +x goldeneye.py && cp goldeneye.py /usr/local/bin/goldeneye && chmod +x /usr/local/bin/goldeneye",
                 "wget -O /tmp/goldeneye.tar.gz https://github.com/jseidl/GoldenEye/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf goldeneye.tar.gz && cd GoldenEye-master && chmod +x goldeneye.py && cp goldeneye.py /usr/local/bin/goldeneye && chmod +x /usr/local/bin/goldeneye"
             ],
             "hulk": [
-                "pip install hulk",
-                "pip3 install hulk",
-                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/grafov/hulk.git /tmp/hulk 2>/dev/null && cd /tmp/hulk && chmod +x hulk.py && cp hulk.py /usr/local/bin/hulk && chmod +x /usr/local/bin/hulk",
+                "pip install --break-system-packages hulk",
+                "pip3 install --break-system-packages hulk",
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/grafov/hulk.git /tmp/hulk && cd /tmp/hulk && chmod +x hulk.py && cp hulk.py /usr/local/bin/hulk && chmod +x /usr/local/bin/hulk",
                 "wget -O /tmp/hulk.tar.gz https://github.com/grafov/hulk/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf hulk.tar.gz && cd hulk-master && chmod +x hulk.py && cp hulk.py /usr/local/bin/hulk && chmod +x /usr/local/bin/hulk"
             ],
             "slowloris": [
-                "pip install slowloris",
-                "pip3 install slowloris",
                 "apt-get install -y slowloris",
                 "yum install -y slowloris",
-                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/gkbrk/slowloris.git /tmp/slowloris 2>/dev/null && cd /tmp/slowloris && chmod +x slowloris.py && cp slowloris.py /usr/local/bin/slowloris && chmod +x /usr/local/bin/slowloris"
+                "pip install --break-system-packages slowloris",
+                "pip3 install --break-system-packages slowloris",
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/gkbrk/slowloris.git /tmp/slowloris && cd /tmp/slowloris && chmod +x slowloris.py && cp slowloris.py /usr/local/bin/slowloris && chmod +x /usr/local/bin/slowloris"
             ],
             "torshammer": [
-                "pip install torshammer",
-                "pip3 install torshammer",
-                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/dotfighter/torshammer.git /tmp/torshammer 2>/dev/null && cd /tmp/torshammer && chmod +x torshammer.py && cp torshammer.py /usr/local/bin/torshammer && chmod +x /usr/local/bin/torshammer",
+                "pip install --break-system-packages torshammer",
+                "pip3 install --break-system-packages torshammer",
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/dotfighter/torshammer.git /tmp/torshammer && cd /tmp/torshammer && chmod +x torshammer.py && cp torshammer.py /usr/local/bin/torshammer && chmod +x /usr/local/bin/torshammer",
                 "wget -O /tmp/torshammer.tar.gz https://github.com/dotfighter/torshammer/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf torshammer.tar.gz && cd torshammer-master && chmod +x torshammer.py && cp torshammer.py /usr/local/bin/torshammer && chmod +x /usr/local/bin/torshammer"
             ],
             "ddos-ripper": [
-                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/palahadi/DDoS-Ripper.git /tmp/ddos-ripper 2>/dev/null && cd /tmp/ddos-ripper && chmod +x DRipper.py && cp DRipper.py /usr/local/bin/ddos-ripper && chmod +x /usr/local/bin/ddos-ripper",
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/palahadi/DDoS-Ripper.git /tmp/ddos-ripper && cd /tmp/ddos-ripper && chmod +x DRipper.py && cp DRipper.py /usr/local/bin/ddos-ripper && chmod +x /usr/local/bin/ddos-ripper",
                 "wget -O /tmp/ddos-ripper.tar.gz https://github.com/palahadi/DDoS-Ripper/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf ddos-ripper.tar.gz && cd DDoS-Ripper-master && chmod +x DRipper.py && cp DRipper.py /usr/local/bin/ddos-ripper && chmod +x /usr/local/bin/ddos-ripper"
             ],
             "pyloris": [
-                "pip install pyloris",
-                "pip3 install pyloris",
-                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/epsylon/pyloris.git /tmp/pyloris 2>/dev/null && cd /tmp/pyloris && chmod +x pyloris.py && cp pyloris.py /usr/local/bin/pyloris && chmod +x /usr/local/bin/pyloris",
+                "pip install --break-system-packages pyloris",
+                "pip3 install --break-system-packages pyloris",
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/epsylon/pyloris.git /tmp/pyloris && cd /tmp/pyloris && chmod +x pyloris.py && cp pyloris.py /usr/local/bin/pyloris && chmod +x /usr/local/bin/pyloris",
                 "wget -O /tmp/pyloris.tar.gz https://github.com/epsylon/pyloris/archive/refs/heads/master.tar.gz && cd /tmp && tar -xzf pyloris.tar.gz && cd pyloris-master && chmod +x pyloris.py && cp pyloris.py /usr/local/bin/pyloris && chmod +x /usr/local/bin/pyloris"
             ],
             "xerxes": [
@@ -2702,6 +2702,34 @@ def auto_install_all_tools(debug=False):
     
     print()
     
+    # Crear directorio temporal con permisos adecuados
+    import tempfile
+    temp_dir = None
+    try:
+        # Intentar usar /var/tmp primero (persistente, permisos más permisivos)
+        if os.path.exists("/var/tmp") and os.access("/var/tmp", os.W_OK):
+            temp_dir = "/var/tmp/loadtest_install"
+        else:
+            # Usar directorio temporal del usuario
+            user_temp = os.path.expanduser("~/tmp")
+            if not os.path.exists(user_temp):
+                os.makedirs(user_temp, exist_ok=True)
+            temp_dir = os.path.join(user_temp, "loadtest_install")
+        
+        # Crear directorio si no existe
+        if not os.path.exists(temp_dir):
+            os.makedirs(temp_dir, exist_ok=True)
+    except Exception:
+        # Fallback a /tmp si todo falla
+        temp_dir = "/tmp/loadtest_install"
+        try:
+            os.makedirs(temp_dir, exist_ok=True)
+        except Exception:
+            temp_dir = "/tmp"
+    
+    if debug:
+        print_color(f"🔍 [DEBUG] Directorio temporal: {temp_dir}", Colors.CYAN)
+    
     installed_count = 0
     failed_count = 0
     skipped_count = 0
@@ -2759,12 +2787,27 @@ def auto_install_all_tools(debug=False):
                             "GIT_TERMINAL_PROMPT" in command or
                             "cd /tmp" in command)
                 
+                # Reemplazar /tmp con directorio temporal mejor
+                command_processed = command.replace("/tmp", temp_dir)
+                
+                # Agregar --break-system-packages a comandos pip si es necesario
+                if ("pip install" in command_processed or "pip3 install" in command_processed or "python3 -m pip install" in command_processed) and system == "Linux":
+                    # Verificar si el sistema tiene externally-managed-environment
+                    if "externally-managed-environment" not in command_processed:
+                        # Agregar flag para sistemas con PEP 668
+                        if "pip install" in command_processed:
+                            command_processed = command_processed.replace("pip install", "pip install --break-system-packages")
+                        elif "pip3 install" in command_processed:
+                            command_processed = command_processed.replace("pip3 install", "pip3 install --break-system-packages")
+                        elif "python3 -m pip install" in command_processed:
+                            command_processed = command_processed.replace("python3 -m pip install", "python3 -m pip install --break-system-packages")
+                
                 # Preparar el comando según si usa shell o no
                 if use_shell:
-                    cmd = command
+                    cmd = command_processed
                 else:
                     # Dividir el comando en lista para subprocess cuando no usa shell
-                    cmd = shlex.split(command)
+                    cmd = shlex.split(command_processed)
                 
                 # Preparar entorno con PATH extendido para herramientas Go y otras
                 env = os.environ.copy()
@@ -2839,9 +2882,33 @@ def auto_install_all_tools(debug=False):
                     # Verificar si realmente se instaló
                     if debug:
                         print_color(f"    🔍 [DEBUG] Verificando si {tool} está disponible...", Colors.CYAN)
-                    if check_command_exists(tool):
+                        # Mostrar PATH actual para debug
+                        current_path = env.get("PATH", os.environ.get("PATH", ""))
+                        print_color(f"    🔍 [DEBUG] PATH actual: {current_path[:200]}...", Colors.CYAN)
+                    
+                    # Verificar con múltiples métodos
+                    tool_found = check_command_exists(tool)
+                    
+                    # Para k6, verificar también con which directamente
+                    if tool == "k6" and not tool_found:
+                        try:
+                            which_result = subprocess.run(
+                                ["which", "k6"],
+                                stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE,
+                                text=True,
+                                timeout=5
+                            )
+                            if which_result.returncode == 0 and which_result.stdout.strip():
+                                tool_found = True
+                                if debug:
+                                    print_color(f"    🔍 [DEBUG] k6 encontrado en: {which_result.stdout.strip()}", Colors.CYAN)
+                        except Exception:
+                            pass
+                    
+                    if tool_found:
                         print_color(f"  ✓ {tool} instalado correctamente", Colors.GREEN)
-                        log_message("INFO", f"{tool} instalado correctamente con: {command}")
+                        log_message("INFO", f"{tool} instalado correctamente con: {command_processed}")
                         success = True
                         installed_count += 1
                         break
@@ -2854,9 +2921,23 @@ def auto_install_all_tools(debug=False):
                             print_color(f"    🔍 [DEBUG] Intentando verificar nuevamente después de 3 segundos...", Colors.CYAN)
                         # Intentar verificar de nuevo después de un momento
                         time.sleep(3)
-                        if check_command_exists(tool):
+                        tool_found_retry = check_command_exists(tool)
+                        if tool == "k6" and not tool_found_retry:
+                            try:
+                                which_result = subprocess.run(
+                                    ["which", "k6"],
+                                    stdout=subprocess.PIPE,
+                                    stderr=subprocess.PIPE,
+                                    text=True,
+                                    timeout=5
+                                )
+                                if which_result.returncode == 0 and which_result.stdout.strip():
+                                    tool_found_retry = True
+                            except Exception:
+                                pass
+                        if tool_found_retry:
                             print_color(f"  ✓ {tool} instalado correctamente (verificación tardía)", Colors.GREEN)
-                            log_message("INFO", f"{tool} instalado correctamente con: {command}")
+                            log_message("INFO", f"{tool} instalado correctamente con: {command_processed}")
                             success = True
                             installed_count += 1
                             break
