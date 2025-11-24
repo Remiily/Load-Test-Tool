@@ -1415,8 +1415,8 @@ def check_insecure_configurations(headers: Dict, content: str) -> List[Dict]:
     
     # X-XSS-Protection deshabilitado o mal configurado
     if "x-xss-protection" in headers_lower:
-        xss_protection = headers_lower["x-xss-protection"]
-        if "0" in xss_protection or "mode=block" not in xss_protection.lower():
+        xss_protection = headers_lower.get("x-xss-protection")
+        if xss_protection and ("0" in str(xss_protection) or "mode=block" not in str(xss_protection).lower()):
             vulnerabilities.append({
                 "type": "insecure_configuration",
                 "severity": "LOW",
@@ -1496,9 +1496,13 @@ def check_outdated_versions(server_header: str) -> List[Dict]:
     }
     
     # Intentar extraer versión del server header
+    if not server_header:
+        return vulnerabilities
+    
+    server_header_str = str(server_header).lower()
     for server_type, versions in vulnerable_versions.items():
-        if server_type.lower() in server_header.lower():
-            version_match = re.search(r'([0-9]+\.[0-9]+(?:\.[0-9]+)?)', server_header)
+        if server_type.lower() in server_header_str:
+            version_match = re.search(r'([0-9]+\.[0-9]+(?:\.[0-9]+)?)', str(server_header))
             if version_match:
                 detected_version = version_match.group(1)
                 
@@ -1801,11 +1805,15 @@ def detect_framework(headers: Dict, content: str) -> Optional[str]:
         "vue": ["vue", "__vue__"]
     }
     
-    content_lower = content.lower()
+    content_str = str(content) if content is not None else ""
+    content_lower = content_str.lower()
+    headers_str = str(headers) if headers is not None else ""
+    headers_lower = headers_str.lower()
+    
     for framework, indicators in frameworks.items():
         if any(ind.lower() in content_lower for ind in indicators):
             return framework
-        if any(ind.lower() in str(headers).lower() for ind in indicators):
+        if any(ind.lower() in headers_lower for ind in indicators):
             return framework
     
     return None
@@ -1814,14 +1822,16 @@ def detect_technologies(headers: Dict, content: str) -> List[str]:
     """Detecta tecnologías utilizadas"""
     technologies = []
     
-    # Detectar por headers
-    if "X-Powered-By" in headers:
-        technologies.append(headers["X-Powered-By"])
-    if "Server" in headers:
-        technologies.append(headers["Server"])
+    # Detectar por headers (validar que headers no sea None)
+    if headers:
+        if "X-Powered-By" in headers and headers["X-Powered-By"]:
+            technologies.append(str(headers["X-Powered-By"]))
+        if "Server" in headers and headers["Server"]:
+            technologies.append(str(headers["Server"]))
     
     # Detectar por contenido
-    content_lower = content.lower()
+    content_str = str(content) if content is not None else ""
+    content_lower = content_str.lower()
     tech_patterns = {
         "PHP": ["php", "<?php"],
         "ASP.NET": ["asp.net", "__viewstate"],
@@ -1859,7 +1869,7 @@ def detect_cdn() -> Optional[str]:
         try:
             response = requests.head(TARGET, timeout=15, allow_redirects=True, verify=False,
                                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
-            headers_lower = {k.lower(): v.lower() for k, v in response.headers.items()}
+            headers_lower = {k.lower(): (v.lower() if v is not None else "") for k, v in response.headers.items()}
             
             for cdn, indicators in cdns.items():
                 if any(ind in str(headers_lower) for ind in indicators):
@@ -1899,7 +1909,7 @@ def detect_waf_advanced() -> Optional[Dict]:
         try:
             response = requests.get(TARGET, timeout=15, allow_redirects=True, verify=False,
                                    headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"})
-            headers_lower = {k.lower(): v.lower() for k, v in response.headers.items()}
+            headers_lower = {k.lower(): (v.lower() if v is not None else "") for k, v in response.headers.items()}
             
             for waf, signatures in waf_signatures.items():
                 if any(sig in str(headers_lower) for sig in signatures):
