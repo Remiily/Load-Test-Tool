@@ -7673,7 +7673,10 @@ def generate_stress_recommendations(fingerprint: Dict = None) -> Dict:
     
     target_type = fingerprint.get("target_type", TARGET_TYPE)
     network_type = fingerprint.get("network_type", NETWORK_TYPE)
-    server = fingerprint.get("server", "Unknown")
+    server = fingerprint.get("server") or "Unknown"  # Asegurar que nunca sea None
+    if server is None:
+        server = "Unknown"
+    server_str = str(server).lower()  # Convertir a string y lowercase una vez
     framework = fingerprint.get("framework")
     # Manejar waf que puede ser dict, string o None
     waf_raw = fingerprint.get("waf")
@@ -7709,7 +7712,7 @@ def generate_stress_recommendations(fingerprint: Dict = None) -> Dict:
         recommendations["reasoning"].append("IP local detectada - usando configuración conservadora para evitar sobrecarga")
         
         # Si es router u otro dispositivo embebido
-        if any(keyword in server.lower() for keyword in ["router", "tp-link", "asus", "netgear", "linksys"]):
+        if server_str and any(keyword in server_str for keyword in ["router", "tp-link", "asus", "netgear", "linksys"]):
             recommendations["recommended_power_level"] = "TEST"
             recommendations["recommended_duration"] = 180
             recommendations["recommended_connections"] = 100
@@ -7728,19 +7731,19 @@ def generate_stress_recommendations(fingerprint: Dict = None) -> Dict:
             recommendations["reasoning"].append("Dominio público - configuración moderada por defecto")
     
     # Recomendaciones según servidor detectado
-    if "nginx" in server.lower():
+    if server_str and "nginx" in server_str:
         recommendations["recommended_power_level"] = "HEAVY"
         recommendations["recommended_connections"] = 8000
         recommendations["recommended_threads"] = 300
         recommendations["reasoning"].append("Nginx detectado - puede manejar alta carga")
     
-    if "apache" in server.lower():
+    if server_str and "apache" in server_str:
         recommendations["recommended_power_level"] = "MODERATE"
         recommendations["recommended_connections"] = 2000
         recommendations["recommended_threads"] = 100
         recommendations["reasoning"].append("Apache detectado - configuración moderada recomendada")
     
-    if "iis" in server.lower():
+    if server_str and "iis" in server_str:
         recommendations["recommended_power_level"] = "MEDIUM"
         recommendations["recommended_connections"] = 1500
         recommendations["reasoning"].append("IIS detectado - configuración moderada")
@@ -7824,7 +7827,10 @@ def generate_recommendations() -> List[Dict]:
     
     target_type = fingerprint.get("target_type", TARGET_TYPE)
     network_type = fingerprint.get("network_type", NETWORK_TYPE)
-    server = fingerprint.get("server", "Unknown")
+    server = fingerprint.get("server") or "Unknown"  # Asegurar que nunca sea None
+    if server is None:
+        server = "Unknown"
+    server_str = str(server).lower()  # Convertir a string y lowercase una vez
     framework = fingerprint.get("framework")
     technologies = fingerprint.get("technologies", [])
     discovered_endpoints = fingerprint.get("discovered_endpoints", [])
@@ -7851,19 +7857,19 @@ def generate_recommendations() -> List[Dict]:
             })
         
         # Recomendaciones según servidor detectado
-        if "router" in server.lower() or "tp-link" in server.lower() or "asus" in server.lower():
+        if server_str and ("router" in server_str or "tp-link" in server_str or "asus" in server_str):
             recommendations.append({
                 "title": "📡 Dispositivo Router Detectado",
                 "description": "Equipo parece ser un router. Usa niveles LIGHT a MODERATE para evitar sobrecargar el dispositivo. Los routers domésticos tienen recursos limitados."
             })
         
-        if "nginx" in server.lower() or "nginx" in technologies:
+        if (server_str and "nginx" in server_str) or "nginx" in technologies:
             recommendations.append({
                 "title": "⚡ Nginx en Red Local",
                 "description": "Nginx detectado. Puede manejar mejor la carga. Usa niveles MODERATE a HEAVY. Verifica configuración de worker_processes y worker_connections."
             })
         
-        if "apache" in server.lower() or "apache" in technologies:
+        if (server_str and "apache" in server_str) or "apache" in technologies:
             recommendations.append({
                 "title": "🔧 Apache en Red Local",
                 "description": "Apache detectado. Optimiza MaxRequestWorkers y ThreadsPerChild. Recomendado niveles MODERATE para evitar memory leaks."
