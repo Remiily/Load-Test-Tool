@@ -7554,7 +7554,8 @@ def generate_html_report(report: Dict) -> Path:
         // Gráfico de Análisis de Errores
         const errorTypesCtx = document.getElementById('errorTypesChart');
         if (errorTypesCtx) {
-            const errorTypes = """ + json.dumps(error_analysis.get('error_types', {}) if report.get('error_analysis') else {}) + """;
+            const errorAnalysis = """ + json.dumps(report.get('error_analysis', {})) + """;
+            const errorTypes = (errorAnalysis && errorAnalysis.error_types) ? errorAnalysis.error_types : {};
             
             if (Object.keys(errorTypes).length > 0) {
                 new Chart(errorTypesCtx, {
