@@ -1286,6 +1286,9 @@ def start_recommended_attack():
         # Normalizar target (quitar espacios y asegurar formato correcto)
         target = target.strip()
         
+        # Log del target recibido para debugging
+        loadtest.log_message("INFO", f"🎯 [START-RECOMMENDED] Target recibido: '{target}'", context="start_recommended_attack", force_console=True)
+        
         # Obtener parámetros óptimos
         optimal_params = tool_recommendations.get("optimal_parameters", {})
         
@@ -1322,26 +1325,68 @@ def start_recommended_attack():
             loadtest.KEEP_ALIVE_POOLING = optimal_params["keep_alive"]
         
         # Validar target DESPUÉS de sincronizar todas las variables
-        # La validación debe usar las variables de loadtest, no las locales
+        # IMPORTANTE: La función validate_critical_variables() usa las variables globales del módulo loadtest
+        # Asegurarse de que todas las variables necesarias estén actualizadas antes de validar
         try:
+            # Forzar actualización de variables críticas antes de validar
+            # La validación puede modificar TARGET, así que guardar el original
+            original_target = loadtest.TARGET
+            
+            # Asegurar que PROTOCOL y PORT estén definidos si no lo están
+            if not hasattr(loadtest, 'PROTOCOL') or not loadtest.PROTOCOL:
+                loadtest.PROTOCOL = "https" if target.startswith("https://") else "http"
+            if not hasattr(loadtest, 'PORT') or not loadtest.PORT:
+                if ":" in target and target.count(":") > 1:  # Puede tener puerto
+                    try:
+                        from urllib.parse import urlparse
+                        parsed = urlparse(target if "://" in target else f"http://{target}")
+                        loadtest.PORT = parsed.port or (443 if loadtest.PROTOCOL == "https" else 80)
+                    except:
+                        loadtest.PORT = 443 if loadtest.PROTOCOL == "https" else 80
+                else:
+                    loadtest.PORT = 443 if loadtest.PROTOCOL == "https" else 80
+            
+            # Llamar a la validación (modifica variables globales de loadtest)
+            # IMPORTANTE: validate_critical_variables() usa las variables globales del módulo loadtest
+            # Asegurarse de que TARGET esté correctamente establecido antes de validar
+            loadtest.log_message("DEBUG", f"🔍 [START-RECOMMENDED] Antes de validar - TARGET: '{loadtest.TARGET}', PROTOCOL: {getattr(loadtest, 'PROTOCOL', 'N/A')}, PORT: {getattr(loadtest, 'PORT', 'N/A')}", context="start_recommended_attack", force_console=True)
+            
             validation_result = validate_critical_variables()
+            
+            loadtest.log_message("DEBUG", f"🔍 [START-RECOMMENDED] Después de validar - TARGET: '{loadtest.TARGET}', Resultado: {validation_result}", context="start_recommended_attack", force_console=True)
+            
             if not validation_result:
                 # Obtener más información sobre el error para debugging
                 error_details = {
-                    "target": loadtest.TARGET,
+                    "target_original": original_target,
+                    "target_after_validation": loadtest.TARGET,
                     "target_type": getattr(loadtest, 'TARGET_TYPE', 'N/A'),
                     "domain": getattr(loadtest, 'DOMAIN', 'N/A'),
-                    "ip_address": getattr(loadtest, 'IP_ADDRESS', 'N/A')
+                    "ip_address": getattr(loadtest, 'IP_ADDRESS', 'N/A'),
+                    "protocol": getattr(loadtest, 'PROTOCOL', 'N/A'),
+                    "port": getattr(loadtest, 'PORT', 'N/A')
                 }
+                
+                # Log del error para debugging
+                loadtest.log_message("ERROR", f"❌ [START-RECOMMENDED] Validación falló. Target original: '{original_target}', Target después: '{loadtest.TARGET}'", context="start_recommended_attack", force_console=True)
+                
                 return jsonify({
                     "status": "error", 
-                    "message": f"Target inválido después de aplicar parámetros",
+                    "message": f"Target inválido después de aplicar parámetros. Ver detalles para más información.",
                     "details": error_details
                 }), 400
+            
+            # Si la validación fue exitosa, actualizar TARGET local con el valor validado
+            TARGET = loadtest.TARGET
+            
         except Exception as validation_error:
+            import traceback
+            error_trace = traceback.format_exc()
+            loadtest.log_message("ERROR", f"❌ [START-RECOMMENDED] Excepción en validación: {str(validation_error)}\n{error_trace}", context="start_recommended_attack", force_console=True)
             return jsonify({
                 "status": "error",
-                "message": f"Error validando target: {str(validation_error)}"
+                "message": f"Error validando target: {str(validation_error)}",
+                "traceback": error_trace if getattr(loadtest, 'DEBUG_MODE', False) else None
             }), 400
         
         # Generar comando para mostrar (después de validación exitosa)
