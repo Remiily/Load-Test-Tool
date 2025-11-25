@@ -1435,6 +1435,7 @@ def start_recommended_attack():
                 import sys
                 import loadtest as loadtest_module
                 from collections import defaultdict
+                from datetime import datetime
                 
                 # Sincronizar estado antes de iniciar
                 loadtest_module.WEB_PANEL_MODE = True
@@ -1494,11 +1495,14 @@ def start_recommended_attack():
                 sys.argv = original_argv
             except Exception as e:
                 # Intentar loggear el error, pero si loadtest_module no está disponible, usar print
+                error_msg = str(e)
                 try:
                     import loadtest as loadtest_module
-                    loadtest_module.log_message("ERROR", f"Error en ataque recomendado: {e}", context="start_recommended_attack", force_console=True)
-                except:
-                    print(f"ERROR: Error en ataque recomendado: {e}")
+                    loadtest_module.log_message("ERROR", f"Error en ataque recomendado: {error_msg}", context="start_recommended_attack", force_console=True)
+                except Exception as import_error:
+                    # Si incluso el import falla, usar print como último recurso
+                    print(f"ERROR: Error en ataque recomendado: {error_msg}")
+                    print(f"ERROR: No se pudo importar loadtest para loggear: {import_error}")
         
         current_attack_process = threading.Thread(target=run_recommended_attack, daemon=True)
         current_attack_process.start()
@@ -1522,10 +1526,15 @@ def start_recommended_attack():
         })
     except Exception as e:
         import traceback
+        # Intentar obtener DEBUG_MODE de loadtest, pero si no está disponible, usar False
+        try:
+            debug_mode = getattr(loadtest, 'DEBUG_MODE', False)
+        except:
+            debug_mode = False
         return jsonify({
             "status": "error",
             "message": str(e),
-            "traceback": traceback.format_exc() if getattr(loadtest, 'DEBUG_MODE', False) else None
+            "traceback": traceback.format_exc() if debug_mode else None
         }), 500
 
 @app.route('/api/apply-recommendations', methods=['POST'])
