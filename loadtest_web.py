@@ -1263,10 +1263,28 @@ def start_recommended_attack():
         data = request.json or {}
         tool_recommendations = data.get("tool_recommendations", {})
         stress_recommendations = data.get("stress_recommendations", {})
-        target = data.get("target", TARGET)
+        target = data.get("target") or TARGET or loadtest.TARGET
         
-        if not target:
-            return jsonify({"status": "error", "message": "Target no especificado"}), 400
+        # Si aún no hay target, intentar obtenerlo del fingerprint guardado
+        if not target or not target.strip():
+            # Intentar obtener del fingerprint si está disponible en loadtest
+            if hasattr(loadtest, 'DOMAIN') and loadtest.DOMAIN:
+                target = loadtest.DOMAIN
+                if hasattr(loadtest, 'PROTOCOL') and loadtest.PROTOCOL:
+                    port = getattr(loadtest, 'PORT', None)
+                    if port and port not in [80, 443]:
+                        target = f"{loadtest.PROTOCOL}://{target}:{port}"
+                    else:
+                        target = f"{loadtest.PROTOCOL}://{target}"
+        
+        if not target or not target.strip():
+            return jsonify({
+                "status": "error", 
+                "message": "Target no especificado. Asegúrate de haber ejecutado un fingerprint primero o especifica el target en la configuración."
+            }), 400
+        
+        # Normalizar target (quitar espacios y asegurar formato correcto)
+        target = target.strip()
         
         # Obtener parámetros óptimos
         optimal_params = tool_recommendations.get("optimal_parameters", {})
@@ -1281,7 +1299,7 @@ def start_recommended_attack():
         STEALTH_MODE = optimal_params.get("stealth_mode", False) or stress_recommendations.get("recommended_stealth", False)
         ATTACK_MODE = "MIXED"  # Siempre MIXED para usar recomendaciones
         
-        # Sincronizar con loadtest
+        # Sincronizar con loadtest - IMPORTANTE: actualizar TARGET primero
         loadtest.TARGET = TARGET
         loadtest.DURATION = DURATION
         loadtest.POWER_LEVEL = POWER_LEVEL
@@ -1303,7 +1321,30 @@ def start_recommended_attack():
         if "keep_alive" in optimal_params:
             loadtest.KEEP_ALIVE_POOLING = optimal_params["keep_alive"]
         
-        # Generar comando para mostrar
+        # Validar target DESPUÉS de sincronizar todas las variables
+        # La validación debe usar las variables de loadtest, no las locales
+        try:
+            validation_result = validate_critical_variables()
+            if not validation_result:
+                # Obtener más información sobre el error para debugging
+                error_details = {
+                    "target": loadtest.TARGET,
+                    "target_type": getattr(loadtest, 'TARGET_TYPE', 'N/A'),
+                    "domain": getattr(loadtest, 'DOMAIN', 'N/A'),
+                    "ip_address": getattr(loadtest, 'IP_ADDRESS', 'N/A')
+                }
+                return jsonify({
+                    "status": "error", 
+                    "message": f"Target inválido después de aplicar parámetros",
+                    "details": error_details
+                }), 400
+        except Exception as validation_error:
+            return jsonify({
+                "status": "error",
+                "message": f"Error validando target: {str(validation_error)}"
+            }), 400
+        
+        # Generar comando para mostrar (después de validación exitosa)
         cmd_parts = ["python", "loadtest.py", "-t", TARGET, "-d", str(DURATION), "-p", POWER_LEVEL,
                      "--connections", str(MAX_CONNECTIONS), "--threads", str(MAX_THREADS), "--mode", "MIXED"]
         if WAF_BYPASS:
@@ -1311,10 +1352,6 @@ def start_recommended_attack():
         if STEALTH_MODE:
             cmd_parts.append("--stealth")
         command = " ".join(cmd_parts)
-        
-        # Validar target antes de iniciar
-        if not validate_critical_variables():
-            return jsonify({"status": "error", "message": "Target inválido después de aplicar parámetros"}), 400
         
         # Iniciar ataque en thread separado (usar la misma lógica que start_attack)
         def run_recommended_attack():
