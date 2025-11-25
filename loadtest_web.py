@@ -1432,16 +1432,39 @@ def start_recommended_attack():
         import sys
         from collections import defaultdict
         from datetime import datetime
-        loadtest_ref = loadtest  # Capturar referencia para el closure
+        
+        # DEBUG: Verificar que loadtest esté disponible antes de capturarlo
+        print(f"[DEBUG start_recommended_attack] Verificando loadtest antes de capturar...")
+        print(f"[DEBUG start_recommended_attack] 'loadtest' in globals(): {'loadtest' in globals()}")
+        print(f"[DEBUG start_recommended_attack] 'loadtest' in locals(): {'loadtest' in locals()}")
+        try:
+            print(f"[DEBUG start_recommended_attack] loadtest type: {type(loadtest)}")
+            print(f"[DEBUG start_recommended_attack] loadtest id: {id(loadtest)}")
+        except NameError as ne:
+            print(f"[DEBUG start_recommended_attack] ERROR: loadtest no está definido: {ne}")
+            # Intentar importar loadtest directamente
+            import loadtest as lt
+            loadtest_ref = lt
+            print(f"[DEBUG start_recommended_attack] loadtest importado directamente como lt")
+        else:
+            loadtest_ref = loadtest  # Capturar referencia para el closure
+            print(f"[DEBUG start_recommended_attack] loadtest_ref capturado correctamente: {loadtest_ref is not None}")
         
         # Iniciar ataque en thread separado (usar la misma lógica que start_attack)
         def run_recommended_attack():
             try:
+                # DEBUG: Verificar que loadtest_ref esté disponible
+                print(f"[DEBUG] loadtest_ref disponible: {loadtest_ref is not None}")
+                print(f"[DEBUG] Tipo de loadtest_ref: {type(loadtest_ref)}")
+                
                 # Usar la referencia capturada de loadtest para evitar problemas de scope en threads
                 loadtest = loadtest_ref
+                print(f"[DEBUG] loadtest asignado correctamente: {loadtest is not None}")
                 
                 # Sincronizar estado antes de iniciar
+                print(f"[DEBUG] Intentando acceder a loadtest.WEB_PANEL_MODE...")
                 loadtest.WEB_PANEL_MODE = True
+                print(f"[DEBUG] loadtest.WEB_PANEL_MODE asignado correctamente")
                 loadtest.DEBUG_MODE = True
                 loadtest.monitoring_active = True
                 
@@ -1497,14 +1520,30 @@ def start_recommended_attack():
                 loadtest.main()
                 sys.argv = original_argv
             except Exception as e:
-                # Intentar loggear el error usando loadtest si está disponible
+                # DEBUG: Información detallada del error
+                import traceback
                 error_msg = str(e)
+                error_trace = traceback.format_exc()
+                print(f"[DEBUG] ERROR CAPTURADO EN run_recommended_attack:")
+                print(f"[DEBUG] Mensaje: {error_msg}")
+                print(f"[DEBUG] Traceback completo:\n{error_trace}")
+                print(f"[DEBUG] loadtest_ref disponible en except: {loadtest_ref is not None if 'loadtest_ref' in locals() or 'loadtest_ref' in globals() else 'NO DEFINIDO'}")
+                
+                # Intentar loggear el error usando loadtest si está disponible
                 try:
                     # Usar la referencia capturada para evitar problemas de scope
-                    loadtest_ref.log_message("ERROR", f"Error en ataque recomendado: {error_msg}", context="start_recommended_attack", force_console=True)
-                except:
+                    if 'loadtest_ref' in locals() or 'loadtest_ref' in globals():
+                        loadtest_ref.log_message("ERROR", f"Error en ataque recomendado: {error_msg}\nTraceback: {error_trace}", context="start_recommended_attack", force_console=True)
+                    else:
+                        print(f"[DEBUG] loadtest_ref no está en locals ni globals")
+                        # Intentar importar loadtest directamente
+                        import loadtest as lt
+                        lt.log_message("ERROR", f"Error en ataque recomendado: {error_msg}\nTraceback: {error_trace}", context="start_recommended_attack", force_console=True)
+                except Exception as log_error:
                     # Si loadtest no está disponible, usar print como último recurso
+                    print(f"[DEBUG] Error al intentar loggear: {log_error}")
                     print(f"ERROR: Error en ataque recomendado: {error_msg}")
+                    print(f"ERROR: Traceback completo:\n{error_trace}")
         
         current_attack_process = threading.Thread(target=run_recommended_attack, daemon=True)
         current_attack_process.start()

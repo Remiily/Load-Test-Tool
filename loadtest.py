@@ -2876,7 +2876,7 @@ def detect_cdn() -> Optional[str]:
             # SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: verificar CNAME para detectar CloudFront
             try:
                 import socket
-                import dns.resolver
+                import dns.resolver  # type: ignore
                 answers = dns.resolver.resolve(DOMAIN, 'CNAME')
                 for rdata in answers:
                     if 'cloudfront.net' in str(rdata.target).lower():
@@ -3017,7 +3017,7 @@ def check_subdomain_bypass_cdn(subdomain: str) -> Dict:
     
     try:
         import socket
-        import dns.resolver
+        import dns.resolver  # type: ignore
         
         # Resolver DNS del subdominio
         # SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: verificar si subdominio resuelve directamente a IP (bypass CDN)
@@ -3101,7 +3101,7 @@ def detect_cloudfront_bypass(domain: str = None) -> Dict:
             # Verificar DNS directamente - SIGUIENDO LÓGICA DEL SCRIPT EXITOSO
             try:
                 import socket
-                import dns.resolver
+                import dns.resolver  # type: ignore
                 # Resolver CNAME para detectar CloudFront
                 cname_answers = dns.resolver.resolve(domain, 'CNAME')
                 for rdata in cname_answers:
@@ -13010,8 +13010,8 @@ Ejemplos:
     
     # Configurar estrategia de rotación de proxies
     if args.proxy_rotation:
+        global PROXY_ROTATION
         PROXY_ROTATION = args.proxy_rotation
-        loadtest.PROXY_ROTATION = args.proxy_rotation
     
     # Configurar variables globales
     TARGET = args.target
