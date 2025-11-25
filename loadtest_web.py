@@ -1426,12 +1426,17 @@ def start_recommended_attack():
             cmd_parts.append(PROXY_ROTATION or "round-robin")
         command = " ".join(cmd_parts)
         
+        # Capturar loadtest en el closure para asegurar disponibilidad en el thread
+        loadtest_module = loadtest
+        
         # Iniciar ataque en thread separado (usar la misma lógica que start_attack)
         def run_recommended_attack():
             try:
-                import loadtest
+                # Usar el módulo loadtest capturado en el closure
                 import sys
                 from collections import defaultdict
+                # Usar loadtest_module en lugar de loadtest para evitar problemas de scope
+                loadtest = loadtest_module
                 
                 # Sincronizar estado antes de iniciar
                 loadtest.WEB_PANEL_MODE = True
