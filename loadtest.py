@@ -3470,36 +3470,44 @@ def generate_evasion_ip() -> str:
     return f"{first_octet}.{random.randint(1, 254)}.{random.randint(1, 254)}.{random.randint(1, 254)}"
 
 def apply_url_evasion(url: str) -> str:
-    """Aplica técnicas de evasión a URLs"""
+    """Aplica técnicas de evasión a URLs (solo en path, nunca en dominio para evitar errores DNS)"""
     if not WAF_BYPASS and not STEALTH_MODE:
         return url
     
-    # Case variation
-    if EVASION_TECHNIQUES.get("case_variation") and random.random() < 0.3:
-        # Cambiar mayúsculas/minúsculas en path
-        parts = url.split('/')
-        if len(parts) > 3:
-            path_part = '/'.join(parts[3:])
-            # Mezclar mayúsculas/minúsculas aleatoriamente
-            path_evaded = ''.join(c.upper() if random.random() < 0.3 else c.lower() for c in path_part)
-            url = '/'.join(parts[:3]) + '/' + path_evaded
+    # Separar dominio y path para no romper la resolución DNS
+    try:
+        from urllib.parse import urlparse, urlunparse
+        parsed = urlparse(url)
+        domain = f"{parsed.scheme}://{parsed.netloc}"
+        path = parsed.path
+        query = parsed.query
+        fragment = parsed.fragment
+    except:
+        # Si falla el parsing, no aplicar evasión
+        return url
     
-    # Double encoding
+    # Case variation - solo en path
+    if EVASION_TECHNIQUES.get("case_variation") and random.random() < 0.3:
+        # Cambiar mayúsculas/minúsculas solo en path (nunca en dominio)
+        if path:
+            path = ''.join(c.upper() if random.random() < 0.3 else c.lower() for c in path)
+    
+    # Double encoding - solo en query string
     if EVASION_TECHNIQUES.get("double_encoding") and random.random() < 0.2:
         from urllib.parse import quote
-        # Codificar caracteres especiales dos veces
-        if '?' in url:
-            base, query = url.split('?', 1)
-            query_encoded = quote(quote(query, safe=''), safe='')
-            url = f"{base}?{query_encoded}"
+        # Codificar query string dos veces (nunca el dominio)
+        if query:
+            query = quote(quote(query, safe=''), safe='')
     
-    # Unicode normalization
-    if EVASION_TECHNIQUES.get("unicode_normalization") and random.random() < 0.15:
-        # Agregar caracteres unicode similares
-        url = url.replace('a', 'а') if random.random() < 0.1 else url  # Cyrillic 'a'
-        url = url.replace('o', 'о') if random.random() < 0.1 else url  # Cyrillic 'o'
+    # Unicode normalization - DESHABILITADO para dominio (causa errores DNS)
+    # Solo aplicar en path si es necesario, pero con cuidado
+    # NOTA: Los homoglyphs rompen la resolución DNS, así que los deshabilitamos
+    # if EVASION_TECHNIQUES.get("unicode_normalization") and random.random() < 0.15:
+    #     # NO aplicar homoglyphs - rompen DNS
+    #     pass
     
-    return url
+    # Reconstruir URL sin modificar el dominio
+    return urlunparse((parsed.scheme, parsed.netloc, path, parsed.params, query, fragment))
 
 def get_random_headers() -> Dict[str, str]:
     """Genera headers aleatorios para evasión con técnicas avanzadas y completamente funcionales"""
