@@ -380,12 +380,13 @@ class ConnectionManager:
                     connect_timeout = 5.0  # Timeout de conexión
                     read_timeout = 10.0 if POWER_LEVEL in ["HEAVY", "EXTREME", "DEVASTATOR", "APOCALYPSE", "GODMODE"] else 15.0
                     
+                    # HTTPAdapter no soporta socket_options directamente
+                    # Se configurará SO_KEEPALIVE a nivel de socket después si es necesario
                     adapter = HTTPAdapter(
                         max_retries=retry_strategy,
                         pool_connections=pool_connections,
                         pool_maxsize=pool_maxsize,
-                        pool_block=False,
-                        socket_options=[(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)] if SOCKET_REUSE else None
+                        pool_block=False
                     )
                     
                     # Configurar timeouts en la sesión
@@ -1604,6 +1605,10 @@ def fingerprint_target() -> Dict:
             
             discovered = discover_endpoints_local_ip(IP_ADDRESS)
             fingerprint["discovered_endpoints"] = discovered
+        else:
+            # Para dominios, no hay endpoints locales que descubrir
+            discovered = []
+            fingerprint["discovered_endpoints"] = []
         
         # Si se descubrieron endpoints, usar el primero para fingerprinting
         if discovered:
