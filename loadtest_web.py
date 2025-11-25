@@ -407,8 +407,84 @@ def get_history():
 def get_history_report(report_id):
     """Obtiene un reporte específico del historial"""
     try:
-        from loadtest import HISTORY_DIR
+        from loadtest import HISTORY_DIR, get_history
         import json
+        
+        # Obtener historial
+        history = get_history(limit=1000)
+        
+        # Buscar reporte por ID
+        report_entry = None
+        for entry in history:
+            if entry.get('id') == report_id or entry.get('timestamp', '').startswith(report_id):
+                report_entry = entry
+                break
+        
+        if not report_entry:
+            return jsonify({"status": "error", "message": "Reporte no encontrado"}), 404
+        
+        # Si tiene full_report, devolverlo
+        if 'full_report' in report_entry:
+            full_report = report_entry['full_report']
+            # Generar HTML del reporte
+            from loadtest import generate_html_report
+            html_content = generate_html_report(full_report)
+            
+            return Response(html_content, mimetype='text/html')
+        else:
+            # Generar reporte básico
+            return jsonify({
+                "status": "success",
+                "report": report_entry
+            })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+@app.route('/api/history/<report_id>/pdf', methods=['GET'])
+def get_history_report_pdf(report_id):
+    """Exporta un reporte del historial a PDF"""
+    try:
+        from loadtest import get_history, export_report_to_pdf
+        import json
+        
+        # Obtener historial
+        history = get_history(limit=1000)
+        
+        # Buscar reporte por ID
+        report_entry = None
+        for entry in history:
+            if entry.get('id') == report_id or entry.get('timestamp', '').startswith(report_id):
+                report_entry = entry
+                break
+        
+        if not report_entry:
+            return jsonify({"status": "error", "message": "Reporte no encontrado"}), 404
+        
+        # Si tiene full_report, generar PDF
+        if 'full_report' in report_entry:
+            full_report = report_entry['full_report']
+            pdf_data = export_report_to_pdf(full_report)
+            
+            return Response(
+                pdf_data,
+                mimetype='application/pdf',
+                headers={
+                    'Content-Disposition': f'attachment; filename=report_{report_id}.pdf'
+                }
+            )
+        else:
+            return jsonify({
+                "status": "error",
+                "message": "Reporte completo no disponible"
+            }), 404
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
         
         history_file = HISTORY_DIR / f"history_{report_id}.json"
         if not history_file.exists():
@@ -1016,33 +1092,75 @@ def show_all_params():
 
 @app.route('/api/logs', methods=['GET'])
 def get_logs():
-    """Obtiene los logs más recientes"""
+    """Obtiene los logs más recientes con soporte para streaming"""
     try:
-        lines = int(request.args.get('lines', 100))
+        lines = int(request.args.get('lines', 200))
         log_type = request.args.get('type', 'debug')  # 'debug' o 'general'
+        last_position = int(request.args.get('last_position', 0))  # Para streaming
         
-        log_file = LOGS_DIR / f"loadtest_{'debug' if log_type == 'debug' else ''}{datetime.now().strftime('%Y%m%d')}.log"
-        if not log_file.exists():
-            log_file = LOGS_DIR / f"loadtest_debug_{datetime.now().strftime('%Y%m%d')}.log"
+        # Buscar archivo de log más reciente
+        log_files = []
+        if LOGS_DIR.exists():
+            # Buscar logs del día actual
+            today = datetime.now().strftime('%Y%m%d')
+            log_files.extend(list(LOGS_DIR.glob(f"loadtest_*{today}.log")))
+            log_files.extend(list(LOGS_DIR.glob(f"loadtest_debug_{today}.log")))
+            
+            # Si no hay del día actual, buscar el más reciente
+            if not log_files:
+                log_files = sorted(LOGS_DIR.glob("loadtest_*.log"), key=lambda x: x.stat().st_mtime, reverse=True)
         
-        if log_file.exists():
-            with open(log_file, 'r', encoding='utf-8') as f:
-                all_lines = f.readlines()
-                recent_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
-                return jsonify({
-                    "status": "success",
-                    "logs": recent_lines,
-                    "total_lines": len(all_lines)
-                })
+        if log_files:
+            log_file = log_files[0]  # Usar el más reciente
+            
+            with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
+                # Si hay last_position, leer desde ahí (streaming)
+                if last_position > 0:
+                    try:
+                        f.seek(last_position)
+                        new_lines = f.readlines()
+                        current_position = f.tell()
+                        return jsonify({
+                            "status": "success",
+                            "logs": new_lines,
+                            "position": current_position,
+                            "total_lines": 0  # No necesario en streaming
+                        })
+                    except:
+                        # Si falla, leer desde el final
+                        f.seek(0, 2)  # Ir al final
+                        current_position = f.tell()
+                        return jsonify({
+                            "status": "success",
+                            "logs": [],
+                            "position": current_position,
+                            "total_lines": 0
+                        })
+                else:
+                    # Lectura normal
+                    all_lines = f.readlines()
+                    recent_lines = all_lines[-lines:] if len(all_lines) > lines else all_lines
+                    return jsonify({
+                        "status": "success",
+                        "logs": recent_lines,
+                        "position": 0,
+                        "total_lines": len(all_lines)
+                    })
         else:
             return jsonify({
                 "status": "error",
-                "message": "No se encontraron logs"
-            }), 404
+                "message": "No se encontraron logs",
+                "logs": [],
+                "position": 0,
+                "total_lines": 0
+            })
     except Exception as e:
         return jsonify({
             "status": "error",
-            "message": str(e)
+            "message": str(e),
+            "logs": [],
+            "position": 0,
+            "total_lines": 0
         }), 500
 
 @app.route('/api/system-info', methods=['GET'])

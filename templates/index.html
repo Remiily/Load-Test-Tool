@@ -1981,15 +1981,22 @@
                 
                 const container = document.getElementById('reports-list');
                 if (data.reports && data.reports.length > 0) {
-                    let html = '<table class="table"><tr><th>Nombre</th><th>Tamaño</th><th>Fecha</th><th>Acción</th></tr>';
+                    let html = '<table class="table" style="width: 100%;"><tr><th>Nombre</th><th>Tamaño</th><th>Fecha</th><th>Acciones</th></tr>';
                     data.reports.forEach(report => {
                         const date = new Date(report.modified);
                         html += `
                             <tr>
-                                <td>${report.name}</td>
+                                <td style="font-weight: 600;">${report.name}</td>
                                 <td>${formatBytes(report.size)}</td>
                                 <td>${date.toLocaleString()}</td>
-                                <td><a href="/api/reports/${report.path}" target="_blank" style="color: var(--primary); text-decoration: none; font-weight: 600;">Ver <i class="fas fa-external-link-alt"></i></a></td>
+                                <td>
+                                    <a href="/api/reports/${report.path}" target="_blank" class="btn btn-sm btn-primary" style="margin-right: 8px; display: inline-block; padding: 0.4rem 0.8rem; background: var(--primary); color: var(--bg-primary); border-radius: 6px; text-decoration: none; font-weight: 600;">
+                                        <i class="fas fa-eye"></i> Ver HTML
+                                    </a>
+                                    <a href="/api/reports/${report.path}/pdf" target="_blank" class="btn btn-sm btn-secondary" style="display: inline-block; padding: 0.4rem 0.8rem; background: var(--secondary); color: var(--bg-primary); border-radius: 6px; text-decoration: none; font-weight: 600;">
+                                        <i class="fas fa-file-pdf"></i> PDF
+                                    </a>
+                                </td>
                             </tr>
                         `;
                     });
@@ -2000,6 +2007,78 @@
                 }
             } catch (error) {
                 console.error('Error loading reports:', error);
+            }
+        }
+        
+        // Load History with report viewing
+        async function loadHistory() {
+            try {
+                const response = await fetch('/api/history?limit=50');
+                const data = await response.json();
+                
+                const container = document.getElementById('history-list');
+                if (data.status === 'success' && data.history && data.history.length > 0) {
+                    let html = '<div style="display: grid; gap: 1rem;">';
+                    data.history.forEach(entry => {
+                        const date = new Date(entry.timestamp);
+                        html += `
+                            <div class="card" style="background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; padding: 1.5rem;">
+                                <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1rem;">
+                                    <div>
+                                        <h3 style="margin: 0 0 0.5rem 0; color: var(--primary); font-size: 1.1rem;">
+                                            ${entry.target || entry.domain || 'N/A'}
+                                        </h3>
+                                        <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                                            ${date.toLocaleString()} • ${entry.duration || entry.elapsed_time || 0}s • ${entry.power_level || 'N/A'}
+                                        </div>
+                                    </div>
+                                    <div style="text-align: right;">
+                                        <div style="color: var(--success); font-size: 1.5rem; font-weight: 700;">
+                                            ${entry.success_rate || 0}%
+                                        </div>
+                                        <div style="color: var(--text-secondary); font-size: 0.8rem;">Tasa de éxito</div>
+                                    </div>
+                                </div>
+                                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin-bottom: 1rem;">
+                                    <div>
+                                        <div style="color: var(--text-secondary); font-size: 0.85rem;">Requests</div>
+                                        <div style="color: var(--primary); font-size: 1.2rem; font-weight: 600;">${formatNumber(entry.requests_sent || 0)}</div>
+                                    </div>
+                                    <div>
+                                        <div style="color: var(--text-secondary); font-size: 0.85rem;">RPS Promedio</div>
+                                        <div style="color: var(--info); font-size: 1.2rem; font-weight: 600;">${formatNumber(entry.avg_rps || 0)}</div>
+                                    </div>
+                                    <div>
+                                        <div style="color: var(--text-secondary); font-size: 0.85rem;">Latencia P95</div>
+                                        <div style="color: var(--warning); font-size: 1.2rem; font-weight: 600;">${entry.p95_latency_ms || 0}ms</div>
+                                    </div>
+                                    <div>
+                                        <div style="color: var(--text-secondary); font-size: 0.85rem;">Errores</div>
+                                        <div style="color: ${entry.errors > 0 ? 'var(--danger)' : 'var(--success)'}; font-size: 1.2rem; font-weight: 600;">${formatNumber(entry.errors || 0)}</div>
+                                    </div>
+                                </div>
+                                <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                                    ${entry.has_full_report ? `
+                                        <a href="/api/history/${entry.id}" target="_blank" class="btn btn-sm btn-primary" style="display: inline-block; padding: 0.4rem 0.8rem; background: var(--primary); color: var(--bg-primary); border-radius: 6px; text-decoration: none; font-weight: 600;">
+                                            <i class="fas fa-file-alt"></i> Ver Reporte Completo
+                                        </a>
+                                        <a href="/api/history/${entry.id}/pdf" target="_blank" class="btn btn-sm btn-secondary" style="display: inline-block; padding: 0.4rem 0.8rem; background: var(--secondary); color: var(--bg-primary); border-radius: 6px; text-decoration: none; font-weight: 600;">
+                                            <i class="fas fa-file-pdf"></i> Exportar PDF
+                                        </a>
+                                    ` : `
+                                        <span style="color: var(--text-muted); font-size: 0.85rem;">Reporte completo no disponible</span>
+                                    `}
+                                </div>
+                            </div>
+                        `;
+                    });
+                    html += '</div>';
+                    container.innerHTML = html;
+                } else {
+                    container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 3rem;">No hay historial disponible</div>';
+                }
+            } catch (error) {
+                console.error('Error loading history:', error);
             }
         }
         
@@ -2037,6 +2116,75 @@
             loadTools();
             updateSystemInfo();
             setInterval(updateSystemInfo, 5000);
+            
+            // Start log streaming
+            startLogStreaming();
+        }
+        
+        // Log Streaming
+        let logPosition = 0;
+        let logStreamInterval = null;
+        
+        function startLogStreaming() {
+            updateLogs();
+            logStreamInterval = setInterval(updateLogs, 1000); // Actualizar cada segundo
+        }
+        
+        async function updateLogs() {
+            try {
+                const response = await fetch(`/api/logs?lines=200&last_position=${logPosition}`);
+                const data = await response.json();
+                
+                if (data.status === 'success' && data.logs) {
+                    const container = document.getElementById('logs-container');
+                    if (container && data.logs.length > 0) {
+                        // Agregar nuevos logs
+                        data.logs.forEach(line => {
+                            if (line.trim()) {
+                                const logLine = document.createElement('div');
+                                logLine.style.marginBottom = '4px';
+                                logLine.style.padding = '4px 8px';
+                                logLine.style.borderRadius = '4px';
+                                
+                                // Colorear según nivel
+                                if (line.includes('[ERROR]') || line.includes('❌')) {
+                                    logLine.style.color = '#ff3366';
+                                    logLine.style.background = 'rgba(255, 51, 102, 0.1)';
+                                } else if (line.includes('[WARN]') || line.includes('⚠️')) {
+                                    logLine.style.color = '#ffb800';
+                                    logLine.style.background = 'rgba(255, 184, 0, 0.1)';
+                                } else if (line.includes('[INFO]') || line.includes('✅') || line.includes('📊')) {
+                                    logLine.style.color = '#00ff88';
+                                    logLine.style.background = 'rgba(0, 255, 136, 0.1)';
+                                } else if (line.includes('[DEBUG]')) {
+                                    logLine.style.color = '#00d9ff';
+                                    logLine.style.background = 'rgba(0, 217, 255, 0.1)';
+                                } else {
+                                    logLine.style.color = '#b4b4c8';
+                                }
+                                
+                                logLine.textContent = line.trim();
+                                container.appendChild(logLine);
+                                
+                                // Limitar a 500 líneas
+                                while (container.children.length > 500) {
+                                    container.removeChild(container.firstChild);
+                                }
+                            }
+                        });
+                        
+                        // Auto-scroll al final
+                        container.scrollTop = container.scrollHeight;
+                    }
+                    
+                    // Actualizar posición para streaming
+                    if (data.position !== undefined) {
+                        logPosition = data.position;
+                    }
+                }
+            } catch (error) {
+                console.error('Error updating logs:', error);
+            }
         }
         
         // Update System Info
