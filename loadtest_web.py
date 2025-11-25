@@ -117,8 +117,18 @@ def get_config():
         "proxy_rotation": get_loadtest_var('PROXY_ROTATION') or "round-robin",
         # Configuración HTTP/2 y HTTP/3
         "http2_multiplexing": get_loadtest_var('HTTP2_MULTIPLEXING') or True,
-        "http3_quic": get_loadtest_var('HTTP3_QUIC') or False
+        "http3_quic": get_loadtest_var('HTTP3_QUIC') or False,
+        # Análisis avanzado
+        "pattern_analysis_enabled": get_loadtest_var('PATTERN_ANALYSIS_ENABLED') or True,
+        "auto_tuning_enabled": get_loadtest_var('AUTO_TUNING_ENABLED') or True,
+        "security_analysis_enabled": get_loadtest_var('SECURITY_ANALYSIS_ENABLED') or True
     })
+    
+    # Obtener datos de análisis avanzado desde attack_stats
+    attack_stats_actual = get_loadtest_var('attack_stats') or {}
+    config["pattern_analysis"] = attack_stats_actual.get("pattern_analysis", {})
+    config["auto_tuning"] = attack_stats_actual.get("auto_tuning", {})
+    config["security_analysis"] = attack_stats_actual.get("security_analysis", {})
 
 @app.route('/api/config', methods=['POST'])
 def set_config():
@@ -204,6 +214,32 @@ def set_config():
     if "max_payload_mb" in data:
         MAX_PAYLOAD_SIZE_MB = int(data["max_payload_mb"])
         loadtest.MAX_PAYLOAD_SIZE_MB = int(data["max_payload_mb"])
+    
+    # Configuración de timeouts
+    if "connect_timeout" in data:
+        loadtest.CONNECT_TIMEOUT = float(data["connect_timeout"])
+    if "read_timeout" in data:
+        loadtest.READ_TIMEOUT = float(data["read_timeout"])
+    if "max_retries" in data:
+        loadtest.MAX_RETRIES = int(data["max_retries"])
+    if "retry_backoff_factor" in data:
+        loadtest.RETRY_BACKOFF_FACTOR = float(data["retry_backoff_factor"])
+    
+    # Técnicas de evasión
+    if "evasion_techniques" in data:
+        evasion_techs = data["evasion_techniques"]
+        if isinstance(evasion_techs, dict):
+            for tech, enabled in evasion_techs.items():
+                if hasattr(loadtest, 'EVASION_TECHNIQUES'):
+                    loadtest.EVASION_TECHNIQUES[tech] = bool(enabled)
+    
+    # Análisis avanzado
+    if "pattern_analysis_enabled" in data:
+        loadtest.PATTERN_ANALYSIS_ENABLED = bool(data["pattern_analysis_enabled"])
+    if "auto_tuning_enabled" in data:
+        loadtest.AUTO_TUNING_ENABLED = bool(data["auto_tuning_enabled"])
+    if "security_analysis_enabled" in data:
+        loadtest.SECURITY_ANALYSIS_ENABLED = bool(data["security_analysis_enabled"])
     
     attack_config.update(data)
     
@@ -328,7 +364,13 @@ def get_stats():
         "memory": memory_info,
         "attack_techniques": attack_stats_actual.get("attack_techniques", []),
         "bytes_sent": int(attack_stats_actual.get("bytes_sent", 0)),
-        "bytes_received": int(attack_stats_actual.get("bytes_received", 0))
+        "bytes_received": int(attack_stats_actual.get("bytes_received", 0)),
+        # Análisis de patrones
+        "pattern_analysis": attack_stats_actual.get("pattern_analysis", {}),
+        # Auto-tuning
+        "auto_tuning": attack_stats_actual.get("auto_tuning", {}),
+        # Análisis de seguridad
+        "security_analysis": attack_stats_actual.get("security_analysis", {})
     }
     
     return jsonify(response_data)
@@ -950,17 +992,45 @@ def get_tool_recommendations():
 def run_autodiagnostic_endpoint():
     """Ejecuta autodiagnóstico completo y retorna reporte"""
     try:
-        diagnostic_report = run_autodiagnostic()
-        return jsonify({
-            "status": "success",
-            "report": diagnostic_report
-        })
+        # Ejecutar autodiagnóstico en thread separado para no bloquear
+        import threading
+        diagnostic_result = {"status": "running", "report": None, "error": None}
+        
+        def run_diagnostic():
+            try:
+                diagnostic_report = run_autodiagnostic()
+                diagnostic_result["status"] = "completed"
+                diagnostic_result["report"] = diagnostic_report
+            except Exception as e:
+                diagnostic_result["status"] = "error"
+                diagnostic_result["error"] = str(e)
+        
+        # Si es GET, ejecutar y esperar (para mostrar en web)
+        if request.method == 'GET':
+            run_diagnostic()
+            if diagnostic_result["status"] == "error":
+                return jsonify({
+                    "status": "error",
+                    "message": diagnostic_result["error"]
+                }), 500
+            return jsonify({
+                "status": "success",
+                "report": diagnostic_result["report"]
+            })
+        else:
+            # POST: ejecutar en background
+            thread = threading.Thread(target=run_diagnostic, daemon=True)
+            thread.start()
+            return jsonify({
+                "status": "started",
+                "message": "Autodiagnóstico iniciado"
+            })
     except Exception as e:
         import traceback
         return jsonify({
             "status": "error",
             "message": str(e),
-            "traceback": traceback.format_exc() if DEBUG_MODE else None
+            "traceback": traceback.format_exc() if getattr(loadtest, 'DEBUG_MODE', False) else None
         }), 500
 
 @app.route('/api/fingerprint', methods=['POST'])

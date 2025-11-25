@@ -397,6 +397,20 @@ HEALTH_CHECK_TIMEOUT = 5  # Timeout para health checks
 # Análisis de respuesta en tiempo real
 REALTIME_ANALYSIS_ENABLED = True  # Activar análisis en tiempo real
 ANALYSIS_INTERVAL = 10  # Intervalo de análisis (segundos)
+
+# Análisis de patrones
+PATTERN_ANALYSIS_ENABLED = True  # Activar análisis de patrones en respuestas
+PATTERN_ANALYSIS_INTERVAL = 15  # Intervalo de análisis de patrones (segundos)
+PATTERN_HISTORY_SIZE = 1000  # Tamaño del historial de respuestas para análisis
+
+# Auto-tuning
+AUTO_TUNING_ENABLED = True  # Activar ajuste automático de parámetros
+AUTO_TUNING_INTERVAL = 20  # Intervalo de auto-tuning (segundos)
+AUTO_TUNING_AGGRESSIVENESS = 0.1  # Factor de agresividad del ajuste (0.0-1.0)
+
+# Análisis de seguridad durante stress
+SECURITY_ANALYSIS_ENABLED = True  # Activar análisis de seguridad durante el stress
+SECURITY_ANALYSIS_INTERVAL = 30  # Intervalo de análisis de seguridad (segundos)
 DEGRADATION_THRESHOLD = 2.0  # Multiplicador de latencia para detectar degradación
 ERROR_RATE_THRESHOLD = 0.5  # 50% de errores para considerar degradación crítica
 
@@ -7451,6 +7465,707 @@ def adjust_adaptive_timeouts():
     except Exception as e:
         log_message("ERROR", f"Error ajustando timeouts: {e}", context="adjust_adaptive_timeouts")
 
+# ============================================================================
+# ANÁLISIS DE PATRONES EN RESPUESTAS
+# ============================================================================
+
+def analyze_response_patterns() -> Dict:
+    """
+    Analiza patrones en las respuestas del target para detectar comportamientos,
+    tendencias y anomalías que puedan indicar defensas activas o vulnerabilidades.
+    """
+    if not PATTERN_ANALYSIS_ENABLED:
+        return {"status": "disabled"}
+    
+    try:
+        # Inicializar estructura de análisis de patrones
+        if "pattern_analysis" not in attack_stats:
+            attack_stats["pattern_analysis"] = {
+                "response_history": [],
+                "status_code_patterns": defaultdict(int),
+                "latency_patterns": [],
+                "header_patterns": defaultdict(int),
+                "content_patterns": defaultdict(int),
+                "error_patterns": defaultdict(int),
+                "timing_patterns": [],
+                "detected_patterns": [],
+                "anomalies": []
+            }
+        
+        pattern_data = attack_stats["pattern_analysis"]
+        
+        # Obtener datos recientes
+        http_codes = attack_stats.get("http_codes", {})
+        latencies = attack_stats.get("latencies", [])[-PATTERN_HISTORY_SIZE:]
+        errors = attack_stats.get("errors", [])[-100:]  # Últimos 100 errores
+        
+        # 1. Análisis de patrones de códigos HTTP
+        status_patterns = {}
+        for code, count in http_codes.items():
+            if count > 0:
+                pattern_data["status_code_patterns"][code] += count
+                status_patterns[code] = count
+        
+        # Detectar patrones en códigos HTTP
+        if len(status_patterns) > 0:
+            total_responses = sum(status_patterns.values())
+            for code, count in status_patterns.items():
+                percentage = (count / total_responses) * 100 if total_responses > 0 else 0
+                
+                # Patrón: Muchos 429 (Rate Limiting)
+                if code == 429 and percentage > 10:
+                    pattern_data["detected_patterns"].append({
+                        "type": "rate_limiting",
+                        "severity": "high",
+                        "description": f"Rate limiting detectado: {percentage:.1f}% de respuestas son 429",
+                        "evidence": {"code": code, "count": count, "percentage": percentage},
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    log_message("WARN", f"🔍 [PATTERN] Rate limiting detectado: {percentage:.1f}% de respuestas 429", context="pattern_analysis", force_console=True)
+                
+                # Patrón: Muchos 503 (Service Unavailable)
+                elif code == 503 and percentage > 15:
+                    pattern_data["detected_patterns"].append({
+                        "type": "service_overload",
+                        "severity": "medium",
+                        "description": f"Servicio sobrecargado: {percentage:.1f}% de respuestas son 503",
+                        "evidence": {"code": code, "count": count, "percentage": percentage},
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    log_message("INFO", f"🔍 [PATTERN] Servicio sobrecargado: {percentage:.1f}% de respuestas 503", context="pattern_analysis")
+                
+                # Patrón: Muchos 301/302 (Redirects)
+                elif code in [301, 302] and percentage > 30:
+                    pattern_data["detected_patterns"].append({
+                        "type": "redirect_loop",
+                        "severity": "low",
+                        "description": f"Muchos redirects: {percentage:.1f}% de respuestas son {code}",
+                        "evidence": {"code": code, "count": count, "percentage": percentage},
+                        "timestamp": datetime.now().isoformat()
+                    })
+        
+        # 2. Análisis de patrones de latencia
+        if len(latencies) >= 10:
+            # Calcular estadísticas de latencia
+            sorted_latencies = sorted(latencies)
+            avg_latency = sum(latencies) / len(latencies)
+            median_latency = sorted_latencies[len(sorted_latencies) // 2]
+            std_dev = (sum((x - avg_latency) ** 2 for x in latencies) / len(latencies)) ** 0.5
+            
+            pattern_data["latency_patterns"].append({
+                "timestamp": datetime.now().isoformat(),
+                "avg": avg_latency,
+                "median": median_latency,
+                "std_dev": std_dev,
+                "min": min(latencies),
+                "max": max(latencies),
+                "samples": len(latencies)
+            })
+            
+            # Mantener solo últimas 20 mediciones
+            if len(pattern_data["latency_patterns"]) > 20:
+                pattern_data["latency_patterns"].pop(0)
+            
+            # Detectar anomalías en latencia (valores atípicos)
+            if std_dev > 0:
+                for latency in latencies[-20:]:  # Últimas 20
+                    z_score = abs((latency - avg_latency) / std_dev) if std_dev > 0 else 0
+                    if z_score > 3:  # Más de 3 desviaciones estándar
+                        pattern_data["anomalies"].append({
+                            "type": "latency_spike",
+                            "severity": "medium",
+                            "description": f"Spike de latencia detectado: {latency:.0f}ms (z-score: {z_score:.2f})",
+                            "value": latency,
+                            "z_score": z_score,
+                            "timestamp": datetime.now().isoformat()
+                        })
+            
+            # Detectar patrón de latencia creciente (degradación)
+            if len(pattern_data["latency_patterns"]) >= 3:
+                recent_avg = pattern_data["latency_patterns"][-1]["avg"]
+                older_avg = pattern_data["latency_patterns"][-3]["avg"]
+                if older_avg > 0 and recent_avg / older_avg > 1.5:
+                    pattern_data["detected_patterns"].append({
+                        "type": "latency_degradation",
+                        "severity": "high",
+                        "description": f"Degradación de latencia detectada: {recent_avg:.0f}ms vs {older_avg:.0f}ms ({((recent_avg/older_avg)-1)*100:.1f}% aumento)",
+                        "evidence": {"current": recent_avg, "previous": older_avg, "increase": ((recent_avg/older_avg)-1)*100},
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    log_message("WARN", f"🔍 [PATTERN] Degradación de latencia: {((recent_avg/older_avg)-1)*100:.1f}% aumento", context="pattern_analysis", force_console=True)
+        
+        # 3. Análisis de patrones de errores
+        if len(errors) > 0:
+            error_types = defaultdict(int)
+            for error in errors:
+                error_str = str(error)[:100]  # Limitar longitud
+                # Categorizar errores
+                if "timeout" in error_str.lower() or "timed out" in error_str.lower():
+                    error_types["timeout"] += 1
+                elif "connection" in error_str.lower() or "refused" in error_str.lower():
+                    error_types["connection"] += 1
+                elif "dns" in error_str.lower() or "name resolution" in error_str.lower():
+                    error_types["dns"] += 1
+                elif "ssl" in error_str.lower() or "certificate" in error_str.lower():
+                    error_types["ssl"] += 1
+                else:
+                    error_types["other"] += 1
+            
+            # Detectar patrones de errores
+            total_errors = sum(error_types.values())
+            for error_type, count in error_types.items():
+                percentage = (count / total_errors) * 100 if total_errors > 0 else 0
+                pattern_data["error_patterns"][error_type] = percentage
+                
+                # Patrón: Muchos timeouts
+                if error_type == "timeout" and percentage > 40:
+                    pattern_data["detected_patterns"].append({
+                        "type": "timeout_pattern",
+                        "severity": "high",
+                        "description": f"Patrón de timeouts: {percentage:.1f}% de errores son timeouts",
+                        "evidence": {"type": error_type, "count": count, "percentage": percentage},
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    log_message("WARN", f"🔍 [PATTERN] Patrón de timeouts: {percentage:.1f}% de errores", context="pattern_analysis", force_console=True)
+                
+                # Patrón: Muchos errores de conexión
+                elif error_type == "connection" and percentage > 50:
+                    pattern_data["detected_patterns"].append({
+                        "type": "connection_failure_pattern",
+                        "severity": "high",
+                        "description": f"Patrón de fallos de conexión: {percentage:.1f}% de errores",
+                        "evidence": {"type": error_type, "count": count, "percentage": percentage},
+                        "timestamp": datetime.now().isoformat()
+                    })
+        
+        # 4. Análisis de patrones temporales (timing)
+        if attack_stats.get("start_time"):
+            elapsed = (datetime.now() - attack_stats["start_time"]).total_seconds()
+            if elapsed > 0:
+                current_rps = attack_stats.get("requests_sent", 0) / elapsed
+                pattern_data["timing_patterns"].append({
+                    "timestamp": datetime.now().isoformat(),
+                    "elapsed": elapsed,
+                    "rps": current_rps,
+                    "requests": attack_stats.get("requests_sent", 0),
+                    "responses": attack_stats.get("responses_received", 0)
+                })
+                
+                # Mantener solo últimas 30 mediciones
+                if len(pattern_data["timing_patterns"]) > 30:
+                    pattern_data["timing_patterns"].pop(0)
+                
+                # Detectar patrón de RPS decreciente
+                if len(pattern_data["timing_patterns"]) >= 5:
+                    recent_rps = pattern_data["timing_patterns"][-1]["rps"]
+                    older_rps = pattern_data["timing_patterns"][-5]["rps"]
+                    if older_rps > 0 and recent_rps / older_rps < 0.7:
+                        pattern_data["detected_patterns"].append({
+                            "type": "rps_decline",
+                            "severity": "medium",
+                            "description": f"Declive de RPS detectado: {recent_rps:.1f} vs {older_rps:.1f} ({((1-recent_rps/older_rps)*100):.1f}% reducción)",
+                            "evidence": {"current": recent_rps, "previous": older_rps, "decline": ((1-recent_rps/older_rps)*100)},
+                            "timestamp": datetime.now().isoformat()
+                        })
+        
+        # Limitar tamaño de patrones detectados
+        if len(pattern_data["detected_patterns"]) > 50:
+            pattern_data["detected_patterns"] = pattern_data["detected_patterns"][-50:]
+        
+        # Limitar tamaño de anomalías
+        if len(pattern_data["anomalies"]) > 100:
+            pattern_data["anomalies"] = pattern_data["anomalies"][-100:]
+        
+        return {
+            "status": "success",
+            "patterns_detected": len(pattern_data["detected_patterns"]),
+            "anomalies_detected": len(pattern_data["anomalies"]),
+            "recent_patterns": pattern_data["detected_patterns"][-10:],  # Últimos 10
+            "recent_anomalies": pattern_data["anomalies"][-10:],  # Últimas 10
+            "error_patterns": dict(pattern_data["error_patterns"]),
+            "status_code_distribution": dict(pattern_data["status_code_patterns"])
+        }
+    
+    except Exception as e:
+        log_message("ERROR", f"Error en análisis de patrones: {e}", context="analyze_response_patterns")
+        return {"status": "error", "error": str(e)[:100]}
+
+# ============================================================================
+# AUTO-TUNING: AJUSTE AUTOMÁTICO DE PARÁMETROS
+# ============================================================================
+
+def auto_tune_parameters() -> Dict:
+    """
+    Ajusta automáticamente los parámetros del ataque basado en el rendimiento
+    y los patrones detectados para optimizar la efectividad.
+    """
+    if not AUTO_TUNING_ENABLED:
+        return {"status": "disabled"}
+    
+    try:
+        global MAX_CONNECTIONS, MAX_THREADS, CONNECT_TIMEOUT, READ_TIMEOUT, MULTIPLIER
+        
+        # Obtener métricas actuales
+        requests_sent = attack_stats.get("requests_sent", 0)
+        responses_received = attack_stats.get("responses_received", 0)
+        errors = len(attack_stats.get("errors", []))
+        latencies = attack_stats.get("latencies", [])
+        
+        if requests_sent == 0:
+            return {"status": "insufficient_data"}
+        
+        # Calcular métricas
+        response_rate = responses_received / requests_sent if requests_sent > 0 else 0
+        error_rate = errors / requests_sent if requests_sent > 0 else 0
+        avg_latency = sum(latencies[-100:]) / len(latencies[-100:]) if latencies else None
+        
+        # Obtener análisis de patrones
+        pattern_analysis = attack_stats.get("pattern_analysis", {})
+        detected_patterns = pattern_analysis.get("detected_patterns", [])
+        
+        # Inicializar estructura de auto-tuning
+        if "auto_tuning" not in attack_stats:
+            attack_stats["auto_tuning"] = {
+                "adjustments": [],
+                "baseline_connections": MAX_CONNECTIONS,
+                "baseline_threads": MAX_THREADS,
+                "baseline_timeout_connect": CONNECT_TIMEOUT,
+                "baseline_timeout_read": READ_TIMEOUT,
+                "baseline_multiplier": MULTIPLIER
+            }
+        
+        tuning_data = attack_stats["auto_tuning"]
+        adjustments = []
+        
+        # 1. Ajuste basado en tasa de respuesta
+        if response_rate < 0.3:  # Menos del 30% de respuestas
+            # Reducir conexiones y threads para evitar saturación
+            new_connections = max(int(MAX_CONNECTIONS * (1 - AUTO_TUNING_AGGRESSIVENESS)), 100)
+            new_threads = max(int(MAX_THREADS * (1 - AUTO_TUNING_AGGRESSIVENESS)), 10)
+            
+            if new_connections < MAX_CONNECTIONS:
+                MAX_CONNECTIONS = new_connections
+                adjustments.append({
+                    "parameter": "max_connections",
+                    "action": "decrease",
+                    "old_value": tuning_data["baseline_connections"],
+                    "new_value": new_connections,
+                    "reason": f"Tasa de respuesta baja ({response_rate*100:.1f}%) - reduciendo conexiones"
+                })
+                log_message("INFO", f"🔧 [AUTO-TUNE] Reduciendo conexiones: {tuning_data['baseline_connections']} -> {new_connections} (response_rate: {response_rate*100:.1f}%)", context="auto_tuning", force_console=True)
+            
+            if new_threads < MAX_THREADS:
+                MAX_THREADS = new_threads
+                adjustments.append({
+                    "parameter": "max_threads",
+                    "action": "decrease",
+                    "old_value": tuning_data["baseline_threads"],
+                    "new_value": new_threads,
+                    "reason": f"Tasa de respuesta baja ({response_rate*100:.1f}%) - reduciendo threads"
+                })
+        
+        elif response_rate > 0.8 and error_rate < 0.1:  # Más del 80% de respuestas, menos del 10% de errores
+            # Aumentar conexiones y threads para más throughput
+            new_connections = min(int(MAX_CONNECTIONS * (1 + AUTO_TUNING_AGGRESSIVENESS)), 100000)
+            new_threads = min(int(MAX_THREADS * (1 + AUTO_TUNING_AGGRESSIVENESS)), 2000)
+            
+            if new_connections > MAX_CONNECTIONS and MAX_CONNECTIONS < 50000:
+                MAX_CONNECTIONS = new_connections
+                adjustments.append({
+                    "parameter": "max_connections",
+                    "action": "increase",
+                    "old_value": tuning_data["baseline_connections"],
+                    "new_value": new_connections,
+                    "reason": f"Tasa de respuesta alta ({response_rate*100:.1f}%) - aumentando conexiones"
+                })
+                log_message("INFO", f"🔧 [AUTO-TUNE] Aumentando conexiones: {tuning_data['baseline_connections']} -> {new_connections} (response_rate: {response_rate*100:.1f}%)", context="auto_tuning", force_console=True)
+            
+            if new_threads > MAX_THREADS and MAX_THREADS < 1000:
+                MAX_THREADS = new_threads
+                adjustments.append({
+                    "parameter": "max_threads",
+                    "action": "increase",
+                    "old_value": tuning_data["baseline_threads"],
+                    "new_value": new_threads,
+                    "reason": f"Tasa de respuesta alta ({response_rate*100:.1f}%) - aumentando threads"
+                })
+        
+        # 2. Ajuste basado en latencia
+        if avg_latency:
+            if avg_latency > 5000:  # Latencia muy alta (>5s)
+                # Aumentar timeouts para evitar errores
+                new_connect_timeout = min(CONNECT_TIMEOUT * (1 + AUTO_TUNING_AGGRESSIVENESS), MAX_CONNECT_TIMEOUT)
+                new_read_timeout = min(READ_TIMEOUT * (1 + AUTO_TUNING_AGGRESSIVENESS), MAX_READ_TIMEOUT)
+                
+                if new_connect_timeout > CONNECT_TIMEOUT:
+                    CONNECT_TIMEOUT = new_connect_timeout
+                    adjustments.append({
+                        "parameter": "connect_timeout",
+                        "action": "increase",
+                        "old_value": tuning_data["baseline_timeout_connect"],
+                        "new_value": new_connect_timeout,
+                        "reason": f"Latencia alta ({avg_latency:.0f}ms) - aumentando timeout de conexión"
+                    })
+                
+                if new_read_timeout > READ_TIMEOUT:
+                    READ_TIMEOUT = new_read_timeout
+                    adjustments.append({
+                        "parameter": "read_timeout",
+                        "action": "increase",
+                        "old_value": tuning_data["baseline_timeout_read"],
+                        "new_value": new_read_timeout,
+                        "reason": f"Latencia alta ({avg_latency:.0f}ms) - aumentando timeout de lectura"
+                    })
+            
+            elif avg_latency < 100:  # Latencia muy baja (<100ms)
+                # Reducir timeouts para más throughput
+                new_connect_timeout = max(CONNECT_TIMEOUT * (1 - AUTO_TUNING_AGGRESSIVENESS), MIN_CONNECT_TIMEOUT)
+                new_read_timeout = max(READ_TIMEOUT * (1 - AUTO_TUNING_AGGRESSIVENESS), MIN_READ_TIMEOUT)
+                
+                if new_connect_timeout < CONNECT_TIMEOUT:
+                    CONNECT_TIMEOUT = new_connect_timeout
+                    adjustments.append({
+                        "parameter": "connect_timeout",
+                        "action": "decrease",
+                        "old_value": tuning_data["baseline_timeout_connect"],
+                        "new_value": new_connect_timeout,
+                        "reason": f"Latencia baja ({avg_latency:.0f}ms) - reduciendo timeout de conexión"
+                    })
+                
+                if new_read_timeout < READ_TIMEOUT:
+                    READ_TIMEOUT = new_read_timeout
+                    adjustments.append({
+                        "parameter": "read_timeout",
+                        "action": "decrease",
+                        "old_value": tuning_data["baseline_timeout_read"],
+                        "new_value": new_read_timeout,
+                        "reason": f"Latencia baja ({avg_latency:.0f}ms) - reduciendo timeout de lectura"
+                    })
+        
+        # 3. Ajuste basado en patrones detectados
+        for pattern in detected_patterns[-5:]:  # Últimos 5 patrones
+            pattern_type = pattern.get("type", "")
+            
+            # Si se detecta rate limiting, reducir agresividad
+            if pattern_type == "rate_limiting":
+                new_multiplier = max(MULTIPLIER * (1 - AUTO_TUNING_AGGRESSIVENESS * 2), 1)
+                if new_multiplier < MULTIPLIER:
+                    MULTIPLIER = new_multiplier
+                    adjustments.append({
+                        "parameter": "multiplier",
+                        "action": "decrease",
+                        "old_value": tuning_data["baseline_multiplier"],
+                        "new_value": new_multiplier,
+                        "reason": "Rate limiting detectado - reduciendo multiplicador"
+                    })
+                    log_message("WARN", f"🔧 [AUTO-TUNE] Rate limiting detectado - reduciendo multiplicador: {tuning_data['baseline_multiplier']} -> {new_multiplier}", context="auto_tuning", force_console=True)
+            
+            # Si se detecta degradación de latencia, reducir carga
+            elif pattern_type == "latency_degradation":
+                new_connections = max(int(MAX_CONNECTIONS * (1 - AUTO_TUNING_AGGRESSIVENESS)), 100)
+                if new_connections < MAX_CONNECTIONS:
+                    MAX_CONNECTIONS = new_connections
+                    adjustments.append({
+                        "parameter": "max_connections",
+                        "action": "decrease",
+                        "old_value": tuning_data["baseline_connections"],
+                        "new_value": new_connections,
+                        "reason": "Degradación de latencia detectada - reduciendo conexiones"
+                    })
+        
+        # Guardar ajustes
+        if adjustments:
+            tuning_data["adjustments"].extend(adjustments)
+            # Mantener solo últimos 50 ajustes
+            if len(tuning_data["adjustments"]) > 50:
+                tuning_data["adjustments"] = tuning_data["adjustments"][-50:]
+        
+        return {
+            "status": "success",
+            "adjustments_made": len(adjustments),
+            "adjustments": adjustments,
+            "current_parameters": {
+                "max_connections": MAX_CONNECTIONS,
+                "max_threads": MAX_THREADS,
+                "connect_timeout": CONNECT_TIMEOUT,
+                "read_timeout": READ_TIMEOUT,
+                "multiplier": MULTIPLIER
+            },
+            "metrics": {
+                "response_rate": response_rate,
+                "error_rate": error_rate,
+                "avg_latency": avg_latency
+            }
+        }
+    
+    except Exception as e:
+        log_message("ERROR", f"Error en auto-tuning: {e}", context="auto_tune_parameters")
+        return {"status": "error", "error": str(e)[:100]}
+
+# ============================================================================
+# ANÁLISIS DE SEGURIDAD DURANTE EL STRESS
+# ============================================================================
+
+def analyze_security_during_stress() -> Dict:
+    """
+    Detecta automáticamente vulnerabilidades y problemas de seguridad
+    durante el stress test basado en las respuestas del target.
+    """
+    if not SECURITY_ANALYSIS_ENABLED:
+        return {"status": "disabled"}
+    
+    try:
+        import requests
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        # Inicializar estructura de análisis de seguridad
+        if "security_analysis" not in attack_stats:
+            attack_stats["security_analysis"] = {
+                "vulnerabilities": [],
+                "security_issues": [],
+                "headers_analysis": {},
+                "ssl_analysis": {},
+                "information_disclosure": [],
+                "last_analysis": None
+            }
+        
+        security_data = attack_stats["security_analysis"]
+        vulnerabilities = []
+        security_issues = []
+        
+        # Realizar request de prueba para análisis
+        try:
+            response = requests.get(
+                TARGET,
+                timeout=10,
+                verify=False,
+                allow_redirects=True
+            )
+            
+            # 1. Análisis de headers de seguridad
+            headers = response.headers
+            
+            # Verificar headers de seguridad faltantes
+            security_headers_required = {
+                "X-Content-Type-Options": "nosniff",
+                "X-Frame-Options": ["DENY", "SAMEORIGIN"],
+                "X-XSS-Protection": "1; mode=block",
+                "Strict-Transport-Security": None,  # Cualquier valor es bueno
+                "Content-Security-Policy": None,
+                "Referrer-Policy": None
+            }
+            
+            missing_headers = []
+            for header, expected_value in security_headers_required.items():
+                if header not in headers:
+                    missing_headers.append(header)
+                elif expected_value and expected_value not in str(headers.get(header, "")):
+                    security_issues.append({
+                        "type": "weak_security_header",
+                        "severity": "medium",
+                        "description": f"Header {header} con valor débil: {headers.get(header)}",
+                        "header": header,
+                        "current_value": headers.get(header),
+                        "recommended": expected_value,
+                        "timestamp": datetime.now().isoformat()
+                    })
+            
+            if missing_headers:
+                security_issues.append({
+                    "type": "missing_security_headers",
+                    "severity": "medium",
+                    "description": f"Headers de seguridad faltantes: {', '.join(missing_headers)}",
+                    "missing_headers": missing_headers,
+                    "timestamp": datetime.now().isoformat()
+                })
+                log_message("WARN", f"🔒 [SECURITY] Headers de seguridad faltantes: {', '.join(missing_headers)}", context="security_analysis")
+            
+            # 2. Análisis de información sensible en headers
+            sensitive_headers = ["Server", "X-Powered-By", "X-AspNet-Version", "X-Runtime"]
+            for header in sensitive_headers:
+                if header in headers:
+                    value = headers[header]
+                    security_issues.append({
+                        "type": "information_disclosure",
+                        "severity": "low",
+                        "description": f"Información de servidor expuesta en header {header}: {value}",
+                        "header": header,
+                        "value": value,
+                        "timestamp": datetime.now().isoformat()
+                    })
+            
+            # 3. Análisis de códigos HTTP que pueden indicar vulnerabilidades
+            http_codes = attack_stats.get("http_codes", {})
+            
+            # Muchos 403 pueden indicar WAF o protección activa
+            if http_codes.get(403, 0) > 100:
+                security_issues.append({
+                    "type": "waf_detected",
+                    "severity": "info",
+                    "description": f"Posible WAF detectado: {http_codes[403]} respuestas 403",
+                    "evidence": {"403_count": http_codes[403]},
+                    "timestamp": datetime.now().isoformat()
+                })
+            
+            # Muchos 500 pueden indicar vulnerabilidades explotadas
+            if http_codes.get(500, 0) > 50:
+                vulnerabilities.append({
+                    "type": "potential_exploitation",
+                    "severity": "high",
+                    "description": f"Posible explotación detectada: {http_codes[500]} respuestas 500 (errores internos del servidor)",
+                    "evidence": {"500_count": http_codes[500]},
+                    "timestamp": datetime.now().isoformat()
+                })
+                log_message("WARN", f"🔒 [SECURITY] Posible explotación: {http_codes[500]} respuestas 500", context="security_analysis", force_console=True)
+            
+            # 4. Análisis SSL/TLS (si es HTTPS)
+            if TARGET.startswith("https://"):
+                try:
+                    import ssl
+                    import socket
+                    from urllib.parse import urlparse
+                    
+                    parsed = urlparse(TARGET)
+                    hostname = parsed.hostname
+                    port = parsed.port or 443
+                    
+                    context = ssl.create_default_context()
+                    with socket.create_connection((hostname, port), timeout=5) as sock:
+                        with context.wrap_socket(sock, server_hostname=hostname) as ssock:
+                            cert = ssock.getpeercert()
+                            protocol = ssock.version()
+                            
+                            # Verificar protocolo TLS débil
+                            if protocol in ["TLSv1", "TLSv1.1"]:
+                                vulnerabilities.append({
+                                    "type": "weak_tls_protocol",
+                                    "severity": "high",
+                                    "description": f"Protocolo TLS débil detectado: {protocol}",
+                                    "protocol": protocol,
+                                    "recommended": "TLSv1.2 o superior",
+                                    "timestamp": datetime.now().isoformat()
+                                })
+                                log_message("WARN", f"🔒 [SECURITY] Protocolo TLS débil: {protocol}", context="security_analysis", force_console=True)
+                            
+                            # Verificar certificado
+                            if cert:
+                                # Verificar fecha de expiración
+                                import datetime as dt
+                                not_after = cert.get("notAfter")
+                                if not_after:
+                                    try:
+                                        expire_date = dt.datetime.strptime(not_after, "%b %d %H:%M:%S %Y %Z")
+                                        days_until_expire = (expire_date - dt.datetime.now()).days
+                                        if days_until_expire < 30:
+                                            security_issues.append({
+                                                "type": "certificate_expiring_soon",
+                                                "severity": "medium",
+                                                "description": f"Certificado SSL expira en {days_until_expire} días",
+                                                "days_until_expire": days_until_expire,
+                                                "expire_date": expire_date.isoformat(),
+                                                "timestamp": datetime.now().isoformat()
+                                            })
+                                    except:
+                                        pass
+                except Exception as ssl_error:
+                    # Error al analizar SSL - puede ser problema de seguridad
+                    security_issues.append({
+                        "type": "ssl_analysis_failed",
+                        "severity": "low",
+                        "description": f"No se pudo analizar SSL/TLS: {str(ssl_error)[:100]}",
+                        "error": str(ssl_error)[:100],
+                        "timestamp": datetime.now().isoformat()
+                    })
+            
+            # 5. Análisis de contenido de respuesta
+            content = response.text[:5000]  # Primeros 5000 caracteres
+            
+            # Buscar información sensible en el contenido
+            sensitive_patterns = [
+                (r"password\s*[:=]\s*['\"]?[^'\"]+", "password_exposed"),
+                (r"api[_-]?key\s*[:=]\s*['\"]?[^'\"]+", "api_key_exposed"),
+                (r"secret\s*[:=]\s*['\"]?[^'\"]+", "secret_exposed"),
+                (r"database\s*[:=]\s*['\"]?[^'\"]+", "database_info_exposed"),
+                (r"error.*stack\s+trace", "stack_trace_exposed"),
+                (r"exception.*at\s+\w+\.\w+", "exception_exposed")
+            ]
+            
+            import re
+            for pattern, vuln_type in sensitive_patterns:
+                matches = re.findall(pattern, content, re.IGNORECASE)
+                if matches:
+                    vulnerabilities.append({
+                        "type": vuln_type,
+                        "severity": "high",
+                        "description": f"Información sensible expuesta en respuesta: {vuln_type}",
+                        "evidence": {"matches_count": len(matches), "sample": matches[0][:100] if matches else ""},
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    log_message("WARN", f"🔒 [SECURITY] Información sensible expuesta: {vuln_type}", context="security_analysis", force_console=True)
+            
+            # 6. Análisis de errores que pueden indicar vulnerabilidades
+            errors = attack_stats.get("errors", [])[-50:]  # Últimos 50 errores
+            for error in errors:
+                error_str = str(error).lower()
+                
+                # SQL Injection patterns en errores
+                if any(keyword in error_str for keyword in ["sql syntax", "mysql", "postgresql", "database error"]):
+                    vulnerabilities.append({
+                        "type": "potential_sql_injection",
+                        "severity": "high",
+                        "description": "Posible SQL Injection detectado en errores",
+                        "evidence": {"error_sample": str(error)[:200]},
+                        "timestamp": datetime.now().isoformat()
+                    })
+                    log_message("WARN", f"🔒 [SECURITY] Posible SQL Injection detectado", context="security_analysis", force_console=True)
+                
+                # Path Traversal patterns
+                elif any(keyword in error_str for keyword in ["path traversal", "directory traversal", "file not found"]):
+                    security_issues.append({
+                        "type": "potential_path_traversal",
+                        "severity": "medium",
+                        "description": "Posible Path Traversal detectado",
+                        "evidence": {"error_sample": str(error)[:200]},
+                        "timestamp": datetime.now().isoformat()
+                    })
+        
+        except requests.exceptions.RequestException as e:
+            # Error al hacer request - puede ser problema de seguridad
+            security_issues.append({
+                "type": "connection_error",
+                "severity": "low",
+                "description": f"Error de conexión durante análisis: {str(e)[:100]}",
+                "error": str(e)[:100],
+                "timestamp": datetime.now().isoformat()
+            })
+        
+        # Actualizar estructura de análisis
+        security_data["vulnerabilities"].extend(vulnerabilities)
+        security_data["security_issues"].extend(security_issues)
+        
+        # Mantener solo últimas 100 vulnerabilidades y issues
+        if len(security_data["vulnerabilities"]) > 100:
+            security_data["vulnerabilities"] = security_data["vulnerabilities"][-100:]
+        if len(security_data["security_issues"]) > 100:
+            security_data["security_issues"] = security_data["security_issues"][-100:]
+        
+        security_data["last_analysis"] = datetime.now().isoformat()
+        
+        return {
+            "status": "success",
+            "vulnerabilities_found": len(vulnerabilities),
+            "security_issues_found": len(security_issues),
+            "recent_vulnerabilities": vulnerabilities[-10:],  # Últimas 10
+            "recent_security_issues": security_issues[-10:],  # Últimas 10
+            "total_vulnerabilities": len(security_data["vulnerabilities"]),
+            "total_security_issues": len(security_data["security_issues"])
+        }
+    
+    except Exception as e:
+        log_message("ERROR", f"Error en análisis de seguridad: {e}", context="analyze_security_during_stress")
+        return {"status": "error", "error": str(e)[:100]}
+
 def prioritize_endpoints(fingerprint: Dict = None) -> List[str]:
     """Identifica y prioriza endpoints críticos basado en fingerprint"""
     prioritized = []
@@ -9854,13 +10569,37 @@ def recommend_tools_from_fingerprint(fingerprint: Dict = None) -> Dict:
             # Con cache: puede manejar más carga
             recommended_tools = ["custom_http", "wrk", "vegeta", "bombardier"]
             tool_count = 4
-            reasoning.append("Cache (Redis/Memcached) detectado - 4 herramientas (cache mejora rendimiento)")
+            reasoning.append("Cache (Redis/Memcached) detectado - 4 herramientas para máxima carga")
+        
+        elif "docker" in tech_str or "kubernetes" in tech_str:
+            # Contenedores: usar herramientas distribuidas
+            recommended_tools = ["custom_http", "wrk", "vegeta"]
+            tool_count = 3
+            reasoning.append("Contenedores (Docker/K8s) detectado - 3 herramientas para carga distribuida")
+        
+        elif "graphql" in tech_str:
+            # GraphQL: usar herramientas especializadas
+            recommended_tools = ["custom_http", "hey"]
+            tool_count = 2
+            reasoning.append("GraphQL detectado - 2 herramientas especializadas")
+        
+        elif "websocket" in tech_str:
+            # WebSocket: usar herramientas especializadas
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append("WebSocket detectado - 1 herramienta especializada")
         
         elif "mysql" in tech_str or "postgresql" in tech_str:
             # Con DB: puede ser cuello de botella
             recommended_tools = ["custom_http", "hey"]
             tool_count = 2
             reasoning.append("Base de datos detectada - 2 herramientas (DB puede ser cuello de botella)")
+        
+        else:
+            # Tecnologías genéricas
+            recommended_tools = ["custom_http", "wrk"]
+            tool_count = 2
+            reasoning.append("Tecnologías genéricas detectadas - 2 herramientas estándar")
     
     # ESTRATEGIA 6: Vulnerabilidades detectadas
     elif vulnerabilities:

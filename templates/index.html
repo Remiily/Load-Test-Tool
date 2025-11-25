@@ -1090,6 +1090,63 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Advanced Analysis Section -->
+            <div class="grid grid-3" style="margin-top: 2rem;">
+                <!-- Pattern Analysis -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-search"></i>
+                            Análisis de Patrones
+                        </div>
+                        <div class="card-icon">🔍</div>
+                    </div>
+                    <div class="card-body">
+                        <div id="pattern-analysis-content" style="min-height: 200px;">
+                            <div style="color: var(--text-secondary); text-align: center; padding: 2rem;">
+                                Esperando datos de análisis...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Auto-Tuning -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-sliders-h"></i>
+                            Auto-Tuning
+                        </div>
+                        <div class="card-icon">🔧</div>
+                    </div>
+                    <div class="card-body">
+                        <div id="auto-tuning-content" style="min-height: 200px;">
+                            <div style="color: var(--text-secondary); text-align: center; padding: 2rem;">
+                                Esperando ajustes automáticos...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Security Analysis -->
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-shield-alt"></i>
+                            Análisis de Seguridad
+                        </div>
+                        <div class="card-icon">🔒</div>
+                    </div>
+                    <div class="card-body">
+                        <div id="security-analysis-content" style="min-height: 200px;">
+                            <div style="color: var(--text-secondary); text-align: center; padding: 2rem;">
+                                Esperando análisis de seguridad...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Configuration Tab -->
@@ -1236,6 +1293,29 @@
                         <div class="form-checkbox">
                             <input type="checkbox" id="config-http2-multiplexing" checked>
                             <label for="config-http2-multiplexing">HTTP/2 Multiplexing</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header" onclick="toggleSection('advanced-analysis')" style="cursor: pointer;">
+                        <div class="card-title">
+                            <i class="fas fa-brain"></i>
+                            Análisis Avanzado
+                        </div>
+                        <i class="fas fa-chevron-down" id="advanced-analysis-icon"></i>
+                    </div>
+                    <div class="card-body" id="advanced-analysis" style="display: none;">
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="config-pattern-analysis" checked>
+                            <label for="config-pattern-analysis">Análisis de Patrones en Respuestas</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="config-auto-tuning" checked>
+                            <label for="config-auto-tuning">Auto-Tuning de Parámetros</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="config-security-analysis" checked>
+                            <label for="config-security-analysis">Análisis de Seguridad Durante Stress</label>
                         </div>
                     </div>
                 </div>
@@ -1419,19 +1499,50 @@
 
         <!-- Tools Tab -->
         <div id="tools" class="tab-content">
-            <div class="card">
-                <div class="card-header">
-                    <div class="card-title">
-                        <i class="fas fa-tools"></i>
-                        Estado de Herramientas
+            <div class="grid grid-2">
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-tools"></i>
+                            Estado de Herramientas
+                        </div>
+                        <button class="btn btn-secondary" onclick="loadTools()">
+                            <i class="fas fa-sync-alt"></i>
+                            Actualizar
+                        </button>
                     </div>
-                    <button class="btn btn-secondary" onclick="loadTools()">
-                        <i class="fas fa-sync-alt"></i>
-                        Actualizar
-                    </button>
+                    <div class="card-body">
+                        <div class="tools-grid" id="tools-grid"></div>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <div class="tools-grid" id="tools-grid"></div>
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-title">
+                            <i class="fas fa-stethoscope"></i>
+                            Autodiagnóstico del Sistema
+                        </div>
+                        <button class="btn btn-primary" onclick="runAutodiagnostic()">
+                            <i class="fas fa-play"></i>
+                            Ejecutar
+                        </button>
+                    </div>
+                    <div class="card-body">
+                        <div style="margin-bottom: 1rem; padding: 1rem; background: var(--bg-tertiary); border-radius: 12px; border: 1px solid var(--border);">
+                            <div style="font-size: 0.9rem; color: var(--text-secondary); line-height: 1.6;">
+                                El autodiagnóstico verifica todas las herramientas, dependencias, permisos y funciones críticas del sistema. 
+                                Ejecuta este diagnóstico antes de iniciar un ataque para asegurar que todo esté funcionando correctamente.
+                            </div>
+                        </div>
+                        <div class="card" id="autodiagnostic-results" style="display: none; margin-top: 1rem; background: var(--bg-tertiary); border: 1px solid var(--border);">
+                            <div class="card-header">
+                                <div class="card-title">
+                                    <i class="fas fa-clipboard-list"></i>
+                                    Resultados del Autodiagnóstico
+                                </div>
+                            </div>
+                            <div class="card-body" id="autodiagnostic-content"></div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1641,6 +1752,99 @@
                 document.getElementById('config-large-payloads').checked = config.use_large_payloads || false;
                 document.getElementById('config-auto-throttle').checked = config.auto_throttle !== false;
                 document.getElementById('config-memory-monitoring').checked = config.memory_monitoring !== false;
+                
+                // Configuración de red y timeouts
+                if (document.getElementById('config-connect-timeout')) {
+                    document.getElementById('config-connect-timeout').value = config.connect_timeout || 3.0;
+                }
+                if (document.getElementById('config-read-timeout')) {
+                    document.getElementById('config-read-timeout').value = config.read_timeout || 6.0;
+                }
+                if (document.getElementById('config-max-retries')) {
+                    document.getElementById('config-max-retries').value = config.max_retries || 0;
+                }
+                if (document.getElementById('config-retry-backoff')) {
+                    document.getElementById('config-retry-backoff').value = config.retry_backoff_factor || 0.3;
+                }
+                if (document.getElementById('config-pool-size')) {
+                    document.getElementById('config-pool-size').value = config.connection_pool_size || 1000;
+                }
+                if (document.getElementById('config-max-payload-mb')) {
+                    document.getElementById('config-max-payload-mb').value = config.max_payload_mb || 10;
+                }
+                if (document.getElementById('config-keep-alive')) {
+                    document.getElementById('config-keep-alive').checked = config.keep_alive_pooling !== false;
+                }
+                if (document.getElementById('config-connection-warmup')) {
+                    document.getElementById('config-connection-warmup').checked = config.connection_warmup !== false;
+                }
+                if (document.getElementById('config-tcp-optimization')) {
+                    document.getElementById('config-tcp-optimization').checked = config.tcp_optimization !== false;
+                }
+                if (document.getElementById('config-http2-multiplexing')) {
+                    document.getElementById('config-http2-multiplexing').checked = config.http2_multiplexing !== false;
+                }
+                
+                // Análisis avanzado
+                if (document.getElementById('config-pattern-analysis')) {
+                    document.getElementById('config-pattern-analysis').checked = config.pattern_analysis_enabled !== false;
+                }
+                if (document.getElementById('config-auto-tuning')) {
+                    document.getElementById('config-auto-tuning').checked = config.auto_tuning_enabled !== false;
+                }
+                if (document.getElementById('config-security-analysis')) {
+                    document.getElementById('config-security-analysis').checked = config.security_analysis_enabled !== false;
+                }
+                
+                // Análisis avanzado
+                if (document.getElementById('config-pattern-analysis')) {
+                    document.getElementById('config-pattern-analysis').checked = config.pattern_analysis_enabled !== false;
+                }
+                if (document.getElementById('config-auto-tuning')) {
+                    document.getElementById('config-auto-tuning').checked = config.auto_tuning_enabled !== false;
+                }
+                if (document.getElementById('config-security-analysis')) {
+                    document.getElementById('config-security-analysis').checked = config.security_analysis_enabled !== false;
+                }
+                
+                // Técnicas de evasión
+                const evasionTechniques = config.evasion_techniques || {};
+                if (document.getElementById('evasion-url-encoding')) {
+                    document.getElementById('evasion-url-encoding').checked = evasionTechniques.url_encoding !== false;
+                }
+                if (document.getElementById('evasion-case-variation')) {
+                    document.getElementById('evasion-case-variation').checked = evasionTechniques.case_variation !== false;
+                }
+                if (document.getElementById('evasion-parameter-pollution')) {
+                    document.getElementById('evasion-parameter-pollution').checked = evasionTechniques.parameter_pollution !== false;
+                }
+                if (document.getElementById('evasion-method-tampering')) {
+                    document.getElementById('evasion-method-tampering').checked = evasionTechniques.method_tampering !== false;
+                }
+                if (document.getElementById('evasion-header-injection')) {
+                    document.getElementById('evasion-header-injection').checked = evasionTechniques.header_injection !== false;
+                }
+                if (document.getElementById('evasion-host-header-injection')) {
+                    document.getElementById('evasion-host-header-injection').checked = evasionTechniques.host_header_injection !== false;
+                }
+                if (document.getElementById('evasion-content-type-manipulation')) {
+                    document.getElementById('evasion-content-type-manipulation').checked = evasionTechniques.content_type_manipulation !== false;
+                }
+                if (document.getElementById('evasion-null-byte-injection')) {
+                    document.getElementById('evasion-null-byte-injection').checked = evasionTechniques.null_byte_injection !== false;
+                }
+                if (document.getElementById('evasion-whitespace-injection')) {
+                    document.getElementById('evasion-whitespace-injection').checked = evasionTechniques.whitespace_injection !== false;
+                }
+                if (document.getElementById('evasion-path-traversal')) {
+                    document.getElementById('evasion-path-traversal').checked = evasionTechniques.path_traversal_evasion !== false;
+                }
+                if (document.getElementById('evasion-query-string-manipulation')) {
+                    document.getElementById('evasion-query-string-manipulation').checked = evasionTechniques.query_string_manipulation !== false;
+                }
+                if (document.getElementById('evasion-cookie-manipulation')) {
+                    document.getElementById('evasion-cookie-manipulation').checked = evasionTechniques.cookie_manipulation !== false;
+                }
             } catch (error) {
                 console.error('Error loading config:', error);
             }
@@ -1659,7 +1863,11 @@
                 stealth_mode: document.getElementById('config-stealth').checked,
                 use_large_payloads: document.getElementById('config-large-payloads').checked,
                 auto_throttle: document.getElementById('config-auto-throttle').checked,
-                memory_monitoring: document.getElementById('config-memory-monitoring').checked
+                memory_monitoring: document.getElementById('config-memory-monitoring').checked,
+                // Análisis avanzado
+                pattern_analysis_enabled: document.getElementById('config-pattern-analysis') ? document.getElementById('config-pattern-analysis').checked : true,
+                auto_tuning_enabled: document.getElementById('config-auto-tuning') ? document.getElementById('config-auto-tuning').checked : true,
+                security_analysis_enabled: document.getElementById('config-security-analysis') ? document.getElementById('config-security-analysis').checked : true
             };
             
             try {
@@ -1789,7 +1997,7 @@
                 const result = await response.json();
                 
                 if (response.ok) {
-                    displayFingerprint(result.fingerprint, result.stress_recommendations, result.fingerprint_status);
+                    displayFingerprint(result.fingerprint, result.stress_recommendations, result.tool_recommendations, result.fingerprint_status);
                     showAlert('Fingerprint completado exitosamente', 'success');
                 } else {
                     content.innerHTML = `
@@ -1814,7 +2022,7 @@
         }
         
         // Display Fingerprint Results
-        function displayFingerprint(fingerprint, recommendations, status) {
+        function displayFingerprint(fingerprint, stressRecommendations, toolRecommendations, status) {
             const container = document.getElementById('fingerprint-results');
             const content = document.getElementById('fingerprint-content');
             
@@ -1989,9 +2197,191 @@
                 // Update attack status
                 updateAttackStatus(stats.monitoring_active || false);
                 
+                // Update Pattern Analysis
+                updatePatternAnalysis(stats.pattern_analysis || {});
+                
+                // Update Auto-Tuning
+                updateAutoTuning(stats.auto_tuning || {});
+                
+                // Update Security Analysis
+                updateSecurityAnalysis(stats.security_analysis || {});
+                
             } catch (error) {
                 console.error('Error updating stats:', error);
             }
+        }
+        
+        // Update Pattern Analysis Display
+        function updatePatternAnalysis(patternData) {
+            const container = document.getElementById('pattern-analysis-content');
+            if (!container) return;
+            
+            if (!patternData || Object.keys(patternData).length === 0) {
+                container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">Esperando datos de análisis...</div>';
+                return;
+            }
+            
+            const detectedPatterns = patternData.detected_patterns || [];
+            const recentPatterns = detectedPatterns.slice(-5).reverse(); // Últimos 5, más recientes primero
+            const anomalies = patternData.anomalies || [];
+            const recentAnomalies = anomalies.slice(-3).reverse(); // Últimas 3
+            
+            let html = '';
+            
+            if (recentPatterns.length > 0) {
+                html += '<div style="margin-bottom: 1.5rem;">';
+                html += '<div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Patrones Detectados</div>';
+                recentPatterns.forEach(pattern => {
+                    const severityColor = pattern.severity === 'high' ? 'var(--danger)' : pattern.severity === 'medium' ? 'var(--warning)' : 'var(--info)';
+                    html += `
+                        <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 8px; border-left: 3px solid ${severityColor}; margin-bottom: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.25rem;">
+                                <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">${pattern.type || 'Patrón'}</div>
+                                <span style="background: ${severityColor}; color: #000; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">${pattern.severity || 'info'}</span>
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${(pattern.description || '').substring(0, 60)}${(pattern.description || '').length > 60 ? '...' : ''}</div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            if (recentAnomalies.length > 0) {
+                html += '<div>';
+                html += '<div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Anomalías</div>';
+                recentAnomalies.forEach(anomaly => {
+                    html += `
+                        <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 8px; border-left: 3px solid var(--warning); margin-bottom: 0.5rem;">
+                            <div style="font-weight: 600; color: var(--warning); font-size: 0.9rem; margin-bottom: 0.25rem;">${anomaly.type || 'Anomalía'}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${(anomaly.description || '').substring(0, 50)}${(anomaly.description || '').length > 50 ? '...' : ''}</div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            if (html === '') {
+                html = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">No se han detectado patrones aún</div>';
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        // Update Auto-Tuning Display
+        function updateAutoTuning(tuningData) {
+            const container = document.getElementById('auto-tuning-content');
+            if (!container) return;
+            
+            if (!tuningData || Object.keys(tuningData).length === 0) {
+                container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">Esperando ajustes automáticos...</div>';
+                return;
+            }
+            
+            const adjustments = tuningData.adjustments || [];
+            const recentAdjustments = adjustments.slice(-5).reverse(); // Últimos 5 ajustes
+            const currentParams = tuningData.current_parameters || {};
+            
+            let html = '';
+            
+            if (recentAdjustments.length > 0) {
+                html += '<div style="margin-bottom: 1.5rem;">';
+                html += '<div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Ajustes Recientes</div>';
+                recentAdjustments.forEach(adj => {
+                    const actionColor = adj.action === 'increase' ? 'var(--success)' : adj.action === 'decrease' ? 'var(--warning)' : 'var(--info)';
+                    const actionIcon = adj.action === 'increase' ? '↑' : adj.action === 'decrease' ? '↓' : '→';
+                    html += `
+                        <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 8px; border-left: 3px solid ${actionColor}; margin-bottom: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.25rem;">
+                                <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">${adj.parameter || 'Parámetro'}</div>
+                                <span style="color: ${actionColor}; font-weight: 700; font-size: 1rem;">${actionIcon}</span>
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 0.25rem;">
+                                ${adj.old_value} → ${adj.new_value}
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted);">${(adj.reason || '').substring(0, 50)}${(adj.reason || '').length > 50 ? '...' : ''}</div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            if (Object.keys(currentParams).length > 0) {
+                html += '<div>';
+                html += '<div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Parámetros Actuales</div>';
+                html += '<div style="display: grid; gap: 0.5rem;">';
+                for (const [key, value] of Object.entries(currentParams)) {
+                    html += `
+                        <div style="display: flex; justify-content: space-between; padding: 0.5rem; background: var(--bg-tertiary); border-radius: 6px;">
+                            <span style="font-size: 0.8rem; color: var(--text-secondary);">${key.replace(/_/g, ' ')}</span>
+                            <span style="font-family: \'JetBrains Mono\', monospace; color: var(--primary); font-weight: 600; font-size: 0.85rem;">${value}</span>
+                        </div>
+                    `;
+                }
+                html += '</div></div>';
+            }
+            
+            if (html === '') {
+                html = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">No se han realizado ajustes aún</div>';
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        // Update Security Analysis Display
+        function updateSecurityAnalysis(securityData) {
+            const container = document.getElementById('security-analysis-content');
+            if (!container) return;
+            
+            if (!securityData || Object.keys(securityData).length === 0) {
+                container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">Esperando análisis de seguridad...</div>';
+                return;
+            }
+            
+            const vulnerabilities = securityData.vulnerabilities || [];
+            const recentVulns = vulnerabilities.slice(-5).reverse(); // Últimas 5
+            const securityIssues = securityData.security_issues || [];
+            const recentIssues = securityIssues.slice(-3).reverse(); // Últimas 3
+            
+            let html = '';
+            
+            if (recentVulns.length > 0) {
+                html += '<div style="margin-bottom: 1.5rem;">';
+                html += '<div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Vulnerabilidades Detectadas</div>';
+                recentVulns.forEach(vuln => {
+                    const severityColor = vuln.severity === 'high' ? 'var(--danger)' : vuln.severity === 'medium' ? 'var(--warning)' : 'var(--info)';
+                    html += `
+                        <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 8px; border-left: 3px solid ${severityColor}; margin-bottom: 0.5rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.25rem;">
+                                <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">${vuln.type || 'Vulnerabilidad'}</div>
+                                <span style="background: ${severityColor}; color: #000; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">${vuln.severity || 'info'}</span>
+                            </div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${(vuln.description || '').substring(0, 60)}${(vuln.description || '').length > 60 ? '...' : ''}</div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            if (recentIssues.length > 0) {
+                html += '<div>';
+                html += '<div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Problemas de Seguridad</div>';
+                recentIssues.forEach(issue => {
+                    const severityColor = issue.severity === 'high' ? 'var(--danger)' : issue.severity === 'medium' ? 'var(--warning)' : 'var(--info)';
+                    html += `
+                        <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 8px; border-left: 3px solid ${severityColor}; margin-bottom: 0.5rem;">
+                            <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem; margin-bottom: 0.25rem;">${issue.type || 'Problema'}</div>
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${(issue.description || '').substring(0, 50)}${(issue.description || '').length > 50 ? '...' : ''}</div>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+            }
+            
+            if (html === '') {
+                html = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">No se han detectado problemas de seguridad</div>';
+            }
+            
+            container.innerHTML = html;
         }
         
         // Update Charts
@@ -2560,6 +2950,304 @@
                 alert.style.transform = 'translateX(100px)';
                 setTimeout(() => alert.remove(), 300);
             }, 5000);
+        }
+        
+        // Toggle Section Function
+        function toggleSection(sectionId) {
+            const section = document.getElementById(sectionId);
+            const icon = document.getElementById(sectionId + '-icon');
+            
+            if (section) {
+                const isVisible = section.style.display !== 'none';
+                section.style.display = isVisible ? 'none' : 'block';
+                
+                if (icon) {
+                    icon.style.transform = isVisible ? 'rotate(0deg)' : 'rotate(180deg)';
+                }
+            }
+        }
+        
+        // Run Autodiagnostic
+        async function runAutodiagnostic() {
+            const container = document.getElementById('autodiagnostic-results');
+            const content = document.getElementById('autodiagnostic-content');
+            
+            if (!container || !content) {
+                showAlert('Error: Contenedor de autodiagnóstico no encontrado', 'error');
+                return;
+            }
+            
+            // Mostrar estado de progreso
+            content.innerHTML = `
+                <div style="text-align: center; padding: 3rem;">
+                    <div style="font-size: 3rem; margin-bottom: 1rem; color: var(--primary);">
+                        <i class="fas fa-spinner fa-spin"></i>
+                    </div>
+                    <div style="font-size: 1.2rem; color: var(--primary); margin-bottom: 0.5rem; font-weight: 600;">
+                        Ejecutando Autodiagnóstico...
+                    </div>
+                    <div style="color: var(--text-secondary); font-size: 0.9rem;">
+                        Esto puede tomar unos momentos...
+                    </div>
+                </div>
+            `;
+            container.style.display = 'block';
+            
+            try {
+                showAlert('Ejecutando autodiagnóstico completo...', 'info');
+                
+                const response = await fetch('/api/autodiagnostic', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.status === 'success') {
+                    displayAutodiagnostic(result.report);
+                    showAlert('Autodiagnóstico completado exitosamente', 'success');
+                } else {
+                    content.innerHTML = `
+                        <div style="text-align: center; padding: 3rem; color: var(--danger);">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                            <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">Error en Autodiagnóstico</div>
+                            <div style="color: var(--text-secondary);">${result.message || 'Error desconocido'}</div>
+                        </div>
+                    `;
+                    showAlert('Error: ' + (result.message || 'Error desconocido'), 'error');
+                }
+            } catch (error) {
+                content.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; color: var(--danger);">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                        <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">Error de Conexión</div>
+                        <div style="color: var(--text-secondary);">${error.message}</div>
+                    </div>
+                `;
+                showAlert('Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Display Autodiagnostic Results
+        function displayAutodiagnostic(report) {
+            const content = document.getElementById('autodiagnostic-content');
+            if (!content || !report) return;
+            
+            const summary = report.summary || {};
+            const errors = report.errors || [];
+            const warnings = report.warnings || [];
+            const suggestions = report.suggestions || [];
+            const checks = report.checks || {};
+            
+            let html = `
+                <div style="margin-bottom: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 1rem; background: var(--bg-tertiary); border-radius: 12px; border: 1px solid var(--border); margin-bottom: 1rem;">
+                        <div>
+                            <div style="font-size: 1.1rem; font-weight: 600; color: var(--primary); margin-bottom: 0.25rem;">
+                                <i class="fas fa-stethoscope"></i> Resumen del Autodiagnóstico
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                ${new Date(report.timestamp || new Date()).toLocaleString('es-ES')}
+                            </div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--primary);">
+                                ${summary.success_rate?.toFixed(1) || 0}%
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px;">
+                                Tasa de Éxito
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 1.5rem;">
+                        <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 12px; border: 1px solid var(--border); text-align: center;">
+                            <div style="font-size: 2rem; font-weight: 700; color: var(--success); margin-bottom: 0.5rem;">
+                                ${summary.passed || 0}
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px;">
+                                Exitosas
+                            </div>
+                        </div>
+                        <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 12px; border: 1px solid var(--border); text-align: center;">
+                            <div style="font-size: 2rem; font-weight: 700; color: var(--danger); margin-bottom: 0.5rem;">
+                                ${summary.failed || 0}
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px;">
+                                Fallidas
+                            </div>
+                        </div>
+                        <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 12px; border: 1px solid var(--border); text-align: center;">
+                            <div style="font-size: 2rem; font-weight: 700; color: var(--warning); margin-bottom: 0.5rem;">
+                                ${summary.warnings || 0}
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px;">
+                                Advertencias
+                            </div>
+                        </div>
+                        <div style="background: var(--bg-tertiary); padding: 1rem; border-radius: 12px; border: 1px solid var(--border); text-align: center;">
+                            <div style="font-size: 2rem; font-weight: 700; color: var(--info); margin-bottom: 0.5rem;">
+                                ${summary.total_checks || 0}
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 1px;">
+                                Total
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Errores
+            if (errors.length > 0) {
+                html += `
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="font-size: 1rem; font-weight: 600; color: var(--danger); margin-bottom: 0.75rem;">
+                            <i class="fas fa-exclamation-circle"></i> Errores Críticos (${errors.length})
+                        </div>
+                        <div style="background: var(--bg-tertiary); border-radius: 12px; border: 1px solid var(--border); padding: 1rem; max-height: 300px; overflow-y: auto;">
+                `;
+                errors.forEach(error => {
+                    html += `
+                        <div style="padding: 0.75rem; margin-bottom: 0.5rem; background: rgba(255, 51, 102, 0.1); border-left: 3px solid var(--danger); border-radius: 8px;">
+                            <div style="font-weight: 600; color: var(--danger); margin-bottom: 0.25rem;">
+                                ${error.item || 'N/A'}
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                                ${error.message || ''}
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--primary);">
+                                <i class="fas fa-lightbulb"></i> ${error.solution || 'Sin solución disponible'}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += `</div></div>`;
+            }
+            
+            // Advertencias
+            if (warnings.length > 0) {
+                html += `
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="font-size: 1rem; font-weight: 600; color: var(--warning); margin-bottom: 0.75rem;">
+                            <i class="fas fa-exclamation-triangle"></i> Advertencias (${warnings.length})
+                        </div>
+                        <div style="background: var(--bg-tertiary); border-radius: 12px; border: 1px solid var(--border); padding: 1rem; max-height: 300px; overflow-y: auto;">
+                `;
+                warnings.forEach(warning => {
+                    html += `
+                        <div style="padding: 0.75rem; margin-bottom: 0.5rem; background: rgba(255, 184, 0, 0.1); border-left: 3px solid var(--warning); border-radius: 8px;">
+                            <div style="font-weight: 600; color: var(--warning); margin-bottom: 0.25rem;">
+                                ${warning.item || 'N/A'}
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: 0.5rem;">
+                                ${warning.message || ''}
+                            </div>
+                            <div style="font-size: 0.75rem; color: var(--primary);">
+                                <i class="fas fa-lightbulb"></i> ${warning.solution || 'Sin solución disponible'}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += `</div></div>`;
+            }
+            
+            // Sugerencias
+            if (suggestions.length > 0) {
+                html += `
+                    <div style="margin-bottom: 1.5rem;">
+                        <div style="font-size: 1rem; font-weight: 600; color: var(--primary); margin-bottom: 0.75rem;">
+                            <i class="fas fa-lightbulb"></i> Sugerencias (${suggestions.length})
+                        </div>
+                        <div style="background: var(--bg-tertiary); border-radius: 12px; border: 1px solid var(--border); padding: 1rem;">
+                `;
+                suggestions.forEach(suggestion => {
+                    const priorityColor = suggestion.priority === 'high' || suggestion.priority === 'critical' ? 'var(--danger)' : 'var(--warning)';
+                    html += `
+                        <div style="padding: 0.75rem; margin-bottom: 0.5rem; background: rgba(0, 255, 136, 0.1); border-left: 3px solid var(--primary); border-radius: 8px;">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                                <div style="font-weight: 600; color: var(--primary);">
+                                    ${suggestion.message || ''}
+                                </div>
+                                <span style="background: ${priorityColor}; color: #000; padding: 0.25rem 0.5rem; border-radius: 12px; font-size: 0.7rem; font-weight: 600; text-transform: uppercase;">
+                                    ${suggestion.priority || 'medium'}
+                                </span>
+                            </div>
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">
+                                <i class="fas fa-arrow-right"></i> ${suggestion.action || 'Sin acción disponible'}
+                            </div>
+                        </div>
+                    `;
+                });
+                html += `</div></div>`;
+            }
+            
+            content.innerHTML = html;
+        }
+        
+        // Apply Stress Recommendations
+        async function applyStressRecommendations() {
+            try {
+                const response = await fetch('/api/fingerprint', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target: document.getElementById('config-target').value })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.stress_recommendations) {
+                    const recs = result.stress_recommendations;
+                    
+                    // Aplicar recomendaciones a los campos
+                    if (recs.recommended_power_level) {
+                        document.getElementById('config-power').value = recs.recommended_power_level;
+                    }
+                    if (recs.recommended_duration) {
+                        document.getElementById('config-duration').value = recs.recommended_duration;
+                    }
+                    if (recs.recommended_connections) {
+                        document.getElementById('config-connections').value = recs.recommended_connections;
+                    }
+                    if (recs.recommended_threads) {
+                        document.getElementById('config-threads').value = recs.recommended_threads;
+                    }
+                    if (recs.recommended_waf_bypass !== undefined) {
+                        document.getElementById('config-waf-bypass').checked = recs.recommended_waf_bypass;
+                    }
+                    if (recs.recommended_stealth !== undefined) {
+                        document.getElementById('config-stealth').checked = recs.recommended_stealth;
+                    }
+                    
+                    showAlert('Recomendaciones de stress aplicadas exitosamente', 'success');
+                } else {
+                    showAlert('No se pudieron obtener recomendaciones', 'warning');
+                }
+            } catch (error) {
+                showAlert('Error aplicando recomendaciones: ' + error.message, 'error');
+            }
+        }
+        
+        // Apply Tool Recommendations
+        async function applyToolRecommendations() {
+            try {
+                const response = await fetch('/api/fingerprint', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ target: document.getElementById('config-target').value })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.tool_recommendations) {
+                    const toolRecs = result.tool_recommendations;
+                    showAlert(`Se recomiendan ${toolRecs.tool_count || toolRecs.recommended_tools.length} herramienta(s): ${toolRecs.recommended_tools.join(', ')}`, 'info');
+                    // Las herramientas se aplicarán automáticamente al iniciar el ataque
+                } else {
+                    showAlert('No se pudieron obtener recomendaciones de herramientas', 'warning');
+                }
+            } catch (error) {
+                showAlert('Error aplicando recomendaciones de herramientas: ' + error.message, 'error');
+            }
         }
     </script>
 </body>
