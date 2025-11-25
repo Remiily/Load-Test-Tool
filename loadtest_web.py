@@ -65,6 +65,10 @@ current_attack_process = None
 attack_config = {}
 attack_history = []
 
+# Variables globales de proxies (inicializadas desde loadtest o configuración)
+PROXY_LIST = get_loadtest_var('PROXY_LIST') or []
+PROXY_ROTATION = get_loadtest_var('PROXY_ROTATION') or "round-robin"
+
 @app.route('/')
 def index():
     """Página principal del panel"""
@@ -1271,7 +1275,7 @@ def generate_command():
 @app.route('/api/start-recommended', methods=['POST'])
 def start_recommended_attack():
     """Inicia un ataque con parámetros recomendados del fingerprint"""
-    global current_attack_process, TARGET, DURATION, POWER_LEVEL, MAX_CONNECTIONS, MAX_THREADS, WAF_BYPASS, STEALTH_MODE, ATTACK_MODE
+    global current_attack_process, TARGET, DURATION, POWER_LEVEL, MAX_CONNECTIONS, MAX_THREADS, WAF_BYPASS, STEALTH_MODE, ATTACK_MODE, PROXY_LIST, PROXY_ROTATION
     
     if current_attack_process and current_attack_process.is_alive():
         return jsonify({"status": "error", "message": "Ya hay un ataque en ejecución"}), 400
