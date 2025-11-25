@@ -90,7 +90,33 @@ def get_config():
         "connection_warmup": get_loadtest_var('CONNECTION_WARMUP') or True,
         "rate_adaptive": get_loadtest_var('RATE_ADAPTIVE') or True,
         "connection_pool_size": get_loadtest_var('CONNECTION_POOL_SIZE') or 1000,
-        "max_payload_mb": get_loadtest_var('MAX_PAYLOAD_SIZE_MB') or 10
+        "max_payload_mb": get_loadtest_var('MAX_PAYLOAD_SIZE_MB') or 10,
+        # Configuración avanzada de timeouts
+        "connect_timeout": get_loadtest_var('CONNECT_TIMEOUT') or 3.0,
+        "read_timeout": get_loadtest_var('READ_TIMEOUT') or 6.0,
+        "max_retries": get_loadtest_var('MAX_RETRIES') or 0,
+        "retry_backoff_factor": get_loadtest_var('RETRY_BACKOFF_FACTOR') or 0.3,
+        # Configuración de rotación
+        "user_agent_rotation_interval": get_loadtest_var('USER_AGENT_ROTATION_INTERVAL') or 100,
+        "ip_rotation_interval": get_loadtest_var('IP_ROTATION_INTERVAL') or 50,
+        "header_rotation_interval": get_loadtest_var('HEADER_ROTATION_INTERVAL') or 200,
+        # Configuración de rate limiting
+        "rate_limit_base": get_loadtest_var('RATE_LIMIT_BASE') or 100,
+        "rate_limit_max": get_loadtest_var('RATE_LIMIT_MAX') or 10000,
+        "rate_limit_min": get_loadtest_var('RATE_LIMIT_MIN') or 10,
+        "rate_adaptive_factor": get_loadtest_var('RATE_ADAPTIVE_FACTOR') or 1.1,
+        # Configuración de backoff
+        "backoff_strategy": get_loadtest_var('BACKOFF_STRATEGY') or "exponential",
+        "backoff_max_delay": get_loadtest_var('BACKOFF_MAX_DELAY') or 5.0,
+        "backoff_min_delay": get_loadtest_var('BACKOFF_MIN_DELAY') or 0.1,
+        # Técnicas de evasión individuales
+        "evasion_techniques": get_loadtest_var('EVASION_TECHNIQUES') or {},
+        # Configuración de proxies
+        "proxy_list": get_loadtest_var('PROXY_LIST') or [],
+        "proxy_rotation": get_loadtest_var('PROXY_ROTATION') or "round-robin",
+        # Configuración HTTP/2 y HTTP/3
+        "http2_multiplexing": get_loadtest_var('HTTP2_MULTIPLEXING') or True,
+        "http3_quic": get_loadtest_var('HTTP3_QUIC') or False
     })
 
 @app.route('/api/config', methods=['POST'])
@@ -101,6 +127,11 @@ def set_config():
     global MEMORY_THRESHOLD_WARN, MEMORY_THRESHOLD_CRITICAL, MEMORY_THRESHOLD_OOM, PAYLOAD_SIZE_KB
     global SOCKET_REUSE, TCP_OPTIMIZATION, KEEP_ALIVE_POOLING, CONNECTION_WARMUP, RATE_ADAPTIVE
     global CONNECTION_POOL_SIZE, MAX_PAYLOAD_SIZE_MB
+    global CONNECT_TIMEOUT, READ_TIMEOUT, MAX_RETRIES, RETRY_BACKOFF_FACTOR
+    global USER_AGENT_ROTATION_INTERVAL, IP_ROTATION_INTERVAL, HEADER_ROTATION_INTERVAL
+    global RATE_LIMIT_BASE, RATE_LIMIT_MAX, RATE_LIMIT_MIN, RATE_ADAPTIVE_FACTOR
+    global BACKOFF_STRATEGY, BACKOFF_MAX_DELAY, BACKOFF_MIN_DELAY, EVASION_TECHNIQUES
+    global PROXY_LIST, PROXY_ROTATION, HTTP2_MULTIPLEXING, HTTP3_QUIC
     
     data = request.json
     
