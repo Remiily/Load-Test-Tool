@@ -2152,16 +2152,36 @@
                     html += `</div></div>`;
                 }
                 
-                if (toolRecommendations.reasoning && toolRecommendations.reasoning.length > 0) {
+                if (toolRecommendations.reasoning) {
                     html += `
                         <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; border: 1px solid var(--border);">
                             <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Razonamiento</div>
-                            <ul style="margin: 0; padding-left: 1.5rem; color: var(--text-primary);">
+                            <div style="color: var(--text-primary);">
                     `;
-                    toolRecommendations.reasoning.forEach(reason => {
-                        html += `<li style="margin-bottom: 0.5rem; font-size: 0.9rem;">${reason}</li>`;
-                    });
-                    html += `</ul></div>`;
+                    // Manejar tanto string como array
+                    if (Array.isArray(toolRecommendations.reasoning)) {
+                        html += `<ul style="margin: 0; padding-left: 1.5rem;">`;
+                        toolRecommendations.reasoning.forEach(reason => {
+                            html += `<li style="margin-bottom: 0.5rem; font-size: 0.9rem;">${reason}</li>`;
+                        });
+                        html += `</ul>`;
+                    } else {
+                        // Si es string, dividir por punto y coma o mostrar directamente
+                        const reasoningText = String(toolRecommendations.reasoning);
+                        if (reasoningText.includes('; ')) {
+                            const reasons = reasoningText.split('; ');
+                            html += `<ul style="margin: 0; padding-left: 1.5rem;">`;
+                            reasons.forEach(reason => {
+                                if (reason.trim()) {
+                                    html += `<li style="margin-bottom: 0.5rem; font-size: 0.9rem;">${reason.trim()}</li>`;
+                                }
+                            });
+                            html += `</ul>`;
+                        } else {
+                            html += `<div style="font-size: 0.9rem; line-height: 1.6;">${reasoningText}</div>`;
+                        }
+                    }
+                    html += `</div></div>`;
                 }
                 
                 html += `</div></div>`;
