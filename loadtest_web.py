@@ -1505,6 +1505,9 @@ def start_recommended_attack():
         
         # Iniciar ataque en thread separado (usar la misma lógica que start_attack)
         def run_recommended_attack():
+            # Declarar variables globales para acceso desde función anidada
+            global PROXY_LIST, PROXY_ROTATION
+            
             try:
                 # DEBUG: Verificar que loadtest_ref esté disponible
                 print(f"[DEBUG] loadtest_ref disponible: {loadtest_ref is not None}")
