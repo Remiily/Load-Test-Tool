@@ -1188,6 +1188,116 @@
                         </div>
                     </div>
                 </div>
+                <div class="card">
+                    <div class="card-header" onclick="toggleSection('advanced-network')" style="cursor: pointer;">
+                        <div class="card-title">
+                            <i class="fas fa-network-wired"></i>
+                            Configuración de Red y Timeouts
+                        </div>
+                        <i class="fas fa-chevron-down" id="advanced-network-icon"></i>
+                    </div>
+                    <div class="card-body" id="advanced-network" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label">Connect Timeout (segundos)</label>
+                            <input type="number" class="form-input" id="config-connect-timeout" value="3.0" step="0.1" min="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Read Timeout (segundos)</label>
+                            <input type="number" class="form-input" id="config-read-timeout" value="6.0" step="0.1" min="0.1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Max Retries</label>
+                            <input type="number" class="form-input" id="config-max-retries" value="0" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Retry Backoff Factor</label>
+                            <input type="number" class="form-input" id="config-retry-backoff" value="0.3" step="0.1" min="0">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Connection Pool Size</label>
+                            <input type="number" class="form-input" id="config-pool-size" value="1000" min="1">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Max Payload Size (MB)</label>
+                            <input type="number" class="form-input" id="config-max-payload-mb" value="10" min="1">
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="config-keep-alive" checked>
+                            <label for="config-keep-alive">Keep-Alive Pooling</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="config-connection-warmup" checked>
+                            <label for="config-connection-warmup">Connection Warmup</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="config-tcp-optimization" checked>
+                            <label for="config-tcp-optimization">TCP Optimization</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="config-http2-multiplexing" checked>
+                            <label for="config-http2-multiplexing">HTTP/2 Multiplexing</label>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-header" onclick="toggleSection('evasion-techniques')" style="cursor: pointer;">
+                        <div class="card-title">
+                            <i class="fas fa-shield-alt"></i>
+                            Técnicas de Evasión
+                        </div>
+                        <i class="fas fa-chevron-down" id="evasion-techniques-icon"></i>
+                    </div>
+                    <div class="card-body" id="evasion-techniques" style="display: none;">
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="evasion-url-encoding" checked>
+                            <label for="evasion-url-encoding">URL Encoding</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="evasion-case-variation" checked>
+                            <label for="evasion-case-variation">Case Variation</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="evasion-parameter-pollution" checked>
+                            <label for="evasion-parameter-pollution">Parameter Pollution</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="evasion-method-tampering" checked>
+                            <label for="evasion-method-tampering">Method Tampering</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="evasion-header-injection" checked>
+                            <label for="evasion-header-injection">Header Injection</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="evasion-host-header-injection" checked>
+                            <label for="evasion-host-header-injection">Host Header Injection</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="evasion-content-type-manipulation" checked>
+                            <label for="evasion-content-type-manipulation">Content-Type Manipulation</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="evasion-null-byte-injection" checked>
+                            <label for="evasion-null-byte-injection">Null Byte Injection</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="evasion-whitespace-injection" checked>
+                            <label for="evasion-whitespace-injection">Whitespace Injection</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="evasion-path-traversal" checked>
+                            <label for="evasion-path-traversal">Path Traversal Evasion</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="evasion-query-string-manipulation" checked>
+                            <label for="evasion-query-string-manipulation">Query String Manipulation</label>
+                        </div>
+                        <div class="form-checkbox">
+                            <input type="checkbox" id="evasion-cookie-manipulation" checked>
+                            <label for="evasion-cookie-manipulation">Cookie Manipulation</label>
+                        </div>
+                    </div>
+                </div>
             </div>
             <div class="card" id="fingerprint-results" style="display: none;">
                 <div class="card-header">
@@ -2080,6 +2190,204 @@
             } catch (error) {
                 console.error('Error loading history:', error);
             }
+        }
+        
+        // Run Autodiagnostic
+        async function runAutodiagnostic() {
+            const container = document.getElementById('tools-content');
+            container.innerHTML = `
+                <div style="text-align: center; padding: 2rem;">
+                    <div class="spinner" style="margin: 0 auto;"></div>
+                    <div style="margin-top: 1rem; color: var(--text-secondary);">Ejecutando autodiagnóstico completo...</div>
+                </div>
+            `;
+            
+            try {
+                showAlert('Ejecutando autodiagnóstico completo...', 'info');
+                
+                const response = await fetch('/api/autodiagnostic', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.status === 'success') {
+                    displayAutodiagnostic(result.report);
+                    showAlert('Autodiagnóstico completado', 'success');
+                } else {
+                    container.innerHTML = `
+                        <div style="text-align: center; padding: 3rem; color: var(--danger);">
+                            <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                            <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">Error en Autodiagnóstico</div>
+                            <div style="color: var(--text-secondary);">${result.message || 'Error desconocido'}</div>
+                        </div>
+                    `;
+                    showAlert(result.message || 'Error en autodiagnóstico', 'error');
+                }
+            } catch (error) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; color: var(--danger);">
+                        <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                        <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">Error de Conexión</div>
+                        <div style="color: var(--text-secondary);">${error.message}</div>
+                    </div>
+                `;
+                showAlert('Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Display Autodiagnostic Results
+        function displayAutodiagnostic(report) {
+            const container = document.getElementById('tools-content');
+            const summary = report.summary;
+            const successRate = summary.success_rate.toFixed(1);
+            
+            let html = `
+                <div style="margin-bottom: 2rem;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem;">
+                        <div class="card" style="background: var(--bg-card); border: 1px solid var(--border); padding: 1.5rem; border-radius: 12px; text-align: center;">
+                            <div style="font-size: 2.5rem; font-weight: 800; color: var(--primary); margin-bottom: 0.5rem;">${summary.total_checks}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Total Verificaciones</div>
+                        </div>
+                        <div class="card" style="background: var(--bg-card); border: 1px solid var(--success); padding: 1.5rem; border-radius: 12px; text-align: center;">
+                            <div style="font-size: 2.5rem; font-weight: 800; color: var(--success); margin-bottom: 0.5rem;">${summary.passed}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Exitosas</div>
+                        </div>
+                        <div class="card" style="background: var(--bg-card); border: 1px solid ${summary.failed > 0 ? 'var(--danger)' : 'var(--border)'}; padding: 1.5rem; border-radius: 12px; text-align: center;">
+                            <div style="font-size: 2.5rem; font-weight: 800; color: ${summary.failed > 0 ? 'var(--danger)' : 'var(--text-secondary)'}; margin-bottom: 0.5rem;">${summary.failed}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Fallidas</div>
+                        </div>
+                        <div class="card" style="background: var(--bg-card); border: 1px solid ${summary.warnings > 0 ? 'var(--warning)' : 'var(--border)'}; padding: 1.5rem; border-radius: 12px; text-align: center;">
+                            <div style="font-size: 2.5rem; font-weight: 800; color: ${summary.warnings > 0 ? 'var(--warning)' : 'var(--text-secondary)'}; margin-bottom: 0.5rem;">${summary.warnings}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Advertencias</div>
+                        </div>
+                        <div class="card" style="background: var(--bg-card); border: 1px solid var(--primary); padding: 1.5rem; border-radius: 12px; text-align: center;">
+                            <div style="font-size: 2.5rem; font-weight: 800; color: var(--primary); margin-bottom: 0.5rem;">${successRate}%</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px;">Tasa de Éxito</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Mostrar errores críticos
+            if (report.errors && report.errors.length > 0) {
+                html += `
+                    <div class="card" style="background: var(--bg-card); border: 1px solid var(--danger); padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem;">
+                        <div class="card-header">
+                            <div class="card-title" style="color: var(--danger);">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                Errores Críticos (${report.errors.length})
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div style="display: grid; gap: 1rem;">
+                `;
+                
+                report.errors.slice(0, 20).forEach(error => {
+                    html += `
+                        <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; border-left: 3px solid var(--danger);">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                                <div style="font-weight: 600; color: var(--danger);">
+                                    [${error.category}] ${error.item}
+                                </div>
+                                <span style="background: var(--danger); color: #000; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">
+                                    ${error.severity.toUpperCase()}
+                                </span>
+                            </div>
+                            <div style="color: var(--text-primary); margin-bottom: 0.5rem;">${error.message}</div>
+                            <div style="padding: 0.75rem; background: var(--bg-secondary); border-radius: 6px; margin-top: 0.5rem;">
+                                <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.25rem;">Solución:</div>
+                                <div style="color: var(--primary); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;">${error.solution}</div>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                if (report.errors.length > 20) {
+                    html += `
+                        <div style="text-align: center; padding: 1rem; color: var(--text-secondary);">
+                            ... y ${report.errors.length - 20} error(es) más
+                        </div>
+                    `;
+                }
+                
+                html += `
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Mostrar advertencias
+            if (report.warnings && report.warnings.length > 0) {
+                html += `
+                    <div class="card" style="background: var(--bg-card); border: 1px solid var(--warning); padding: 1.5rem; border-radius: 12px; margin-bottom: 1.5rem;">
+                        <div class="card-header">
+                            <div class="card-title" style="color: var(--warning);">
+                                <i class="fas fa-exclamation-circle"></i>
+                                Advertencias (${report.warnings.length})
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div style="display: grid; gap: 1rem;">
+                `;
+                
+                report.warnings.slice(0, 10).forEach(warning => {
+                    html += `
+                        <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; border-left: 3px solid var(--warning);">
+                            <div style="font-weight: 600; color: var(--warning); margin-bottom: 0.5rem;">
+                                [${warning.category}] ${warning.item}
+                            </div>
+                            <div style="color: var(--text-primary); margin-bottom: 0.5rem;">${warning.message}</div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">${warning.solution}</div>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Mostrar sugerencias
+            if (report.suggestions && report.suggestions.length > 0) {
+                html += `
+                    <div class="card" style="background: var(--bg-card); border: 1px solid var(--primary); padding: 1.5rem; border-radius: 12px;">
+                        <div class="card-header">
+                            <div class="card-title" style="color: var(--primary);">
+                                <i class="fas fa-lightbulb"></i>
+                                Sugerencias Automáticas
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div style="display: grid; gap: 1rem;">
+                `;
+                
+                report.suggestions.forEach(suggestion => {
+                    html += `
+                        <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; border-left: 3px solid var(--primary);">
+                            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.5rem;">
+                                <div style="font-weight: 600; color: var(--primary);">${suggestion.message}</div>
+                                <span style="background: var(--primary); color: #000; padding: 0.25rem 0.5rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">
+                                    ${suggestion.priority.toUpperCase()}
+                                </span>
+                            </div>
+                            <div style="color: var(--text-secondary); font-size: 0.85rem;">${suggestion.action}</div>
+                        </div>
+                    `;
+                });
+                
+                html += `
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            container.innerHTML = html;
         }
         
         // Load Tools

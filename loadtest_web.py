@@ -32,7 +32,8 @@ from loadtest import (
     PAYLOAD_SIZE_KB, POWER_LEVELS, TOOLS, attack_stats, monitoring_active,
     OUTPUT_DIR, REPORTS_DIR, LOGS_DIR, VERSION, validate_critical_variables,
     fingerprint_target, generate_report, show_tool_status, detect_all_tools,
-    generate_stress_recommendations, DOMAIN, IP_ADDRESS, TARGET_TYPE, NETWORK_TYPE
+    generate_stress_recommendations, recommend_tools_from_fingerprint,
+    run_autodiagnostic, DOMAIN, IP_ADDRESS, TARGET_TYPE, NETWORK_TYPE
 )
 
 # Acceso a variables globales del módulo loadtest
@@ -918,6 +919,50 @@ def stop_attack():
         "timestamp": datetime.now().isoformat()
     })
 
+@app.route('/api/tool-recommendations', methods=['GET'])
+def get_tool_recommendations():
+    """Obtiene recomendaciones de herramientas basadas en fingerprint"""
+    try:
+        # Intentar cargar fingerprint más reciente
+        fingerprint = None
+        try:
+            fingerprint_file = REPORTS_DIR / f"fingerprint_{DOMAIN.replace('.', '_').replace(':', '_')}.json"
+            if fingerprint_file.exists():
+                with open(fingerprint_file, "r", encoding="utf-8") as f:
+                    fingerprint = json.load(f)
+        except:
+            pass
+        
+        # Obtener recomendaciones
+        recommendations = recommend_tools_from_fingerprint(fingerprint)
+        
+        return jsonify({
+            "status": "success",
+            "recommendations": recommendations
+        })
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": str(e)
+        }), 500
+
+@app.route('/api/autodiagnostic', methods=['GET', 'POST'])
+def run_autodiagnostic_endpoint():
+    """Ejecuta autodiagnóstico completo y retorna reporte"""
+    try:
+        diagnostic_report = run_autodiagnostic()
+        return jsonify({
+            "status": "success",
+            "report": diagnostic_report
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc() if DEBUG_MODE else None
+        }), 500
+
 @app.route('/api/fingerprint', methods=['POST'])
 def run_fingerprint():
     """Ejecuta fingerprint del target"""
@@ -994,6 +1039,16 @@ def run_fingerprint():
             print(f"DEBUG: Traceback recomendaciones: {traceback.format_exc()}")
             stress_recommendations = {"error": str(rec_error), "message": "No se pudieron generar recomendaciones"}
         
+        # Generar recomendaciones de herramientas basadas en fingerprint
+        tool_recommendations = {}
+        try:
+            tool_recommendations = recommend_tools_from_fingerprint(fingerprint)
+        except Exception as tool_rec_error:
+            import traceback
+            print(f"DEBUG: Error generando recomendaciones de herramientas: {tool_rec_error}")
+            print(f"DEBUG: Traceback recomendaciones de herramientas: {traceback.format_exc()}")
+            tool_recommendations = {"error": str(tool_rec_error), "message": "No se pudieron generar recomendaciones de herramientas"}
+        
         # Asegurar que el fingerprint sea serializable a JSON
         # Convertir cualquier objeto datetime o no serializable
         try:
@@ -1015,6 +1070,7 @@ def run_fingerprint():
             "status": "success", 
             "fingerprint": fingerprint,
             "stress_recommendations": stress_recommendations,
+            "tool_recommendations": tool_recommendations,
             "fingerprint_status": fingerprint.get("status", "completed"),
             "completed_at": fingerprint.get("completed_at", datetime.now().isoformat())
         })
