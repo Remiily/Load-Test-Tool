@@ -675,7 +675,7 @@
         
         @keyframes pulse {
             0%, 100% { 
-                opacity: 1; 
+                opacity: 1;
                 transform: scale(1);
             }
             50% { 
@@ -887,10 +887,10 @@
             <div class="logo-section">
                 <div class="logo">LT</div>
                 <div class="logo-text">
-                    <h1>LoadTest Enterprise</h1>
+            <h1>LoadTest Enterprise</h1>
                     <div class="subtitle">Security Operations Center</div>
-                </div>
-            </div>
+        </div>
+        </div>
             <div class="header-stats">
                 <div class="stat-badge">
                     <div class="value" id="header-requests">0</div>
@@ -953,7 +953,7 @@
                     </div>
                     <div class="metric-value" id="metric-requests">0</div>
                     <div class="metric-label">Total Enviados</div>
-                </div>
+                    </div>
                 <div class="card metric-card">
                     <div class="card-title">
                         <i class="fas fa-tachometer-alt"></i>
@@ -961,7 +961,7 @@
                     </div>
                     <div class="metric-value" id="metric-rps">0</div>
                     <div class="metric-label">RPS Actual</div>
-                </div>
+                    </div>
                 <div class="card metric-card">
                     <div class="card-title">
                         <i class="fas fa-check-circle"></i>
@@ -977,9 +977,9 @@
                     </div>
                     <div class="metric-value" id="metric-latency">0ms</div>
                     <div class="metric-label">Tiempo Promedio</div>
+                    </div>
                 </div>
-            </div>
-
+                
             <!-- Charts Row 1 -->
             <div class="grid grid-2">
                 <div class="card">
@@ -987,7 +987,7 @@
                         <div class="card-title">
                             <i class="fas fa-chart-line"></i>
                             Requests en Tiempo Real
-                        </div>
+                    </div>
                         <div class="card-icon">📊</div>
                     </div>
                     <div class="card-body">
@@ -1010,8 +1010,8 @@
                         </div>
                     </div>
                 </div>
-            </div>
-
+                </div>
+                
             <!-- Charts Row 2 -->
             <div class="grid grid-2">
                 <div class="card">
@@ -1089,8 +1089,8 @@
                         <div class="metric-label">Conexiones Establecidas</div>
                     </div>
                 </div>
-            </div>
-
+                </div>
+                
             <!-- Advanced Analysis Section -->
             <div class="grid grid-3" style="margin-top: 2rem;">
                 <!-- Pattern Analysis -->
@@ -1110,14 +1110,14 @@
                         </div>
                     </div>
                 </div>
-
+                
                 <!-- Auto-Tuning -->
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-sliders-h"></i>
                             Auto-Tuning
-                        </div>
+                    </div>
                         <div class="card-icon">🔧</div>
                     </div>
                     <div class="card-body">
@@ -1125,10 +1125,10 @@
                             <div style="color: var(--text-secondary); text-align: center; padding: 2rem;">
                                 Esperando ajustes automáticos...
                             </div>
-                        </div>
-                    </div>
                 </div>
-
+            </div>
+        </div>
+        
                 <!-- Security Analysis -->
                 <div class="card">
                     <div class="card-header">
@@ -1160,15 +1160,15 @@
                         </div>
                     </div>
                     <div class="card-body">
-                        <div class="form-group">
+                    <div class="form-group">
                             <label class="form-label">Target URL/IP</label>
                             <input type="text" class="form-input" id="config-target" placeholder="https://example.com">
-                        </div>
-                        <div class="form-group">
+                    </div>
+                    <div class="form-group">
                             <label class="form-label">Duración (segundos)</label>
                             <input type="number" class="form-input" id="config-duration" value="60" min="1">
-                        </div>
-                        <div class="form-group">
+                    </div>
+                    <div class="form-group">
                             <label class="form-label">Nivel de Potencia</label>
                             <select class="form-select" id="config-power">
                                 <option value="LIGHT">LIGHT (x2)</option>
@@ -1176,55 +1176,55 @@
                                 <option value="HEAVY">HEAVY (x20)</option>
                                 <option value="EXTREME">EXTREME (x50)</option>
                                 <option value="GODMODE">GODMODE (x100)</option>
-                            </select>
-                        </div>
-                        <div class="form-group">
+                        </select>
+                    </div>
+                    <div class="form-group">
                             <label class="form-label">Modo de Ataque</label>
                             <select class="form-select" id="config-mode">
-                                <option value="MIXED" selected>MIXED</option>
-                                <option value="CONSTANT">CONSTANT</option>
-                                <option value="BURST">BURST</option>
-                                <option value="RAMP_UP">RAMP_UP</option>
-                            </select>
-                        </div>
+                            <option value="MIXED" selected>MIXED</option>
+                            <option value="CONSTANT">CONSTANT</option>
+                            <option value="BURST">BURST</option>
+                            <option value="RAMP_UP">RAMP_UP</option>
+                        </select>
+                    </div>
                         <button class="btn btn-secondary" onclick="runFingerprint()">
                             <i class="fas fa-fingerprint"></i>
                             Ejecutar Fingerprint
                         </button>
-                    </div>
+                </div>
                 </div>
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-sliders-h"></i>
                             Configuración Avanzada
-                        </div>
+                    </div>
                     </div>
                     <div class="card-body">
-                        <div class="form-group">
+                    <div class="form-group">
                             <label class="form-label">Max Conexiones</label>
                             <input type="number" class="form-input" id="config-connections" value="10000" min="1">
-                        </div>
-                        <div class="form-group">
+                    </div>
+                    <div class="form-group">
                             <label class="form-label">Max Threads</label>
                             <input type="number" class="form-input" id="config-threads" value="400" min="1">
-                        </div>
+                    </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="config-waf-bypass">
                             <label for="config-waf-bypass">WAF Bypass</label>
-                        </div>
+                    </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="config-stealth">
                             <label for="config-stealth">Modo Stealth</label>
-                        </div>
+                </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="config-large-payloads">
                             <label for="config-large-payloads">Payloads Grandes</label>
-                        </div>
+                    </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="config-auto-throttle" checked>
                             <label for="config-auto-throttle">Auto Throttle</label>
-                        </div>
+                    </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="config-memory-monitoring" checked>
                             <label for="config-memory-monitoring">Monitoreo de Memoria</label>
@@ -1250,34 +1250,34 @@
                         <div class="card-title">
                             <i class="fas fa-network-wired"></i>
                             Configuración de Red y Timeouts
-                        </div>
+                    </div>
                         <i class="fas fa-chevron-down" id="advanced-network-icon"></i>
                     </div>
                     <div class="card-body" id="advanced-network" style="display: none;">
                         <div class="form-group">
                             <label class="form-label">Connect Timeout (segundos)</label>
                             <input type="number" class="form-input" id="config-connect-timeout" value="3.0" step="0.1" min="0.1">
-                        </div>
+                    </div>
                         <div class="form-group">
                             <label class="form-label">Read Timeout (segundos)</label>
                             <input type="number" class="form-input" id="config-read-timeout" value="6.0" step="0.1" min="0.1">
-                        </div>
+                    </div>
                         <div class="form-group">
                             <label class="form-label">Max Retries</label>
                             <input type="number" class="form-input" id="config-max-retries" value="0" min="0">
-                        </div>
-                        <div class="form-group">
+                    </div>
+                    <div class="form-group">
                             <label class="form-label">Retry Backoff Factor</label>
                             <input type="number" class="form-input" id="config-retry-backoff" value="0.3" step="0.1" min="0">
-                        </div>
-                        <div class="form-group">
+                    </div>
+                    <div class="form-group">
                             <label class="form-label">Connection Pool Size</label>
                             <input type="number" class="form-input" id="config-pool-size" value="1000" min="1">
-                        </div>
+                    </div>
                         <div class="form-group">
                             <label class="form-label">Max Payload Size (MB)</label>
                             <input type="number" class="form-input" id="config-max-payload-mb" value="10" min="1">
-                        </div>
+                </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="config-keep-alive" checked>
                             <label for="config-keep-alive">Keep-Alive Pooling</label>
@@ -1301,41 +1301,41 @@
                         <div class="card-title">
                             <i class="fas fa-brain"></i>
                             Análisis Avanzado
-                        </div>
+                    </div>
                         <i class="fas fa-chevron-down" id="advanced-analysis-icon"></i>
                     </div>
                     <div class="card-body" id="advanced-analysis" style="display: none;">
                         <div class="form-checkbox">
                             <input type="checkbox" id="config-pattern-analysis" checked>
                             <label for="config-pattern-analysis">Análisis de Patrones en Respuestas</label>
-                        </div>
+                    </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="config-auto-tuning" checked>
                             <label for="config-auto-tuning">Auto-Tuning de Parámetros</label>
-                        </div>
+                    </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="config-security-analysis" checked>
                             <label for="config-security-analysis">Análisis de Seguridad Durante Stress</label>
-                        </div>
                     </div>
                 </div>
+            </div>
                 <div class="card">
                     <div class="card-header" onclick="toggleSection('evasion-techniques')" style="cursor: pointer;">
                         <div class="card-title">
                             <i class="fas fa-shield-alt"></i>
                             Técnicas de Evasión
-                        </div>
+                </div>
                         <i class="fas fa-chevron-down" id="evasion-techniques-icon"></i>
-                    </div>
+            </div>
                     <div class="card-body" id="evasion-techniques" style="display: none;">
                         <div class="form-checkbox">
                             <input type="checkbox" id="evasion-url-encoding" checked>
                             <label for="evasion-url-encoding">URL Encoding</label>
-                        </div>
+        </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="evasion-case-variation" checked>
                             <label for="evasion-case-variation">Case Variation</label>
-                        </div>
+                    </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="evasion-parameter-pollution" checked>
                             <label for="evasion-parameter-pollution">Parameter Pollution</label>
@@ -1347,38 +1347,38 @@
                         <div class="form-checkbox">
                             <input type="checkbox" id="evasion-header-injection" checked>
                             <label for="evasion-header-injection">Header Injection</label>
-                        </div>
+                    </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="evasion-host-header-injection" checked>
                             <label for="evasion-host-header-injection">Host Header Injection</label>
-                        </div>
+                </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="evasion-content-type-manipulation" checked>
                             <label for="evasion-content-type-manipulation">Content-Type Manipulation</label>
-                        </div>
+                    </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="evasion-null-byte-injection" checked>
                             <label for="evasion-null-byte-injection">Null Byte Injection</label>
-                        </div>
+                    </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="evasion-whitespace-injection" checked>
                             <label for="evasion-whitespace-injection">Whitespace Injection</label>
-                        </div>
+                    </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="evasion-path-traversal" checked>
                             <label for="evasion-path-traversal">Path Traversal Evasion</label>
-                        </div>
+                    </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="evasion-query-string-manipulation" checked>
                             <label for="evasion-query-string-manipulation">Query String Manipulation</label>
-                        </div>
+                    </div>
                         <div class="form-checkbox">
                             <input type="checkbox" id="evasion-cookie-manipulation" checked>
                             <label for="evasion-cookie-manipulation">Cookie Manipulation</label>
-                        </div>
+                    </div>
+                    </div>
                     </div>
                 </div>
-            </div>
             <div class="card" id="fingerprint-results" style="display: none;">
                 <div class="card-header">
                     <div class="card-title">
@@ -1388,8 +1388,8 @@
                 </div>
                 <div class="card-body" id="fingerprint-content"></div>
             </div>
-        </div>
-
+            </div>
+            
         <!-- Monitoring Tab -->
         <div id="monitoring" class="tab-content">
             <div class="grid grid-2">
@@ -1398,8 +1398,8 @@
                         <div class="card-title">
                             <i class="fas fa-chart-bar"></i>
                             Estadísticas de Latencia
-                        </div>
                     </div>
+                </div>
                     <div class="card-body">
                         <table class="table">
                             <tr>
@@ -1438,17 +1438,17 @@
                         <div class="card-title">
                             <i class="fas fa-code"></i>
                             Distribución de Códigos HTTP
-                        </div>
                     </div>
-                    <div class="card-body" id="http-codes-distribution"></div>
                 </div>
+                    <div class="card-body" id="http-codes-distribution"></div>
             </div>
+                </div>
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">
                         <i class="fas fa-terminal"></i>
                         Logs en Tiempo Real
-                    </div>
+            </div>
                 </div>
                 <div class="card-body">
                     <div id="logs-container" style="font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; max-height: 450px; overflow-y: auto; background: var(--bg-tertiary); padding: 1.5rem; border-radius: 12px; border: 1px solid var(--border);">
@@ -1457,7 +1457,7 @@
                 </div>
             </div>
         </div>
-
+        
         <!-- Reports Tab -->
         <div id="reports" class="tab-content">
             <div class="grid grid-2">
@@ -1479,7 +1479,7 @@
                 </div>
                 
                 <!-- Reportes HTML Disponibles -->
-                <div class="card">
+            <div class="card">
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-file-alt"></i>
@@ -1491,36 +1491,36 @@
                         </button>
                     </div>
                     <div class="card-body">
-                        <div id="reports-list"></div>
+                <div id="reports-list"></div>
                     </div>
                 </div>
             </div>
         </div>
-
+        
         <!-- Tools Tab -->
         <div id="tools" class="tab-content">
             <div class="grid grid-2">
-                <div class="card">
+            <div class="card">
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-tools"></i>
                             Estado de Herramientas
-                        </div>
+            </div>
                         <button class="btn btn-secondary" onclick="loadTools()">
                             <i class="fas fa-sync-alt"></i>
                             Actualizar
                         </button>
-                    </div>
+        </div>
                     <div class="card-body">
                         <div class="tools-grid" id="tools-grid"></div>
-                    </div>
-                </div>
+                            </div>
+                        </div>
                 <div class="card">
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-stethoscope"></i>
                             Autodiagnóstico del Sistema
-                        </div>
+                    </div>
                         <button class="btn btn-primary" onclick="runAutodiagnostic()">
                             <i class="fas fa-play"></i>
                             Ejecutar
@@ -1538,14 +1538,14 @@
                                 <div class="card-title">
                                     <i class="fas fa-clipboard-list"></i>
                                     Resultados del Autodiagnóstico
-                                </div>
-                            </div>
+                    </div>
+                    </div>
                             <div class="card-body" id="autodiagnostic-content"></div>
+                    </div>
+                    </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
 
         <!-- System Tab -->
         <div id="system" class="tab-content">
@@ -1555,27 +1555,27 @@
                         <div class="card-title">
                             <i class="fas fa-server"></i>
                             Información del Sistema
-                        </div>
                     </div>
-                    <div class="card-body" id="system-info"></div>
                 </div>
-                <div class="card">
+                    <div class="card-body" id="system-info"></div>
+            </div>
+                    <div class="card">
                     <div class="card-header">
                         <div class="card-title">
                             <i class="fas fa-chart-pie"></i>
                             Uso de Recursos
-                        </div>
+                    </div>
                     </div>
                     <div class="card-body">
                         <div class="chart-container">
                             <canvas id="system-resources-chart"></canvas>
-                        </div>
-                    </div>
                 </div>
             </div>
         </div>
-    </div>
-
+                </div>
+            </div>
+        </div>
+        
     <script>
         // Global state
         let config = {};
@@ -2175,7 +2175,7 @@
                             html += `<li style="margin-bottom: 0.5rem; font-size: 0.9rem;">${reason}</li>`;
                         });
                         html += `</ul>`;
-                    } else {
+                        } else {
                         // Si es string, dividir por punto y coma o mostrar directamente
                         const reasoningText = String(toolRecommendations.reasoning);
                         if (reasoningText.includes('; ')) {
@@ -2187,7 +2187,7 @@
                                 }
                             });
                             html += `</ul>`;
-                        } else {
+                    } else {
                             html += `<div style="font-size: 0.9rem; line-height: 1.6;">${reasoningText}</div>`;
                         }
                     }
@@ -2222,8 +2222,11 @@
                                     <button onclick="showRecommendedCommand()" style="flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1.5rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem;" onmouseover="this.style.background='var(--bg-secondary)'; this.style.borderColor='var(--primary)'" onmouseout="this.style.background='var(--bg-tertiary)'; this.style.borderColor='var(--border)'">
                                         <i class="fas fa-terminal"></i> Ver Comando
                                     </button>
-                                    <button onclick="launchRecommendedAttack()" style="flex: 2; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); color: #000; border: none; border-radius: 8px; padding: 0.75rem 1.5rem; font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(0, 255, 136, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(0, 255, 136, 0.3)'">
+                                    <button id="launch-recommended-btn" onclick="launchRecommendedAttack()" style="flex: 2; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); color: #000; border: none; border-radius: 8px; padding: 0.75rem 1.5rem; font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(0, 255, 136, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(0, 255, 136, 0.3)'">
                                         <i class="fas fa-rocket"></i> Lanzar Stress Recomendado
+                                    </button>
+                                    <button id="stop-recommended-btn" onclick="stopRecommendedAttack()" style="display: none; flex: 1; background: linear-gradient(135deg, var(--danger) 0%, #ff4444 100%); color: #fff; border: none; border-radius: 8px; padding: 0.75rem 1.5rem; font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; box-shadow: 0 4px 12px rgba(255, 68, 68, 0.3);" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(255, 68, 68, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(255, 68, 68, 0.3)'">
+                                        <i class="fas fa-stop"></i> Detener Stress
                                     </button>
                                 </div>
                             </div>
@@ -2297,12 +2300,44 @@
                 if (response.ok && result.command) {
                     commandElement.textContent = result.command;
                     showAlert('Comando generado correctamente', 'success');
-                } else {
+                        } else {
                     commandElement.textContent = 'Error: ' + (result.message || 'Error generando comando');
                     showAlert(result.message || 'Error generando comando', 'error');
                 }
             } catch (error) {
                 commandElement.textContent = 'Error: ' + error.message;
+                showAlert('Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Detener ataque recomendado
+        async function stopRecommendedAttack() {
+            if (!confirm('¿Desea detener el stress recomendado actual?')) {
+                return;
+            }
+            
+            try {
+                showAlert('Deteniendo ataque...', 'info');
+                
+                const response = await fetch('/api/stop', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    // Ocultar botón de detener y mostrar botón de lanzar
+                    const launchBtn = document.getElementById('launch-recommended-btn');
+                    const stopBtn = document.getElementById('stop-recommended-btn');
+                    if (launchBtn) launchBtn.style.display = 'flex';
+                    if (stopBtn) stopBtn.style.display = 'none';
+                    
+                    showAlert('Ataque detenido correctamente', 'success');
+                } else {
+                    showAlert(result.message || 'Error deteniendo ataque', 'error');
+                }
+            } catch (error) {
                 showAlert('Error: ' + error.message, 'error');
             }
         }
@@ -2389,6 +2424,12 @@
                         }
                     }
                     
+                    // Mostrar botón de detener y ocultar botón de lanzar
+                    const launchBtn = document.getElementById('launch-recommended-btn');
+                    const stopBtn = document.getElementById('stop-recommended-btn');
+                    if (launchBtn) launchBtn.style.display = 'none';
+                    if (stopBtn) stopBtn.style.display = 'flex';
+                    
                     showAlert('Ataque recomendado iniciado correctamente', 'success');
                     
                     // Cambiar a pestaña Dashboard
@@ -2424,14 +2465,29 @@
                 // Update charts
                 updateCharts();
                 
-                // Update latency stats
-                if (stats.latency_stats) {
-                    document.getElementById('latency-avg').textContent = Math.round(stats.latency_stats.avg || 0) + 'ms';
-                    document.getElementById('latency-min').textContent = Math.round(stats.latency_stats.min || 0) + 'ms';
-                    document.getElementById('latency-max').textContent = Math.round(stats.latency_stats.max || 0) + 'ms';
-                    document.getElementById('latency-p50').textContent = Math.round(stats.latency_stats.p50 || 0) + 'ms';
-                    document.getElementById('latency-p95').textContent = Math.round(stats.latency_stats.p95 || 0) + 'ms';
-                    document.getElementById('latency-p99').textContent = Math.round(stats.latency_stats.p99 || 0) + 'ms';
+                // Update latency stats - mejorado con validación
+                if (stats.latency_stats && Object.keys(stats.latency_stats).length > 0) {
+                    const latency = stats.latency_stats;
+                    // Validar que los valores sean números válidos
+                    const formatLatency = (val) => {
+                        if (val === null || val === undefined || isNaN(val) || val < 0) return '-';
+                        return Math.round(val) + 'ms';
+                    };
+                    
+                    document.getElementById('latency-avg').textContent = formatLatency(latency.avg);
+                    document.getElementById('latency-min').textContent = formatLatency(latency.min);
+                    document.getElementById('latency-max').textContent = formatLatency(latency.max);
+                    document.getElementById('latency-p50').textContent = formatLatency(latency.p50);
+                    document.getElementById('latency-p95').textContent = formatLatency(latency.p95);
+                    document.getElementById('latency-p99').textContent = formatLatency(latency.p99);
+                } else {
+                    // Si no hay datos, mostrar guiones
+                    document.getElementById('latency-avg').textContent = '-';
+                    document.getElementById('latency-min').textContent = '-';
+                    document.getElementById('latency-max').textContent = '-';
+                    document.getElementById('latency-p50').textContent = '-';
+                    document.getElementById('latency-p95').textContent = '-';
+                    document.getElementById('latency-p99').textContent = '-';
                 }
                 
                 // Update HTTP codes distribution
@@ -2445,6 +2501,19 @@
                 
                 // Update attack status
                 updateAttackStatus(stats.monitoring_active || false);
+                
+                // Actualizar botones de lanzar/detener según estado
+                const launchBtn = document.getElementById('launch-recommended-btn');
+                const stopBtn = document.getElementById('stop-recommended-btn');
+                if (launchBtn && stopBtn) {
+                    if (stats.monitoring_active) {
+                        launchBtn.style.display = 'none';
+                        stopBtn.style.display = 'flex';
+                    } else {
+                        launchBtn.style.display = 'flex';
+                        stopBtn.style.display = 'none';
+                    }
+                }
                 
                 // Update Pattern Analysis
                 updatePatternAnalysis(stats.pattern_analysis || {});
@@ -2482,17 +2551,17 @@
                 html += '<div style="font-size: 0.85rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Patrones Detectados</div>';
                 recentPatterns.forEach(pattern => {
                     const severityColor = pattern.severity === 'high' ? 'var(--danger)' : pattern.severity === 'medium' ? 'var(--warning)' : 'var(--info)';
-                    html += `
+                html += `
                         <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 8px; border-left: 3px solid ${severityColor}; margin-bottom: 0.5rem;">
                             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.25rem;">
                                 <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">${pattern.type || 'Patrón'}</div>
                                 <span style="background: ${severityColor}; color: #000; padding: 0.2rem 0.4rem; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">${pattern.severity || 'info'}</span>
-                            </div>
-                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${(pattern.description || '').substring(0, 60)}${(pattern.description || '').length > 60 ? '...' : ''}</div>
                         </div>
-                    `;
-                });
-                html += '</div>';
+                            <div style="font-size: 0.8rem; color: var(--text-secondary);">${(pattern.description || '').substring(0, 60)}${(pattern.description || '').length > 60 ? '...' : ''}</div>
+                    </div>
+                `;
+            });
+            html += '</div>';
             }
             
             if (recentAnomalies.length > 0) {
@@ -2538,7 +2607,7 @@
                 recentAdjustments.forEach(adj => {
                     const actionColor = adj.action === 'increase' ? 'var(--success)' : adj.action === 'decrease' ? 'var(--warning)' : 'var(--info)';
                     const actionIcon = adj.action === 'increase' ? '↑' : adj.action === 'decrease' ? '↓' : '→';
-                    html += `
+                html += `
                         <div style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: 8px; border-left: 3px solid ${actionColor}; margin-bottom: 0.5rem;">
                             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.25rem;">
                                 <div style="font-weight: 600; color: var(--text-primary); font-size: 0.9rem;">${adj.parameter || 'Parámetro'}</div>
@@ -2548,10 +2617,10 @@
                                 ${adj.old_value} → ${adj.new_value}
                             </div>
                             <div style="font-size: 0.75rem; color: var(--text-muted);">${(adj.reason || '').substring(0, 50)}${(adj.reason || '').length > 50 ? '...' : ''}</div>
-                        </div>
-                    `;
-                });
-                html += '</div>';
+                    </div>
+                `;
+            });
+            html += '</div>';
             }
             
             if (Object.keys(currentParams).length > 0) {
@@ -2679,37 +2748,72 @@
             }
         }
         
-        // Update HTTP Codes Distribution
+        // Update HTTP Codes Distribution - mejorado con validación y formato profesional
         function updateHttpCodesDistribution(codes) {
             const container = document.getElementById('http-codes-distribution');
             if (!container) return;
             
-            const total = Object.values(codes).reduce((a, b) => a + b, 0);
+            // Validar y limpiar códigos (asegurar que sean números)
+            const cleanCodes = {};
+            for (const [code, count] of Object.entries(codes)) {
+                const codeNum = parseInt(code);
+                if (!isNaN(codeNum) && codeNum > 0 && count > 0) {
+                    cleanCodes[codeNum] = parseInt(count);
+                }
+            }
+            
+            const total = Object.values(cleanCodes).reduce((a, b) => a + b, 0);
             if (total === 0) {
-                container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">No hay datos</div>';
+                container.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem;">Esperando datos de códigos HTTP...</div>';
                 return;
             }
             
-            let html = '';
-            const sorted = Object.entries(codes).sort((a, b) => b[1] - a[1]);
+            let html = '<div style="display: grid; gap: 1rem;">';
+            const sorted = Object.entries(cleanCodes).sort((a, b) => b[1] - a[1]);
             
             sorted.forEach(([code, count]) => {
+                const codeNum = parseInt(code);
                 const percentage = ((count / total) * 100).toFixed(1);
-                const color = code >= 500 ? '#ff3366' : code >= 400 ? '#ffb800' : code >= 300 ? '#00d9ff' : '#00ff88';
+                
+                // Colores profesionales según categoría
+                let color, category;
+                if (codeNum >= 500) {
+                    color = '#ff3366';
+                    category = 'Error del Servidor';
+                } else if (codeNum >= 400) {
+                    color = '#ffb800';
+                    category = 'Error del Cliente';
+                } else if (codeNum >= 300) {
+                    color = '#00d9ff';
+                    category = 'Redirección';
+                } else if (codeNum >= 200) {
+                    color = '#00ff88';
+                    category = 'Éxito';
+                } else {
+                    color = '#888';
+                    category = 'Información';
+                }
                 
                 html += `
-                    <div style="margin-bottom: 1.5rem;">
-                        <div style="display: flex; justify-content: space-between; margin-bottom: 0.75rem;">
-                            <span style="font-family: 'JetBrains Mono', monospace; color: ${color}; font-weight: 600;">HTTP ${code}</span>
-                            <span style="color: var(--text-primary); font-weight: 600;">${formatNumber(count)} (${percentage}%)</span>
+                    <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; border-left: 4px solid ${color};">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                            <div>
+                                <span style="font-family: 'JetBrains Mono', monospace; color: ${color}; font-weight: 700; font-size: 1.1rem;">HTTP ${codeNum}</span>
+                                <span style="margin-left: 0.5rem; font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase;">${category}</span>
+                            </div>
+                            <div style="text-align: right;">
+                                <div style="font-weight: 700; color: var(--text-primary); font-size: 1rem;">${formatNumber(count)}</div>
+                                <div style="font-size: 0.75rem; color: var(--text-secondary);">${percentage}%</div>
+                            </div>
                         </div>
-                        <div class="progress-bar">
-                            <div class="progress-fill" style="width: ${percentage}%; background: ${color};"></div>
+                        <div style="background: var(--bg-primary); border-radius: 4px; height: 8px; overflow: hidden;">
+                            <div style="width: ${percentage}%; background: ${color}; height: 100%; transition: width 0.3s ease;"></div>
                         </div>
                     </div>
                 `;
             });
             
+            html += '</div>';
             container.innerHTML = html;
         }
         
@@ -2779,8 +2883,8 @@
                                         </h3>
                                         <div style="color: var(--text-secondary); font-size: 0.9rem;">
                                             ${date.toLocaleString()} • ${entry.duration || entry.elapsed_time || 0}s • ${entry.power_level || 'N/A'}
-                                        </div>
                                     </div>
+                                </div>
                                     <div style="text-align: right;">
                                         <div style="color: var(--success); font-size: 1.5rem; font-weight: 700;">
                                             ${entry.success_rate || 0}%
@@ -2860,8 +2964,8 @@
                             <i class="fas fa-exclamation-triangle" style="font-size: 3rem; margin-bottom: 1rem;"></i>
                             <div style="font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem;">Error en Autodiagnóstico</div>
                             <div style="color: var(--text-secondary);">${result.message || 'Error desconocido'}</div>
-                        </div>
-                    `;
+                            </div>
+                        `;
                     showAlert(result.message || 'Error en autodiagnóstico', 'error');
                 }
             } catch (error) {

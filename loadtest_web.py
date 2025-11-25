@@ -1435,6 +1435,7 @@ def start_recommended_attack():
                     attack_stats_ref["errors"] = []
                     attack_stats_ref["peak_rps"] = 0
                     attack_stats_ref["avg_rps"] = 0
+                    attack_stats_ref["is_recommended_attack"] = True  # Marcar como ataque recomendado
                 
                 loadtest.log_message("INFO", "🚀 [RECOMMENDED] Iniciando ataque recomendado desde panel web", context="start_recommended_attack", force_console=True)
                 

