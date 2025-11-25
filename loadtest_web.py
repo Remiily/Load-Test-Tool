@@ -1426,44 +1426,47 @@ def start_recommended_attack():
             cmd_parts.append(PROXY_ROTATION or "round-robin")
         command = " ".join(cmd_parts)
         
+        # Capturar loadtest en el closure para asegurar disponibilidad en el thread
+        # El módulo ya está importado al inicio del archivo, pero lo capturamos aquí
+        # para asegurar que esté disponible en el closure del thread
+        import sys
+        from collections import defaultdict
+        from datetime import datetime
+        loadtest_ref = loadtest  # Capturar referencia para el closure
+        
         # Iniciar ataque en thread separado (usar la misma lógica que start_attack)
         def run_recommended_attack():
             try:
-                # Importar loadtest dentro de la función para asegurar disponibilidad en el thread
-                # El módulo ya está importado al inicio del archivo, pero reimportarlo aquí
-                # asegura que esté disponible en el scope del thread
-                import sys
-                import loadtest as loadtest_module
-                from collections import defaultdict
-                from datetime import datetime
+                # Usar la referencia capturada de loadtest para evitar problemas de scope en threads
+                loadtest = loadtest_ref
                 
                 # Sincronizar estado antes de iniciar
-                loadtest_module.WEB_PANEL_MODE = True
-                loadtest_module.DEBUG_MODE = True
-                loadtest_module.monitoring_active = True
+                loadtest.WEB_PANEL_MODE = True
+                loadtest.DEBUG_MODE = True
+                loadtest.monitoring_active = True
                 
                 # Sincronizar variables globales
-                loadtest_module.TARGET = TARGET
-                loadtest_module.DURATION = DURATION
-                loadtest_module.POWER_LEVEL = POWER_LEVEL
-                loadtest_module.ATTACK_MODE = ATTACK_MODE
-                loadtest_module.MAX_CONNECTIONS = MAX_CONNECTIONS
-                loadtest_module.MAX_THREADS = MAX_THREADS
-                loadtest_module.WAF_BYPASS = WAF_BYPASS
-                loadtest_module.USE_LARGE_PAYLOADS = USE_LARGE_PAYLOADS
-                loadtest_module.STEALTH_MODE = STEALTH_MODE
-                loadtest_module.AUTO_THROTTLE = AUTO_THROTTLE
-                loadtest_module.MEMORY_MONITORING = MEMORY_MONITORING
+                loadtest.TARGET = TARGET
+                loadtest.DURATION = DURATION
+                loadtest.POWER_LEVEL = POWER_LEVEL
+                loadtest.ATTACK_MODE = ATTACK_MODE
+                loadtest.MAX_CONNECTIONS = MAX_CONNECTIONS
+                loadtest.MAX_THREADS = MAX_THREADS
+                loadtest.WAF_BYPASS = WAF_BYPASS
+                loadtest.USE_LARGE_PAYLOADS = USE_LARGE_PAYLOADS
+                loadtest.STEALTH_MODE = STEALTH_MODE
+                loadtest.AUTO_THROTTLE = AUTO_THROTTLE
+                loadtest.MEMORY_MONITORING = MEMORY_MONITORING
                 
                 # Asegurar que los proxies configurados estén cargados - SIGUIENDO LÓGICA DEL SCRIPT EXITOSO
                 if PROXY_LIST:
-                    loadtest_module.PROXY_LIST = PROXY_LIST
-                    loadtest_module.log_message("INFO", f"✅ [RECOMMENDED] {len(PROXY_LIST)} proxy(s) cargado(s) para ataque devastador", context="start_recommended_attack", force_console=True)
+                    loadtest.PROXY_LIST = PROXY_LIST
+                    loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(PROXY_LIST)} proxy(s) cargado(s) para ataque devastador", context="start_recommended_attack", force_console=True)
                 if PROXY_ROTATION:
-                    loadtest_module.PROXY_ROTATION = PROXY_ROTATION
+                    loadtest.PROXY_ROTATION = PROXY_ROTATION
                 
                 # Resetear estadísticas
-                attack_stats_ref = loadtest_module.attack_stats
+                attack_stats_ref = loadtest.attack_stats
                 if attack_stats_ref:
                     attack_stats_ref["start_time"] = datetime.now()
                     attack_stats_ref["end_time"] = None
@@ -1476,7 +1479,7 @@ def start_recommended_attack():
                     attack_stats_ref["avg_rps"] = 0
                     attack_stats_ref["is_recommended_attack"] = True  # Marcar como ataque recomendado
                 
-                loadtest_module.log_message("INFO", "🚀 [RECOMMENDED] Iniciando ataque recomendado desde panel web", context="start_recommended_attack", force_console=True)
+                loadtest.log_message("INFO", "🚀 [RECOMMENDED] Iniciando ataque recomendado desde panel web", context="start_recommended_attack", force_console=True)
                 
                 # Configurar sys.argv para simular línea de comandos
                 original_argv = sys.argv
@@ -1491,18 +1494,17 @@ def start_recommended_attack():
                     sys.argv.append('--no-auto-throttle')
                 sys.argv.extend(['--connections', str(MAX_CONNECTIONS), '--threads', str(MAX_THREADS), '--mode', 'MIXED'])
                 
-                loadtest_module.main()
+                loadtest.main()
                 sys.argv = original_argv
             except Exception as e:
-                # Intentar loggear el error, pero si loadtest_module no está disponible, usar print
+                # Intentar loggear el error usando loadtest si está disponible
                 error_msg = str(e)
                 try:
-                    import loadtest as loadtest_module
-                    loadtest_module.log_message("ERROR", f"Error en ataque recomendado: {error_msg}", context="start_recommended_attack", force_console=True)
-                except Exception as import_error:
-                    # Si incluso el import falla, usar print como último recurso
+                    # Usar la referencia capturada para evitar problemas de scope
+                    loadtest_ref.log_message("ERROR", f"Error en ataque recomendado: {error_msg}", context="start_recommended_attack", force_console=True)
+                except:
+                    # Si loadtest no está disponible, usar print como último recurso
                     print(f"ERROR: Error en ataque recomendado: {error_msg}")
-                    print(f"ERROR: No se pudo importar loadtest para loggear: {import_error}")
         
         current_attack_process = threading.Thread(target=run_recommended_attack, daemon=True)
         current_attack_process.start()
