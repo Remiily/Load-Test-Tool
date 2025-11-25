@@ -2100,7 +2100,7 @@
                 html += '</div></div>';
             }
             
-            if (recommendations) {
+            if (stressRecommendations) {
                 html += `
                     <div class="card" style="background: var(--bg-card); border: 1px solid var(--border); padding: 1.5rem; border-radius: 12px;">
                         <h3 style="margin-bottom: 1.5rem; color: var(--secondary); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem;">
@@ -2109,21 +2109,62 @@
                         <div style="display: grid; gap: 1rem;">
                             <div style="padding: 1rem; background: linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(0, 217, 255, 0.1) 100%); border-radius: 8px; border: 1px solid var(--border-glow);">
                                 <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Nivel de Potencia Recomendado</div>
-                                <div style="font-size: 1.3rem; color: var(--primary); font-weight: 700;">${recommendations.recommended_power_level || 'N/A'}</div>
+                                <div style="font-size: 1.3rem; color: var(--primary); font-weight: 700;">${stressRecommendations.recommended_power_level || 'N/A'}</div>
                             </div>
                             <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem;">
                                 <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; border: 1px solid var(--border);">
                                     <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Conexiones</div>
-                                    <div style="font-size: 1.1rem; color: var(--primary); font-weight: 600;">${recommendations.recommended_connections || 'N/A'}</div>
+                                    <div style="font-size: 1.1rem; color: var(--primary); font-weight: 600;">${stressRecommendations.recommended_connections || 'N/A'}</div>
                                 </div>
                                 <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; border: 1px solid var(--border);">
                                     <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Threads</div>
-                                    <div style="font-size: 1.1rem; color: var(--secondary); font-weight: 600;">${recommendations.recommended_threads || 'N/A'}</div>
+                                    <div style="font-size: 1.1rem; color: var(--secondary); font-weight: 600;">${stressRecommendations.recommended_threads || 'N/A'}</div>
                                 </div>
                             </div>
                         </div>
                     </div>
                 `;
+            }
+            
+            // Mostrar recomendaciones de herramientas si existen
+            if (toolRecommendations && Object.keys(toolRecommendations).length > 0) {
+                html += `
+                    <div class="card" style="grid-column: 1 / -1; background: var(--bg-card); border: 1px solid var(--primary); padding: 1.5rem; border-radius: 12px; margin-top: 1.5rem;">
+                        <h3 style="margin-bottom: 1.5rem; color: var(--primary); font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem;">
+                            <i class="fas fa-tools"></i> Recomendaciones de Herramientas
+                        </h3>
+                        <div style="display: grid; gap: 1rem;">
+                `;
+                
+                if (toolRecommendations.recommended_tools && toolRecommendations.recommended_tools.length > 0) {
+                    html += `
+                        <div style="padding: 1rem; background: linear-gradient(135deg, rgba(0, 255, 136, 0.1) 0%, rgba(0, 217, 255, 0.1) 100%); border-radius: 8px; border: 1px solid var(--border-glow);">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Herramientas Recomendadas (${toolRecommendations.tool_count || toolRecommendations.recommended_tools.length})</div>
+                            <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                    `;
+                    toolRecommendations.recommended_tools.forEach(tool => {
+                        html += `
+                            <span style="padding: 0.5rem 1rem; background: var(--bg-tertiary); border-radius: 6px; border: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--primary);">
+                                ${tool}
+                            </span>
+                        `;
+                    });
+                    html += `</div></div>`;
+                }
+                
+                if (toolRecommendations.reasoning && toolRecommendations.reasoning.length > 0) {
+                    html += `
+                        <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 8px; border: 1px solid var(--border);">
+                            <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.75rem;">Razonamiento</div>
+                            <ul style="margin: 0; padding-left: 1.5rem; color: var(--text-primary);">
+                    `;
+                    toolRecommendations.reasoning.forEach(reason => {
+                        html += `<li style="margin-bottom: 0.5rem; font-size: 0.9rem;">${reason}</li>`;
+                    });
+                    html += `</ul></div>`;
+                }
+                
+                html += `</div></div>`;
             }
             
             // Vulnerabilidades si existen
