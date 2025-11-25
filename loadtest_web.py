@@ -243,13 +243,19 @@ def set_config():
                 if hasattr(loadtest, 'EVASION_TECHNIQUES'):
                     loadtest.EVASION_TECHNIQUES[tech] = bool(enabled)
     
-    # Configuración de proxies
+    # Configuración de proxies - SIGUIENDO LÓGICA DEL SCRIPT EXITOSO
     if "proxy_list" in data:
         proxy_data = data["proxy_list"]
-        if isinstance(proxy_data, str):
+        if isinstance(proxy_data, str) and proxy_data.strip():
             # Si es string (lista de proxies separados por \n), cargar usando load_proxy_list
-            loadtest.load_proxy_list(proxy_string=proxy_data)
-        elif isinstance(proxy_data, list):
+            loaded_proxies = loadtest.load_proxy_list(proxy_string=proxy_data)
+            # Sincronizar con variable local
+            if loaded_proxies:
+                PROXY_LIST = loaded_proxies
+            else:
+                PROXY_LIST = []
+                loadtest.PROXY_LIST = []
+        elif isinstance(proxy_data, list) and len(proxy_data) > 0:
             # Si es lista, asignar directamente
             PROXY_LIST = proxy_data
             loadtest.PROXY_LIST = proxy_data
@@ -1313,6 +1319,30 @@ def start_recommended_attack():
         # Obtener parámetros óptimos
         optimal_params = tool_recommendations.get("optimal_parameters", {})
         
+        # Cargar proxies desde la configuración guardada ANTES de aplicar otros parámetros
+        # SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: Los proxies son críticos para el bypass
+        proxy_config = get_loadtest_var('PROXY_LIST') or []
+        proxy_rotation_config = get_loadtest_var('PROXY_ROTATION') or "round-robin"
+        
+        # Si hay proxies en la configuración, cargarlos
+        if proxy_config:
+            if isinstance(proxy_config, str) and proxy_config.strip():
+                # Si es string (lista de proxies separados por \n), cargar usando load_proxy_list
+                loaded_proxies = loadtest.load_proxy_list(proxy_string=proxy_config)
+                if loaded_proxies:
+                    PROXY_LIST = loaded_proxies
+                    loadtest.PROXY_LIST = loaded_proxies
+                    loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(loaded_proxies)} proxy(s) cargado(s) desde configuración para ataque devastador", context="start_recommended_attack", force_console=True)
+            elif isinstance(proxy_config, list) and len(proxy_config) > 0:
+                # Si es lista, usar directamente
+                PROXY_LIST = proxy_config
+                loadtest.PROXY_LIST = proxy_config
+                loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(proxy_config)} proxy(s) cargado(s) desde configuración para ataque devastador", context="start_recommended_attack", force_console=True)
+        
+        if proxy_rotation_config:
+            PROXY_ROTATION = proxy_rotation_config
+            loadtest.PROXY_ROTATION = proxy_rotation_config
+        
         # Aplicar parámetros recomendados
         TARGET = target
         DURATION = stress_recommendations.get("recommended_duration") or optimal_params.get("duration") or DURATION
@@ -1322,6 +1352,29 @@ def start_recommended_attack():
         WAF_BYPASS = optimal_params.get("waf_bypass", False) or stress_recommendations.get("recommended_waf_bypass", False)
         STEALTH_MODE = optimal_params.get("stealth_mode", False) or stress_recommendations.get("recommended_stealth", False)
         ATTACK_MODE = "MIXED"  # Siempre MIXED para usar recomendaciones
+        
+        # Cargar proxies desde la configuración guardada - SIGUIENDO LÓGICA DEL SCRIPT EXITOSO
+        # Obtener proxies desde la configuración del web panel
+        proxy_config = get_loadtest_var('PROXY_LIST') or []
+        proxy_rotation_config = get_loadtest_var('PROXY_ROTATION') or "round-robin"
+        
+        # Si hay proxies en la configuración, cargarlos
+        if proxy_config:
+            if isinstance(proxy_config, str):
+                # Si es string (lista de proxies separados por \n), cargar usando load_proxy_list
+                loaded_proxies = loadtest.load_proxy_list(proxy_string=proxy_config)
+                if loaded_proxies:
+                    PROXY_LIST = loaded_proxies
+                    loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(loaded_proxies)} proxy(s) cargado(s) desde configuración para ataque devastador", context="start_recommended_attack", force_console=True)
+            elif isinstance(proxy_config, list) and len(proxy_config) > 0:
+                # Si es lista, usar directamente
+                PROXY_LIST = proxy_config
+                loadtest.PROXY_LIST = proxy_config
+                loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(proxy_config)} proxy(s) cargado(s) desde configuración para ataque devastador", context="start_recommended_attack", force_console=True)
+        
+        if proxy_rotation_config:
+            PROXY_ROTATION = proxy_rotation_config
+            loadtest.PROXY_ROTATION = proxy_rotation_config
         
         # Sincronizar con loadtest - IMPORTANTE: actualizar TARGET primero
         loadtest.TARGET = TARGET
@@ -1482,9 +1535,27 @@ def start_recommended_attack():
                 loadtest.MEMORY_MONITORING = MEMORY_MONITORING
                 
                 # Asegurar que los proxies configurados estén cargados - SIGUIENDO LÓGICA DEL SCRIPT EXITOSO
+                # Los proxies ya deberían estar cargados desde arriba, pero verificamos y sincronizamos
                 if PROXY_LIST:
                     loadtest.PROXY_LIST = PROXY_LIST
-                    loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(PROXY_LIST)} proxy(s) cargado(s) para ataque devastador", context="start_recommended_attack", force_console=True)
+                    loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(PROXY_LIST)} proxy(s) activo(s) para ataque devastador", context="start_recommended_attack", force_console=True)
+                else:
+                    # Si no hay proxies, intentar cargar desde configuración una vez más
+                    proxy_config = get_loadtest_var('PROXY_LIST') or []
+                    if proxy_config:
+                        if isinstance(proxy_config, str) and proxy_config.strip():
+                            loaded_proxies = loadtest.load_proxy_list(proxy_string=proxy_config)
+                            if loaded_proxies:
+                                PROXY_LIST = loaded_proxies
+                                loadtest.PROXY_LIST = loaded_proxies
+                                loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(loaded_proxies)} proxy(s) cargado(s) para ataque devastador", context="start_recommended_attack", force_console=True)
+                        elif isinstance(proxy_config, list) and len(proxy_config) > 0:
+                            PROXY_LIST = proxy_config
+                            loadtest.PROXY_LIST = proxy_config
+                            loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(proxy_config)} proxy(s) cargado(s) para ataque devastador", context="start_recommended_attack", force_console=True)
+                    else:
+                        loadtest.log_message("WARN", "⚠️ [RECOMMENDED] No hay proxies configurados - Usando conexión directa (menos efectivo)", context="start_recommended_attack", force_console=True)
+                
                 if PROXY_ROTATION:
                     loadtest.PROXY_ROTATION = PROXY_ROTATION
                 
