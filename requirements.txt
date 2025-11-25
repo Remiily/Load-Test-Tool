@@ -10,6 +10,9 @@ Flask-Cors>=4.0.0
 requests>=2.31.0
 urllib3>=2.0.0
 
+# DNS Resolution (obligatorio para bypass de CloudFront)
+dnspython>=2.4.0
+
 # Monitoreo del Sistema
 psutil>=5.9.0
 

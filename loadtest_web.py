@@ -239,6 +239,23 @@ def set_config():
                 if hasattr(loadtest, 'EVASION_TECHNIQUES'):
                     loadtest.EVASION_TECHNIQUES[tech] = bool(enabled)
     
+    # Configuración de proxies
+    if "proxy_list" in data:
+        proxy_data = data["proxy_list"]
+        if isinstance(proxy_data, str):
+            # Si es string (lista de proxies separados por \n), cargar usando load_proxy_list
+            loadtest.load_proxy_list(proxy_string=proxy_data)
+        elif isinstance(proxy_data, list):
+            # Si es lista, asignar directamente
+            PROXY_LIST = proxy_data
+            loadtest.PROXY_LIST = proxy_data
+        else:
+            PROXY_LIST = []
+            loadtest.PROXY_LIST = []
+    if "proxy_rotation" in data:
+        PROXY_ROTATION = data["proxy_rotation"]
+        loadtest.PROXY_ROTATION = data["proxy_rotation"]
+    
     # Análisis avanzado
     if "pattern_analysis_enabled" in data:
         loadtest.PATTERN_ANALYSIS_ENABLED = bool(data["pattern_analysis_enabled"])
@@ -1396,6 +1413,13 @@ def start_recommended_attack():
             cmd_parts.append("--bypass-waf")
         if STEALTH_MODE:
             cmd_parts.append("--stealth")
+        # Agregar proxies al comando si están configurados
+        if PROXY_LIST:
+            # Si hay proxies, mostrar en el comando (usar archivo si es posible)
+            cmd_parts.append("--proxy-file")
+            cmd_parts.append("proxies.txt")
+            cmd_parts.append("--proxy-rotation")
+            cmd_parts.append(PROXY_ROTATION or "round-robin")
         command = " ".join(cmd_parts)
         
         # Iniciar ataque en thread separado (usar la misma lógica que start_attack)
@@ -1422,6 +1446,13 @@ def start_recommended_attack():
                 loadtest.STEALTH_MODE = STEALTH_MODE
                 loadtest.AUTO_THROTTLE = AUTO_THROTTLE
                 loadtest.MEMORY_MONITORING = MEMORY_MONITORING
+                
+                # Asegurar que los proxies configurados estén cargados - SIGUIENDO LÓGICA DEL SCRIPT EXITOSO
+                if PROXY_LIST:
+                    loadtest.PROXY_LIST = PROXY_LIST
+                    loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(PROXY_LIST)} proxy(s) cargado(s) para ataque devastador", context="start_recommended_attack", force_console=True)
+                if PROXY_ROTATION:
+                    loadtest.PROXY_ROTATION = PROXY_ROTATION
                 
                 # Resetear estadísticas
                 attack_stats_ref = loadtest.attack_stats
@@ -1472,6 +1503,8 @@ def start_recommended_attack():
                 "max_threads": MAX_THREADS,
                 "waf_bypass": WAF_BYPASS,
                 "stealth_mode": STEALTH_MODE,
+                "proxies_loaded": len(PROXY_LIST) if PROXY_LIST else 0,
+                "proxy_rotation": PROXY_ROTATION or "round-robin",
                 "expected_sessions": tool_recommendations.get("expected_sessions", "N/A")
             }
         })
