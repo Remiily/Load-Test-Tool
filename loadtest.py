@@ -1016,16 +1016,48 @@ def validate_critical_variables():
                 return False
             
             PROTOCOL = parsed.scheme.lower()
-            if parsed.port:
-                PORT = parsed.port
-            else:
-                PORT = 443 if PROTOCOL == "https" else 80
             
-            # Reconstruir TARGET con formato correcto
-            if parsed.path and parsed.path != '/':
-                TARGET = f"{PROTOCOL}://{target_host}:{PORT}{parsed.path}"
+            # Extraer hostname y puerto por separado para evitar duplicación
+            # parsed.netloc puede ser "domain:port" o solo "domain"
+            if ':' in target_host:
+                # Ya tiene puerto en netloc
+                hostname, port_str = target_host.rsplit(':', 1)
+                try:
+                    PORT = int(port_str)
+                except ValueError:
+                    PORT = 443 if PROTOCOL == "https" else 80
+                    hostname = target_host  # Si no se puede parsear, usar todo como hostname
             else:
-                TARGET = f"{PROTOCOL}://{target_host}:{PORT}/"
+                # No tiene puerto, usar el de parsed.port o default
+                hostname = target_host
+                if parsed.port:
+                    PORT = parsed.port
+                else:
+                    PORT = 443 if PROTOCOL == "https" else 80
+            
+            # Reconstruir TARGET con formato correcto (sin duplicar puerto)
+            # Solo incluir puerto si no es el default (80 para HTTP, 443 para HTTPS)
+            if PORT == 443 and PROTOCOL == "https":
+                # HTTPS default, no incluir puerto
+                if parsed.path and parsed.path != '/':
+                    TARGET = f"{PROTOCOL}://{hostname}{parsed.path}"
+                else:
+                    TARGET = f"{PROTOCOL}://{hostname}/"
+            elif PORT == 80 and PROTOCOL == "http":
+                # HTTP default, no incluir puerto
+                if parsed.path and parsed.path != '/':
+                    TARGET = f"{PROTOCOL}://{hostname}{parsed.path}"
+                else:
+                    TARGET = f"{PROTOCOL}://{hostname}/"
+            else:
+                # Puerto no default, incluir en URL
+                if parsed.path and parsed.path != '/':
+                    TARGET = f"{PROTOCOL}://{hostname}:{PORT}{parsed.path}"
+                else:
+                    TARGET = f"{PROTOCOL}://{hostname}:{PORT}/"
+            
+            # Actualizar target_host para uso posterior (sin puerto) - IMPORTANTE para validación de dominio
+            target_host = hostname
         else:
             # Si no tiene protocolo, extraer IP o dominio
             # Limpiar espacios y caracteres especiales al inicio/fin
