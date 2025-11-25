@@ -634,8 +634,13 @@ def log_message(level: str, message: str, force_console: bool = False, context: 
         except:
             pass
     
-    # Mostrar en consola solo si no es modo web panel o si es crítico
-    if force_console or (not WEB_PANEL_MODE and (DEBUG_MODE or level in ["ERROR", "WARN", "CRITICAL"])):
+    # Mostrar en consola solo errores, warnings y críticos (no INFO ni DEBUG para evitar saturación)
+    # Los logs completos siempre se guardan en archivo para debugging posterior
+    # force_console=True fuerza la salida a consola incluso para INFO/DEBUG
+    console_levels = ["ERROR", "WARN", "CRITICAL"]
+    should_show_console = force_console or (level in console_levels and not WEB_PANEL_MODE) or (WEB_PANEL_MODE and level == "CRITICAL")
+    
+    if should_show_console:
         color_map = {
             "INFO": Colors.CYAN,
             "WARN": Colors.YELLOW,
@@ -2207,7 +2212,7 @@ def deploy_tool_gradually(tool_name: str, deploy_func, delay: float = 1.0, max_r
             time.sleep(delay)
         
         # Desplegar herramienta
-        log_message("INFO", f"Desplegando {tool_name}...")
+        # No loggear despliegue de herramientas en consola - solo errores (se guarda en archivo)
         result = deploy_func()
         
         # Pequeña pausa después del despliegue para que el sistema se estabilice
@@ -2215,7 +2220,7 @@ def deploy_tool_gradually(tool_name: str, deploy_func, delay: float = 1.0, max_r
         
         # Verificar que el despliegue fue exitoso
         if result is not None:
-            log_message("INFO", f"{tool_name} desplegado correctamente")
+            # No loggear despliegue exitoso en consola - solo errores (se guarda en archivo)
             return True
         else:
             log_message("WARN", f"{tool_name} no se pudo desplegar")
@@ -4226,26 +4231,30 @@ def deploy_custom_http_attack():
             last_rate_check = time.time()
             rate_adjustment = 1.0
             
-            # Pre-calentar conexiones con URL normalizada y mejor logging
-            if CONNECTION_WARMUP:
-                try:
-                    warmup_response = session.get(normalized_target, headers=get_random_headers(), timeout=10, verify=False, allow_redirects=True)
-                    if warmup_response.status_code:
-                        log_message("DEBUG", f"✅ [WORKER {worker_id}] Precalentamiento exitoso: HTTP {warmup_response.status_code}")
-                    else:
-                        log_message("WARN", f"⚠️ [WORKER {worker_id}] Precalentamiento: sin código de estado")
-                except Exception as warmup_error:
-                    error_type = type(warmup_error).__name__
-                    error_msg = str(warmup_error)[:150]
-                    log_message("WARN", f"⚠️ [WORKER {worker_id}] Error en precalentamiento: {error_type}: {error_msg}")
-                    # Continuar de todas formas - puede ser que el servidor esté lento o bajo carga
-            
             # Contador de requests exitosos vs errores para ajuste dinámico
             consecutive_errors = 0
             max_consecutive_errors = 50  # Si hay muchos errores seguidos, puede ser que el servicio esté saturado
             
-            log_message("DEBUG", f"🔄 [WORKER {worker_id}] Worker iniciado - monitoring_active: {monitoring_active}", force_console=False)
+            # No loggear inicio de workers para evitar saturación - solo errores
             request_count_worker = 0
+            
+            # Pre-calentar conexiones en background (no bloqueante) - solo para los primeros workers
+            # Esto evita saturar con precalentamientos simultáneos
+            if CONNECTION_WARMUP and worker_id < 10:
+                def warmup_background():
+                    try:
+                        warmup_headers_raw = get_random_headers()
+                        warmup_headers = {k: v for k, v in warmup_headers_raw.items() if not k.startswith(':')}
+                        warmup_response = session.get(normalized_target, headers=warmup_headers, timeout=2, verify=False, allow_redirects=True)
+                        if warmup_response.status_code:
+                            log_message("DEBUG", f"✅ [WORKER {worker_id}] Precalentamiento exitoso: HTTP {warmup_response.status_code}")
+                    except:
+                        pass  # Ignorar errores de precalentamiento
+                
+                # Iniciar precalentamiento en thread separado para no bloquear
+                threading.Thread(target=warmup_background, daemon=True).start()
+            
+            # Iniciar ataque inmediatamente sin esperar precalentamiento
             while time.time() < end_time and monitoring_active:
                 request_count_worker += 1
                 try:
@@ -4253,9 +4262,8 @@ def deploy_custom_http_attack():
                     # Esto es bueno para el stress test - continuar pero con delay mínimo
                     if consecutive_errors > max_consecutive_errors:
                         time.sleep(0.1)  # Pequeña pausa si hay muchos errores
-                    # Log cada 500 requests para debugging (reducido para no saturar logs)
+                    # No loggear cada 500 requests para evitar saturación - solo errores importantes
                     if request_count_worker % 500 == 0:
-                        log_message("DEBUG", f"🔄 [WORKER {worker_id}] {request_count_worker} requests, monitoring_active: {monitoring_active}")
                         consecutive_errors = 0
                     
                     # Seleccionar target (si hay variaciones)
@@ -4372,16 +4380,11 @@ def deploy_custom_http_attack():
                     error_msg = str(e)
                     error_type = type(e).__name__
                     
-                    # Loggear los primeros errores en detalle para diagnóstico
-                    if request_count < 5 or consecutive_errors < 5:
+                    # Loggear solo los primeros errores en detalle para diagnóstico (evitar saturación)
+                    if request_count < 3 or (consecutive_errors < 3 and ("Connection" in error_msg or "timeout" in error_msg.lower())):
                         log_message("ERROR", f"❌ [WORKER {worker_id}] Error #{request_count}: {error_type}: {error_msg[:200]} | URL: {target_url[:100]}")
                     
-                    # Loggear errores importantes más frecuentemente
-                    if "Connection" in error_msg or "timeout" in error_msg.lower() or "SSL" in error_msg or "refused" in error_msg.lower():
-                        if request_count % 5 == 0:  # Loggear cada 5 errores para diagnóstico
-                            log_message("WARN", f"⚠️ [WORKER {worker_id}] Error de conexión #{request_count}: {error_type}: {error_msg[:150]}")
-                    elif DEBUG_MODE or request_count < 10:
-                        log_message("DEBUG", f"🔍 [WORKER {worker_id}] Error #{request_count}: {error_type}: {error_msg[:150]}")
+                    # No loggear errores repetidos para evitar saturación - solo los primeros errores importantes
                     
                     consecutive_errors += 1
                     # Pequeño delay en caso de error para no saturar
