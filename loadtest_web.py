@@ -5,7 +5,13 @@ Panel de control web para configuración y monitoreo
 """
 
 from flask import Flask, render_template, request, jsonify, send_from_directory, Response
-from flask_cors import CORS
+try:
+    from flask_cors import CORS  # type: ignore
+    CORS_AVAILABLE = True
+except ImportError:
+    CORS_AVAILABLE = False
+    # CORS no disponible, pero no es crítico
+    CORS = None
 import json
 import threading
 import time
@@ -587,12 +593,13 @@ def get_history_report_pdf(report_id):
 def export_report_to_pdf(filename):
     """Exporta un reporte a PDF"""
     try:
-        from reportlab.lib.pagesizes import letter, A4
-        from reportlab.lib import colors
-        from reportlab.lib.units import inch
-        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.enums import TA_CENTER, TA_LEFT
+        # Importar reportlab (opcional - se maneja con try/except)
+        from reportlab.lib.pagesizes import letter, A4  # type: ignore
+        from reportlab.lib import colors  # type: ignore
+        from reportlab.lib.units import inch  # type: ignore
+        from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, PageBreak  # type: ignore
+        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle  # type: ignore
+        from reportlab.lib.enums import TA_CENTER, TA_LEFT  # type: ignore
         from io import BytesIO
         import json
         
@@ -1168,6 +1175,230 @@ def get_recommendations():
         return jsonify({"status": "success", "recommendations": recommendations})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/generate-command', methods=['POST'])
+def generate_command():
+    """Genera la línea de comando basada en recomendaciones"""
+    try:
+        data = request.json or {}
+        tool_recommendations = data.get("tool_recommendations", {})
+        stress_recommendations = data.get("stress_recommendations", {})
+        target = data.get("target", TARGET)
+        
+        if not target:
+            return jsonify({"status": "error", "message": "Target no especificado"}), 400
+        
+        # Obtener parámetros óptimos
+        optimal_params = tool_recommendations.get("optimal_parameters", {})
+        
+        # Construir línea de comando
+        cmd_parts = ["python", "loadtest.py"]
+        cmd_parts.extend(["-t", target])
+        
+        # Duración
+        duration = stress_recommendations.get("recommended_duration") or optimal_params.get("duration") or DURATION
+        cmd_parts.extend(["-d", str(duration)])
+        
+        # Power level
+        power_level = optimal_params.get("power_level") or stress_recommendations.get("recommended_power_level") or POWER_LEVEL
+        cmd_parts.extend(["-p", power_level])
+        
+        # Conexiones
+        max_connections = optimal_params.get("max_connections") or stress_recommendations.get("recommended_connections") or MAX_CONNECTIONS
+        cmd_parts.extend(["--connections", str(max_connections)])
+        
+        # Threads
+        max_threads = optimal_params.get("max_threads") or stress_recommendations.get("recommended_threads") or MAX_THREADS
+        cmd_parts.extend(["--threads", str(max_threads)])
+        
+        # WAF bypass
+        if optimal_params.get("waf_bypass") or stress_recommendations.get("recommended_waf_bypass"):
+            cmd_parts.append("--bypass-waf")
+        
+        # Stealth mode
+        if optimal_params.get("stealth_mode") or stress_recommendations.get("recommended_stealth"):
+            cmd_parts.append("--stealth")
+        
+        # Large payloads
+        if stress_recommendations.get("recommended_large_payloads"):
+            cmd_parts.append("--large-payloads")
+        
+        # Attack mode (siempre MIXED para usar recomendaciones)
+        cmd_parts.extend(["--mode", "MIXED"])
+        
+        # Construir comando final
+        command = " ".join(cmd_parts)
+        
+        return jsonify({
+            "status": "success",
+            "command": command,
+            "parameters": {
+                "target": target,
+                "duration": duration,
+                "power_level": power_level,
+                "max_connections": max_connections,
+                "max_threads": max_threads,
+                "waf_bypass": optimal_params.get("waf_bypass", False),
+                "stealth_mode": optimal_params.get("stealth_mode", False),
+                "expected_sessions": tool_recommendations.get("expected_sessions", "N/A")
+            }
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc() if getattr(loadtest, 'DEBUG_MODE', False) else None
+        }), 500
+
+@app.route('/api/start-recommended', methods=['POST'])
+def start_recommended_attack():
+    """Inicia un ataque con parámetros recomendados del fingerprint"""
+    global current_attack_process, TARGET, DURATION, POWER_LEVEL, MAX_CONNECTIONS, MAX_THREADS, WAF_BYPASS, STEALTH_MODE, ATTACK_MODE
+    
+    if current_attack_process and current_attack_process.is_alive():
+        return jsonify({"status": "error", "message": "Ya hay un ataque en ejecución"}), 400
+    
+    try:
+        data = request.json or {}
+        tool_recommendations = data.get("tool_recommendations", {})
+        stress_recommendations = data.get("stress_recommendations", {})
+        target = data.get("target", TARGET)
+        
+        if not target:
+            return jsonify({"status": "error", "message": "Target no especificado"}), 400
+        
+        # Obtener parámetros óptimos
+        optimal_params = tool_recommendations.get("optimal_parameters", {})
+        
+        # Aplicar parámetros recomendados
+        TARGET = target
+        DURATION = stress_recommendations.get("recommended_duration") or optimal_params.get("duration") or DURATION
+        POWER_LEVEL = optimal_params.get("power_level") or stress_recommendations.get("recommended_power_level") or POWER_LEVEL
+        MAX_CONNECTIONS = optimal_params.get("max_connections") or stress_recommendations.get("recommended_connections") or MAX_CONNECTIONS
+        MAX_THREADS = optimal_params.get("max_threads") or stress_recommendations.get("recommended_threads") or MAX_THREADS
+        WAF_BYPASS = optimal_params.get("waf_bypass", False) or stress_recommendations.get("recommended_waf_bypass", False)
+        STEALTH_MODE = optimal_params.get("stealth_mode", False) or stress_recommendations.get("recommended_stealth", False)
+        ATTACK_MODE = "MIXED"  # Siempre MIXED para usar recomendaciones
+        
+        # Sincronizar con loadtest
+        loadtest.TARGET = TARGET
+        loadtest.DURATION = DURATION
+        loadtest.POWER_LEVEL = POWER_LEVEL
+        loadtest.MAX_CONNECTIONS = MAX_CONNECTIONS
+        loadtest.MAX_THREADS = MAX_THREADS
+        loadtest.WAF_BYPASS = WAF_BYPASS
+        loadtest.STEALTH_MODE = STEALTH_MODE
+        loadtest.ATTACK_MODE = ATTACK_MODE
+        
+        # Aplicar parámetros adicionales si existen
+        if "connect_timeout" in optimal_params:
+            loadtest.CONNECT_TIMEOUT = optimal_params["connect_timeout"]
+        if "read_timeout" in optimal_params:
+            loadtest.READ_TIMEOUT = optimal_params["read_timeout"]
+        if "multiplier" in optimal_params:
+            loadtest.MULTIPLIER = optimal_params["multiplier"]
+        if "pool_connections" in optimal_params:
+            loadtest.CONNECTION_POOL_SIZE = optimal_params["pool_connections"]
+        if "keep_alive" in optimal_params:
+            loadtest.KEEP_ALIVE_POOLING = optimal_params["keep_alive"]
+        
+        # Generar comando para mostrar
+        cmd_parts = ["python", "loadtest.py", "-t", TARGET, "-d", str(DURATION), "-p", POWER_LEVEL,
+                     "--connections", str(MAX_CONNECTIONS), "--threads", str(MAX_THREADS), "--mode", "MIXED"]
+        if WAF_BYPASS:
+            cmd_parts.append("--bypass-waf")
+        if STEALTH_MODE:
+            cmd_parts.append("--stealth")
+        command = " ".join(cmd_parts)
+        
+        # Validar target antes de iniciar
+        if not validate_critical_variables():
+            return jsonify({"status": "error", "message": "Target inválido después de aplicar parámetros"}), 400
+        
+        # Iniciar ataque en thread separado (usar la misma lógica que start_attack)
+        def run_recommended_attack():
+            try:
+                import loadtest
+                import sys
+                from collections import defaultdict
+                
+                # Sincronizar estado antes de iniciar
+                loadtest.WEB_PANEL_MODE = True
+                loadtest.DEBUG_MODE = True
+                loadtest.monitoring_active = True
+                
+                # Sincronizar variables globales
+                loadtest.TARGET = TARGET
+                loadtest.DURATION = DURATION
+                loadtest.POWER_LEVEL = POWER_LEVEL
+                loadtest.ATTACK_MODE = ATTACK_MODE
+                loadtest.MAX_CONNECTIONS = MAX_CONNECTIONS
+                loadtest.MAX_THREADS = MAX_THREADS
+                loadtest.WAF_BYPASS = WAF_BYPASS
+                loadtest.USE_LARGE_PAYLOADS = USE_LARGE_PAYLOADS
+                loadtest.STEALTH_MODE = STEALTH_MODE
+                loadtest.AUTO_THROTTLE = AUTO_THROTTLE
+                loadtest.MEMORY_MONITORING = MEMORY_MONITORING
+                
+                # Resetear estadísticas
+                attack_stats_ref = loadtest.attack_stats
+                if attack_stats_ref:
+                    attack_stats_ref["start_time"] = datetime.now()
+                    attack_stats_ref["end_time"] = None
+                    attack_stats_ref["requests_sent"] = 0
+                    attack_stats_ref["responses_received"] = 0
+                    attack_stats_ref["http_codes"] = defaultdict(int)
+                    attack_stats_ref["latencies"] = []
+                    attack_stats_ref["errors"] = []
+                    attack_stats_ref["peak_rps"] = 0
+                    attack_stats_ref["avg_rps"] = 0
+                
+                loadtest.log_message("INFO", "🚀 [RECOMMENDED] Iniciando ataque recomendado desde panel web", context="start_recommended_attack", force_console=True)
+                
+                # Configurar sys.argv para simular línea de comandos
+                original_argv = sys.argv
+                sys.argv = ['loadtest.py', '-t', TARGET, '-d', str(DURATION), '-p', POWER_LEVEL]
+                if WAF_BYPASS:
+                    sys.argv.append('--bypass-waf')
+                if USE_LARGE_PAYLOADS:
+                    sys.argv.append('--large-payloads')
+                if STEALTH_MODE:
+                    sys.argv.append('--stealth')
+                if not AUTO_THROTTLE:
+                    sys.argv.append('--no-auto-throttle')
+                sys.argv.extend(['--connections', str(MAX_CONNECTIONS), '--threads', str(MAX_THREADS), '--mode', 'MIXED'])
+                
+                loadtest.main()
+                sys.argv = original_argv
+            except Exception as e:
+                loadtest.log_message("ERROR", f"Error en ataque recomendado: {e}", context="start_recommended_attack", force_console=True)
+        
+        current_attack_process = threading.Thread(target=run_recommended_attack, daemon=True)
+        current_attack_process.start()
+        
+        return jsonify({
+            "status": "success",
+            "message": "Ataque recomendado iniciado",
+            "command": command,
+            "parameters": {
+                "target": TARGET,
+                "duration": DURATION,
+                "power_level": POWER_LEVEL,
+                "max_connections": MAX_CONNECTIONS,
+                "max_threads": MAX_THREADS,
+                "waf_bypass": WAF_BYPASS,
+                "stealth_mode": STEALTH_MODE,
+                "expected_sessions": tool_recommendations.get("expected_sessions", "N/A")
+            }
+        })
+    except Exception as e:
+        import traceback
+        return jsonify({
+            "status": "error",
+            "message": str(e),
+            "traceback": traceback.format_exc() if getattr(loadtest, 'DEBUG_MODE', False) else None
+        }), 500
 
 @app.route('/api/apply-recommendations', methods=['POST'])
 def apply_recommendations():

@@ -2021,8 +2021,18 @@
             }
         }
         
+        // Variables globales para recomendaciones
+        let currentFingerprint = null;
+        let currentStressRecommendations = null;
+        let currentToolRecommendations = null;
+        
         // Display Fingerprint Results
         function displayFingerprint(fingerprint, stressRecommendations, toolRecommendations, status) {
+            // Guardar recomendaciones globalmente
+            currentFingerprint = fingerprint;
+            currentStressRecommendations = stressRecommendations;
+            currentToolRecommendations = toolRecommendations;
+            
             const container = document.getElementById('fingerprint-results');
             const content = document.getElementById('fingerprint-content');
             
@@ -2184,6 +2194,43 @@
                     html += `</div></div>`;
                 }
                 
+                // Botón para lanzar stress recomendado
+                if (toolRecommendations.optimal_parameters || stressRecommendations) {
+                    html += `
+                        <div style="padding: 1.5rem; background: linear-gradient(135deg, rgba(0, 255, 136, 0.15) 0%, rgba(0, 217, 255, 0.15) 100%); border-radius: 12px; border: 2px solid var(--primary); margin-top: 1rem;">
+                            <div style="display: flex; flex-direction: column; gap: 1rem;">
+                                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.5rem;">
+                                    <h4 style="margin: 0; color: var(--primary); font-size: 1.1rem; font-weight: 600; display: flex; align-items: center; gap: 0.5rem;">
+                                        <i class="fas fa-rocket"></i> Lanzar Stress Recomendado
+                                    </h4>
+                                    <span style="background: var(--primary); color: #000; padding: 0.25rem 0.75rem; border-radius: 12px; font-size: 0.75rem; font-weight: 600;">
+                                        ${toolRecommendations.expected_sessions || '40,000-60,000+'} sesiones esperadas
+                                    </span>
+                                </div>
+                                
+                                <div id="recommended-command-container" style="display: none; margin-bottom: 1rem;">
+                                    <div style="font-size: 0.75rem; color: var(--text-secondary); text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 0.5rem;">Comando para Replicar</div>
+                                    <div style="position: relative;">
+                                        <pre id="recommended-command" style="background: var(--bg-primary); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--primary); margin: 0; overflow-x: auto; word-break: break-all; white-space: pre-wrap;">Cargando comando...</pre>
+                                        <button onclick="copyRecommendedCommand()" style="position: absolute; top: 0.5rem; right: 0.5rem; background: var(--primary); color: #000; border: none; border-radius: 6px; padding: 0.5rem 1rem; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; gap: 0.5rem;" onmouseover="this.style.background='var(--secondary)'" onmouseout="this.style.background='var(--primary)'">
+                                            <i class="fas fa-copy"></i> Copiar
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div style="display: flex; gap: 1rem;">
+                                    <button onclick="showRecommendedCommand()" style="flex: 1; background: var(--bg-tertiary); color: var(--text-primary); border: 1px solid var(--border); border-radius: 8px; padding: 0.75rem 1.5rem; font-size: 0.9rem; font-weight: 600; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem;" onmouseover="this.style.background='var(--bg-secondary)'; this.style.borderColor='var(--primary)'" onmouseout="this.style.background='var(--bg-tertiary)'; this.style.borderColor='var(--border)'">
+                                        <i class="fas fa-terminal"></i> Ver Comando
+                                    </button>
+                                    <button onclick="launchRecommendedAttack()" style="flex: 2; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); color: #000; border: none; border-radius: 8px; padding: 0.75rem 1.5rem; font-size: 0.9rem; font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 0.5rem; box-shadow: 0 4px 12px rgba(0, 255, 136, 0.3);" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 6px 16px rgba(0, 255, 136, 0.4)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='0 4px 12px rgba(0, 255, 136, 0.3)'">
+                                        <i class="fas fa-rocket"></i> Lanzar Stress Recomendado
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
                 html += `</div></div>`;
             }
             
@@ -2214,6 +2261,147 @@
             html += '</div>';
             content.innerHTML = html;
             container.style.display = 'block';
+        }
+        
+        // Mostrar comando recomendado
+        async function showRecommendedCommand() {
+            const container = document.getElementById('recommended-command-container');
+            const commandElement = document.getElementById('recommended-command');
+            
+            if (!container || !commandElement) {
+                showAlert('Elementos no encontrados', 'error');
+                return;
+            }
+            
+            if (!currentToolRecommendations && !currentStressRecommendations) {
+                showAlert('No hay recomendaciones disponibles', 'error');
+                return;
+            }
+            
+            try {
+                commandElement.textContent = 'Generando comando...';
+                container.style.display = 'block';
+                
+                const response = await fetch('/api/generate-command', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        tool_recommendations: currentToolRecommendations,
+                        stress_recommendations: currentStressRecommendations,
+                        target: currentFingerprint?.target || document.getElementById('target-input')?.value || ''
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok && result.command) {
+                    commandElement.textContent = result.command;
+                    showAlert('Comando generado correctamente', 'success');
+                } else {
+                    commandElement.textContent = 'Error: ' + (result.message || 'Error generando comando');
+                    showAlert(result.message || 'Error generando comando', 'error');
+                }
+            } catch (error) {
+                commandElement.textContent = 'Error: ' + error.message;
+                showAlert('Error: ' + error.message, 'error');
+            }
+        }
+        
+        // Copiar comando al portapapeles
+        async function copyRecommendedCommand() {
+            const commandElement = document.getElementById('recommended-command');
+            if (!commandElement) return;
+            
+            try {
+                await navigator.clipboard.writeText(commandElement.textContent);
+                showAlert('Comando copiado al portapapeles', 'success');
+                
+                // Feedback visual
+                const button = event.target.closest('button');
+                if (button) {
+                    const originalHTML = button.innerHTML;
+                    button.innerHTML = '<i class="fas fa-check"></i> Copiado';
+                    button.style.background = 'var(--success)';
+                    setTimeout(() => {
+                        button.innerHTML = originalHTML;
+                        button.style.background = 'var(--primary)';
+                    }, 2000);
+                }
+            } catch (error) {
+                // Fallback para navegadores antiguos
+                const textArea = document.createElement('textarea');
+                textArea.value = commandElement.textContent;
+                textArea.style.position = 'fixed';
+                textArea.style.opacity = '0';
+                document.body.appendChild(textArea);
+                textArea.select();
+                try {
+                    document.execCommand('copy');
+                    showAlert('Comando copiado al portapapeles', 'success');
+                } catch (err) {
+                    showAlert('Error al copiar comando', 'error');
+                }
+                document.body.removeChild(textArea);
+            }
+        }
+        
+        // Lanzar ataque recomendado
+        async function launchRecommendedAttack() {
+            if (!currentToolRecommendations && !currentStressRecommendations) {
+                showAlert('No hay recomendaciones disponibles', 'error');
+                return;
+            }
+            
+            const target = currentFingerprint?.target || document.getElementById('target-input')?.value || '';
+            if (!target) {
+                showAlert('Target no especificado', 'error');
+                return;
+            }
+            
+            // Confirmar acción
+            if (!confirm('¿Desea lanzar el stress recomendado con los parámetros optimizados?\n\nEsto iniciará un ataque con la configuración recomendada basada en el fingerprint.')) {
+                return;
+            }
+            
+            try {
+                showAlert('Iniciando ataque recomendado...', 'info');
+                
+                const response = await fetch('/api/start-recommended', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        tool_recommendations: currentToolRecommendations,
+                        stress_recommendations: currentStressRecommendations,
+                        target: target
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    // Mostrar comando usado
+                    if (result.command) {
+                        const container = document.getElementById('recommended-command-container');
+                        const commandElement = document.getElementById('recommended-command');
+                        if (container && commandElement) {
+                            commandElement.textContent = result.command;
+                            container.style.display = 'block';
+                        }
+                    }
+                    
+                    showAlert('Ataque recomendado iniciado correctamente', 'success');
+                    
+                    // Cambiar a pestaña Dashboard
+                    const dashboardTab = document.querySelector('[data-tab="dashboard"]');
+                    if (dashboardTab) {
+                        dashboardTab.click();
+                    }
+                } else {
+                    showAlert(result.message || 'Error iniciando ataque', 'error');
+                }
+            } catch (error) {
+                showAlert('Error: ' + error.message, 'error');
+            }
         }
         
         // Update Stats
