@@ -11300,7 +11300,7 @@ def recommend_tools_from_fingerprint(fingerprint: Dict = None) -> Dict:
             # Cloudflare: usar herramientas que evadan rate limiting
             recommended_tools = ["custom_http", "mhddos", "db1000n"]
             tool_count = 3
-            reasoning.append("Cloudflare detectado - usar herramientas con evasión avanzada (mhddos, db1000n)")
+            reasoning.append("Cloudflare CDN detectado - usar múltiples herramientas con evasión avanzada (mhddos, db1000n) para máximo impacto")
         elif cdn.lower() in ["cloudfront", "fastly", "akamai"]:
             # Otros CDNs: usar herramientas de alto throughput
             recommended_tools = ["custom_http", "wrk", "bombardier"]
@@ -11767,11 +11767,9 @@ def recommend_tools_from_fingerprint(fingerprint: Dict = None) -> Dict:
         recommended_tools.insert(0, "custom_http")
         tool_count = len(recommended_tools)
     
-    # Asegurar que siempre sea UNA herramienta para máximo throughput
-    if tool_count > 1:
-        recommended_tools = ["custom_http"]
-        tool_count = 1
-        reasoning.append("Optimizado para UNA herramienta - máximo throughput sin sobrecarga del sistema")
+    # SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: Respetar las recomendaciones del fingerprint
+    # No forzar a una sola herramienta - usar múltiples herramientas cuando sea apropiado
+    # (El código anterior forzaba a una sola herramienta, pero el script exitoso usa múltiples)
     
     # Si no se definieron parámetros óptimos, usar valores por defecto optimizados
     if 'optimal_params' not in locals():

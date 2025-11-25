@@ -1321,7 +1321,7 @@ def start_recommended_attack():
         
         # Cargar proxies desde la configuración guardada ANTES de aplicar otros parámetros
         # SIGUIENDO LÓGICA DEL SCRIPT EXITOSO: Los proxies son críticos para el bypass
-        proxy_config = get_loadtest_var('PROXY_LIST') or []
+        proxy_config = get_loadtest_var('PROXY_LIST')
         proxy_rotation_config = get_loadtest_var('PROXY_ROTATION') or "round-robin"
         
         # Si hay proxies en la configuración, cargarlos
@@ -1338,6 +1338,13 @@ def start_recommended_attack():
                 PROXY_LIST = proxy_config
                 loadtest.PROXY_LIST = proxy_config
                 loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(proxy_config)} proxy(s) cargado(s) desde configuración para ataque devastador", context="start_recommended_attack", force_console=True)
+        else:
+            # Si no hay proxies en loadtest, intentar cargar desde la variable global local
+            if PROXY_LIST and len(PROXY_LIST) > 0:
+                loadtest.PROXY_LIST = PROXY_LIST
+                loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(PROXY_LIST)} proxy(s) cargado(s) desde variable global para ataque devastador", context="start_recommended_attack", force_console=True)
+            else:
+                loadtest.log_message("WARN", "⚠️ [RECOMMENDED] No hay proxies configurados - Usando conexión directa (menos efectivo)", context="start_recommended_attack", force_console=True)
         
         if proxy_rotation_config:
             PROXY_ROTATION = proxy_rotation_config
@@ -1539,23 +1546,25 @@ def start_recommended_attack():
                 
                 # Asegurar que los proxies configurados estén cargados - SIGUIENDO LÓGICA DEL SCRIPT EXITOSO
                 # Los proxies ya deberían estar cargados desde arriba, pero verificamos y sincronizamos
-                if PROXY_LIST:
+                if PROXY_LIST and len(PROXY_LIST) > 0:
                     loadtest.PROXY_LIST = PROXY_LIST
                     loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(PROXY_LIST)} proxy(s) activo(s) para ataque devastador", context="start_recommended_attack", force_console=True)
                 else:
                     # Si no hay proxies, intentar cargar desde configuración una vez más
-                    proxy_config = get_loadtest_var('PROXY_LIST') or []
+                    proxy_config = get_loadtest_var('PROXY_LIST')
                     if proxy_config:
                         if isinstance(proxy_config, str) and proxy_config.strip():
                             loaded_proxies = loadtest.load_proxy_list(proxy_string=proxy_config)
                             if loaded_proxies:
                                 PROXY_LIST = loaded_proxies
                                 loadtest.PROXY_LIST = loaded_proxies
-                                loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(loaded_proxies)} proxy(s) cargado(s) para ataque devastador", context="start_recommended_attack", force_console=True)
+                                loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(loaded_proxies)} proxy(s) cargado(s) desde configuración para ataque devastador", context="start_recommended_attack", force_console=True)
                         elif isinstance(proxy_config, list) and len(proxy_config) > 0:
                             PROXY_LIST = proxy_config
                             loadtest.PROXY_LIST = proxy_config
-                            loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(proxy_config)} proxy(s) cargado(s) para ataque devastador", context="start_recommended_attack", force_console=True)
+                            loadtest.log_message("INFO", f"✅ [RECOMMENDED] {len(proxy_config)} proxy(s) cargado(s) desde configuración para ataque devastador", context="start_recommended_attack", force_console=True)
+                        else:
+                            loadtest.log_message("WARN", "⚠️ [RECOMMENDED] No hay proxies configurados - Usando conexión directa (menos efectivo)", context="start_recommended_attack", force_console=True)
                     else:
                         loadtest.log_message("WARN", "⚠️ [RECOMMENDED] No hay proxies configurados - Usando conexión directa (menos efectivo)", context="start_recommended_attack", force_console=True)
                 
